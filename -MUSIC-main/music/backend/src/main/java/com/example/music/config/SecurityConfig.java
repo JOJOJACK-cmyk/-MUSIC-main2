@@ -28,7 +28,7 @@ import java.util.Map;
 public class SecurityConfig {
 
     private final CustomOAuth2UserService customOAuth2UserService;
-    private final ClientRegistrationRepository clientRegistrationRepository; // 💡 추가: ClientRegistrationRepository 주입
+    private final ClientRegistrationRepository clientRegistrationRepository;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -37,17 +37,17 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
-                                "/api/auth/signup",
-                                "/api/auth/login",
+                                "/api/auth/**",
                                 "/oauth2/**",
                                 "/login/oauth2/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**",
-                                "/ws-chat/**"
+                                "/ws-chat/**",
+                                "/ws/**"
                         ).permitAll()
 
-                        .requestMatchers(HttpMethod.GET, "/api/musics/**")
+                        .requestMatchers(HttpMethod.GET, "/api/musics/**", "/api/broadcast/**")
                         .permitAll()
 
                         .requestMatchers(
@@ -63,12 +63,12 @@ public class SecurityConfig {
                 )
 
                 .oauth2Login(oauth2 -> oauth2
-                        // 💡 [핵심 추가] 네이버 로그인 시 무조건 아이디/비밀번호 입력창(reprompt)을 띄우도록 설정
                         .authorizationEndpoint(authorization -> authorization
                                 .authorizationRequestResolver(
                                         new CustomOAuth2AuthorizationRequestResolver(clientRegistrationRepository)
                                 )
                         )
+                        // 💡 Vite 포트인 3000으로 수정
                         .successHandler((request, response, authentication) -> {
                             response.sendRedirect("http://localhost:3000/");
                         })
@@ -93,7 +93,6 @@ public class SecurityConfig {
         return http.build();
     }
 
-    // 💡 [핵심 클래스 추가] OAuth2 인증 요청 시 auth_type=reprompt 파라미터를 강제로 붙여주는 Resolver
     private static class CustomOAuth2AuthorizationRequestResolver implements OAuth2AuthorizationRequestResolver {
         private final OAuth2AuthorizationRequestResolver defaultResolver;
 
@@ -118,7 +117,6 @@ public class SecurityConfig {
 
             Map<String, Object> extraParams = new HashMap<>(req.getAdditionalParameters());
 
-            // 네이버 OAuth 요청 시 재인증(아이디/비밀번호 다시 입력) 파라미터 추가
             if (req.getAuthorizationUri().contains("naver")) {
                 extraParams.put("auth_type", "reprompt");
             }
@@ -129,7 +127,6 @@ public class SecurityConfig {
         }
     }
 
-    // SecurityConfig.java 내부에 추가
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
