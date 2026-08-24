@@ -46,7 +46,8 @@ public class SecurityConfig {
                                 "/ws-chat/**",
                                 "/ws/**",
                                 "/api/v1/logs/**",  // 💡 청취 로그 수집 API 허용 추가
-                                "/api/logs/**"      // 💡 (경로 대비용 추가)
+                                "/api/logs/**"     // 💡 (경로 대비용 추가)
+
                         ).permitAll()
 
                         .requestMatchers(HttpMethod.GET, "/api/musics/**", "/api/broadcast/**")
