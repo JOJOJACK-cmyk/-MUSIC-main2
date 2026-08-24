@@ -4,13 +4,21 @@ services:
     container_name: music-srs
 
     ports:
-      # RTMP 방송 수신
+      # RTMP
       - "1935:1935"
 
       # SRS HTTP API
       - "1985:1985"
 
-      # HLS / HTTP 재생
+      # HLS
       - "8080:8080"
+
+    volumes:
+      - ./srs.conf:/usr/local/srs/conf/music.conf:ro
+
+    command:
+      - ./objs/srs
+      - -c
+      - conf/music.conf
 
     restart: unless-stopped
