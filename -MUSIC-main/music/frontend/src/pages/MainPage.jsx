@@ -6,13 +6,16 @@ import MusicModal from '../components/MusicModal';
 import { musicApi } from '../api/musicApi';
 import { usePlayer } from '../context/PlayerContext';
 
+
+
+
 export default function MainPage({ isModalOpen, setIsModalOpen }) {
   const [musics, setMusics] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingMusic, setEditingMusic] = useState(null);
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState('');
-  const { setPlaylist } = usePlayer();
+  const { setPlaylist, currentTrack } = usePlayer();
 
   const fetchMusics = async () => {
     setLoading(true);
