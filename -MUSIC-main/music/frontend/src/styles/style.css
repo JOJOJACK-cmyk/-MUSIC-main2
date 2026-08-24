@@ -694,3 +694,53 @@ body {
     font-size: 20px;
     cursor: pointer;
 }
+
+/* 현재 재생 중인 YouTube 플레이어 */
+.youtube-player-floating {
+    position: fixed;
+
+    right: 24px;
+    bottom: 110px;
+
+    width: 400px;
+
+    background-color: var(--bg-sidebar);
+
+    border: 1px solid rgba(224, 40, 183, 0.35);
+    border-radius: 14px;
+
+    padding: 12px;
+
+    box-shadow:
+        0 12px 40px rgba(0, 0, 0, 0.6);
+
+    z-index: 90;
+
+    overflow: hidden;
+}
+
+.youtube-player-title {
+    display: flex;
+    align-items: center;
+
+    gap: 10px;
+
+    margin-bottom: 10px;
+
+    font-size: 13px;
+}
+
+.youtube-player-title span {
+    color: var(--primary-color);
+    font-weight: 700;
+
+    flex-shrink: 0;
+}
+
+.youtube-player-title strong {
+    color: var(--text-main);
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
