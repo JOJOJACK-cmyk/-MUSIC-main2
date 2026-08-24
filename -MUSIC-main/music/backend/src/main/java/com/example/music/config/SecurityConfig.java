@@ -44,7 +44,9 @@ public class SecurityConfig {
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**",
                                 "/ws-chat/**",
-                                "/ws/**"
+                                "/ws/**",
+                                "/api/v1/logs/**",  // 💡 청취 로그 수집 API 허용 추가
+                                "/api/logs/**"      // 💡 (경로 대비용 추가)
                         ).permitAll()
 
                         .requestMatchers(HttpMethod.GET, "/api/musics/**", "/api/broadcast/**")
@@ -68,7 +70,6 @@ public class SecurityConfig {
                                         new CustomOAuth2AuthorizationRequestResolver(clientRegistrationRepository)
                                 )
                         )
-                        // 💡 Vite 포트인 3000으로 수정
                         .successHandler((request, response, authentication) -> {
                             response.sendRedirect("http://localhost:3000/");
                         })

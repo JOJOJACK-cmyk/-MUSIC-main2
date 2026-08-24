@@ -15,6 +15,9 @@ import lombok.Setter;
 @NoArgsConstructor
 public class YouTubeVideoDto {
 
+    @Schema(description = "내부 데이터베이스 음원 ID (DB 캐싱 저장 후 반환 시)", example = "1")
+    private Long id;
+
     @Schema(description = "YouTube 동영상 고유 ID", example = "dQw4w9WgXcQ")
     private String youtubeVideoId;
 
@@ -26,4 +29,7 @@ public class YouTubeVideoDto {
 
     @Schema(description = "고화질 썸네일 이미지 URL", example = "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg")
     private String thumbnailUrl;
+
+    @Schema(description = "재생 시간 (초 단위)", example = "213")
+    private Long durationSeconds;
 }

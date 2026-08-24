@@ -1,6 +1,7 @@
 package com.example.music.service;
 
 import com.example.music.dto.MusicDto;
+import com.example.music.dto.YouTubeVideoDto;
 import com.example.music.entity.Music;
 import com.example.music.repository.MusicRepository;
 import lombok.RequiredArgsConstructor;
@@ -9,7 +10,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
-import com.example.music.dto.YouTubeVideoDto;
 
 @Service
 @RequiredArgsConstructor
@@ -57,30 +57,16 @@ public class MusicService {
                 .orElseThrow(() -> new IllegalArgumentException("음원을 찾을 수 없습니다. id=" + id));
         musicRepository.delete(music);
     }
+
     @Transactional
     public MusicDto.Response createMusicFromYouTube(String videoId) throws Exception {
+        // 1. YouTubeApiService를 호출하여 영상 조회 (없으면 API 호출 후 내부에서 DB 자동 캐싱 저장)
+        YouTubeVideoDto video = youTubeApiService.getVideoInfo(videoId);
 
-        // 이미 DB에 등록된 영상인지 확인
-        musicRepository.findByYoutubeVideoId(videoId).ifPresent(m -> {
-            throw new IllegalArgumentException("이미 등록된 음원(영상)입니다.");
-        });
+        // 2. 캐싱되어 DB에 저장된 Music Entity를 조회하여 반환 (이중 save 충돌 방지)
+        Music music = musicRepository.findByYoutubeVideoId(video.getYoutubeVideoId())
+                .orElseThrow(() -> new IllegalStateException("YouTube 음원 정보 조회 및 캐싱에 실패했습니다. videoId=" + videoId));
 
-        // YouTube API에서 영상 정보 가져오기
-        YouTubeVideoDto video =
-                youTubeApiService.getVideoInfo(videoId);
-
-        // YouTube 정보를 Music Entity로 변환
-        Music music = Music.builder()
-                .youtubeVideoId(video.getYoutubeVideoId())
-                .title(video.getTitle())
-                .artist(video.getArtist())
-                .thumbnailUrl(video.getThumbnailUrl())
-                .build();
-
-        // DB 저장
-        Music savedMusic =
-                musicRepository.save(music);
-
-        return new MusicDto.Response(savedMusic);
+        return new MusicDto.Response(music);
     }
 }
