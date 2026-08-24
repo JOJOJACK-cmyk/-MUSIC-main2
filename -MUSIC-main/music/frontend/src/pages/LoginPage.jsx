@@ -1,22 +1,36 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { authApi } from '../api/authApi';
+import { useAuth } from '../context/AuthContext'; // 💡 useAuth 추가
 
 export default function LoginPage() {
   const [activeTab, setActiveTab] = useState('login');
   const navigate = useNavigate();
+  const { login } = useAuth(); // 💡 AuthContext의 login 함수 가져오기
 
-  // 💡 username -> email 로 변경
   const [loginData, setLoginData] = useState({ email: '', password: '' });
   const [signupData, setSignupData] = useState({ email: '', password: '', nickname: '' });
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     try {
-      await authApi.login(loginData);
+      const response = await authApi.login(loginData);
+
+      // 💡 백엔드 응답 데이터에서 사용자 정보와 토큰 추출 (응답 구조에 유연하게 대응)
+      const token = response?.accessToken || response?.token || response?.data?.accessToken;
+      const userData = {
+        nickname: response?.nickname || response?.name || response?.data?.nickname || loginData.email.split('@')[0],
+        email: response?.email || response?.data?.email || loginData.email,
+        profileImageUrl: response?.profileImageUrl || response?.data?.profileImageUrl || '',
+      };
+
+      // 💡 AuthContext에 로그인 사용자 정보 등록 (전역 상태 및 로컬 스토리지 동기화)
+      login(userData, token);
+
       alert('로그인되었습니다!');
       navigate('/');
     } catch (err) {
+      console.error('로그인 에러:', err);
       alert('로그인 실패: 이메일 또는 비밀번호를 확인해주세요.');
     }
   };
@@ -63,7 +77,6 @@ export default function LoginPage() {
           <form id="login-form" className="auth-form" onSubmit={handleLoginSubmit}>
             <div className="input-group">
               <i className="fa-solid fa-envelope"></i>
-              {/* 💡 placeholder 및 name 속성을 이메일로 변경 */}
               <input
                 type="email"
                 name="email"
@@ -119,7 +132,6 @@ export default function LoginPage() {
           <form id="signup-form" className="auth-form" onSubmit={handleSignupSubmit}>
             <div className="input-group">
               <i className="fa-solid fa-envelope"></i>
-              {/* 💡 회원가입 입력란도 email로 변경 */}
               <input
                 type="email"
                 placeholder="이메일"
