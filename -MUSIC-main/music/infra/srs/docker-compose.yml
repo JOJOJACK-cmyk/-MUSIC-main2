@@ -1,0 +1,16 @@
+services:
+  srs:
+    image: ossrs/srs:6
+    container_name: music-srs
+
+    ports:
+      # RTMP 방송 수신
+      - "1935:1935"
+
+      # SRS HTTP API
+      - "1985:1985"
+
+      # HLS / HTTP 재생
+      - "8080:8080"
+
+    restart: unless-stopped
