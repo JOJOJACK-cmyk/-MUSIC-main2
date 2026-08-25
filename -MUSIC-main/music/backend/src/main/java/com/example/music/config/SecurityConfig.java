@@ -52,9 +52,8 @@ public class SecurityConfig {
                                 "/v3/api-docs/**",
                                 "/ws-chat/**",
                                 "/ws/**",
-                                "/api/v1/logs/**",  // 💡 청취 로그 수집 API 허용 추가
-                                "/api/logs/**"     // 💡 (경로 대비용 추가)
-
+                                "/api/v1/logs/**",
+                                "/api/logs/**"
                         ).permitAll()
 
                         .requestMatchers(HttpMethod.GET, "/api/musics/**", "/api/broadcast/**")
@@ -78,10 +77,9 @@ public class SecurityConfig {
                                         new CustomOAuth2AuthorizationRequestResolver(clientRegistrationRepository)
                                 )
                         )
-                        // 💡 제공자(registrationId)를 명확히 판별하여 파싱
                         .successHandler((request, response, authentication) -> {
                             OAuth2AuthenticationToken oauthToken = (OAuth2AuthenticationToken) authentication;
-                            String registrationId = oauthToken.getAuthorizedClientRegistrationId().toLowerCase(); // google, naver, kakao
+                            String registrationId = oauthToken.getAuthorizedClientRegistrationId().toLowerCase();
                             OAuth2User oAuth2User = oauthToken.getPrincipal();
                             Map<String, Object> attributes = oAuth2User.getAttributes();
 
@@ -127,7 +125,6 @@ public class SecurityConfig {
                                 profileImageUrl = (String) attributes.get("picture");
                             }
 
-                            // 기본 Fallback
                             if (nickname == null || nickname.isEmpty()) {
                                 nickname = (String) attributes.getOrDefault("nickname", attributes.getOrDefault("name", "소셜사용자"));
                             }
@@ -138,7 +135,6 @@ public class SecurityConfig {
                             String encodedEmail = URLEncoder.encode(email, StandardCharsets.UTF_8);
                             String encodedProfile = URLEncoder.encode(profileImageUrl, StandardCharsets.UTF_8);
 
-                            // 프론트엔드로 리다이렉트
                             response.sendRedirect(String.format(
                                     "http://localhost:3000/?nickname=%s&email=%s&profileImageUrl=%s",
                                     encodedNickname, encodedEmail, encodedProfile
@@ -168,8 +164,15 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:3000"));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+
+        // 💡 null(로컬 HTML 직접 열기) 및 localhost 모든 포트 허용
+        configuration.setAllowedOriginPatterns(List.of(
+                "http://localhost:3000",
+                "http://localhost:8080",
+                "null",
+                "*"
+        ));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
 
