@@ -25,29 +25,42 @@ public class ListenLogService {
 
     @Transactional
     public void recordLog(ListenLogDto dto) {
-        // 1. 유효성 검사 (30초 미만 트리거 차단)
+        // 1. 30초 미만 청취 차단
         if (dto.getListenSeconds() == null || dto.getListenSeconds() < 30) {
             throw new IllegalArgumentException("청취 시간이 30초 미만인 로그는 유효하지 않습니다.");
         }
 
-        // 2. 30초 쿨다운 검증 (동일 사용자의 비정상적인 반복 호출 어뷰징 방지)
-        LocalDateTime thirtySecondsAgo = LocalDateTime.now().minusSeconds(30);
-        boolean isDuplicate = listenLogRepository.existsByUserIdAndMusicIdAndListenedAtAfter(
-                dto.getUserId(), dto.getMusicId(), thirtySecondsAgo
-        );
+        // 2. 유저 식별 (ID 또는 Email로 실제 DB 유저 조회)
+        User user = null;
+        if (dto.getUserId() != null) {
+            user = userRepository.findById(dto.getUserId()).orElse(null);
+        }
+        if (user == null && dto.getEmail() != null && !dto.getEmail().isBlank()) {
+            user = userRepository.findByEmail(dto.getEmail()).orElse(null);
+        }
 
-        if (isDuplicate) {
-            log.warn("[Log Collector] 중복 청취 로그 감지 - User: {}, Music: {}", dto.getUserId(), dto.getMusicId());
+        if (user == null) {
+            log.warn("[Log Collector] 인증된 사용자를 찾을 수 없어 로그 기록을 취소합니다.");
             return;
         }
 
-        // 3. 연관 엔티티 조회
-        User user = userRepository.findById(dto.getUserId())
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자입니다. ID: " + dto.getUserId()));
+        // 3. 30초 쿨다운 중복 방어 (DB 조회)
+        LocalDateTime thirtySecondsAgo = LocalDateTime.now().minusSeconds(30);
+        boolean isDuplicate = listenLogRepository.checkRecentLogExists(
+                user.getId(), dto.getMusicId(), thirtySecondsAgo
+        );
+
+        if (isDuplicate) {
+            log.warn("[Log Collector] ⚠️ 30초 내 중복 청취 감지 (기록 생략) - User: {} ({}), MusicId: {}",
+                    user.getId(), user.getEmail(), dto.getMusicId());
+            return;
+        }
+
+        // 4. 음원 조회
         Music music = musicRepository.findById(dto.getMusicId())
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 음원입니다. ID: " + dto.getMusicId()));
 
-        // 4. 청취 로그 엔티티 생성 및 저장
+        // 5. 로그 저장
         ListenLog logEntity = new ListenLog();
         logEntity.setUser(user);
         logEntity.setMusic(music);
@@ -56,7 +69,7 @@ public class ListenLogService {
 
         listenLogRepository.save(logEntity);
 
-        log.info("[Log Collector] 청취 로그 수집 완료 - User: {}, Music: {}, Duration: {} seconds",
-                user.getId(), music.getTitle(), dto.getListenSeconds());
+        log.info("[Log Collector] ✅ 청취 로그 저장 완료 - User: {} ({}), Music: {}, Duration: {}s",
+                user.getId(), user.getEmail(), music.getTitle(), dto.getListenSeconds());
     }
 }

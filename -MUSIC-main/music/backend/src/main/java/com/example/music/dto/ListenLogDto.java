@@ -13,9 +13,11 @@ import lombok.*;
 @Builder
 public class ListenLogDto {
 
-    @Schema(description = "사용자 ID", example = "1")
-    @NotNull(message = "사용자 ID는 필수입니다.")
+    @Schema(description = "사용자 ID (숫자 PK, 소셜 로그인 시 생략 가능)", example = "1")
     private Long userId;
+
+    @Schema(description = "사용자 이메일 (소셜 로그인 식별용)", example = "cjsrudgh98@gmail.com")
+    private String email;
 
     @Schema(description = "음원 고유 ID", example = "10")
     @NotNull(message = "음원 ID는 필수입니다.")
