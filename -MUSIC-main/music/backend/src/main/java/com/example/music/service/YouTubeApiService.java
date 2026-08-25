@@ -40,6 +40,7 @@ public class YouTubeApiService {
             log.info("[YouTube Cache Hit] DB에서 곡 정보를 반환합니다. videoId: {}", videoId);
             Music music = cachedMusic.get();
             return YouTubeVideoDto.builder()
+                    .id(music.getId())
                     .youtubeVideoId(music.getYoutubeVideoId())
                     .title(music.getTitle())
                     .artist(music.getArtist())
@@ -92,9 +93,10 @@ public class YouTubeApiService {
                     .artist(artist)
                     .thumbnailUrl(thumbnailUrl)
                     .build();
-            musicRepository.save(newMusic);
+            Music savedMusic = musicRepository.save(newMusic);
 
             return YouTubeVideoDto.builder()
+                    .id(savedMusic.getId())
                     .youtubeVideoId(videoId)
                     .title(title)
                     .artist(artist)

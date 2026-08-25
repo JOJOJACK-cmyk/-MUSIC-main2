@@ -47,7 +47,12 @@ public class MusicService {
         Music music = musicRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("음원을 찾을 수 없습니다. id=" + id));
 
-        music.update(request.getTitle(), request.getArtist(), request.getThumbnailUrl());
+        // 썸네일 URL이 null이거나 비어있을 경우 기존 엔티티의 썸네일 URL 유지
+        String targetThumbnail = (request.getThumbnailUrl() != null && !request.getThumbnailUrl().isBlank())
+                ? request.getThumbnailUrl()
+                : music.getThumbnailUrl();
+
+        music.update(request.getTitle(), request.getArtist(), targetThumbnail);
         return new MusicDto.Response(music);
     }
 

@@ -4,6 +4,8 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import PlayerBar from './components/PlayerBar';
 import YouTubePlayer from './components/YouTubePlayer';
+import HlsAudioPlayer from './components/HlsAudioPlayer';
+import MusicModal from './components/MusicModal';
 
 import MainPage from './pages/MainPage';
 import LoginPage from './pages/LoginPage';
@@ -11,195 +13,66 @@ import ChartPage from './pages/ChartPage';
 import LivePage from './pages/LivePage';
 import LibraryPage from './pages/LibraryPage';
 
-import {
-  PlayerProvider,
-  usePlayer
-} from './context/PlayerContext';
-
+import { PlayerProvider } from './context/PlayerContext';
+import { AuthProvider } from './context/AuthContext';
+import { musicApi } from './api/musicApi';
 import './styles/style.css';
 
-
-/**
- * 현재 재생 중인 YouTube 영상
- */
-function NowPlayingVideo() {
-
-  const { currentTrack } = usePlayer();
-
-
-  // 현재 선택된 곡이 없으면
-  // YouTube 플레이어를 보여주지 않음
-  if (!currentTrack?.youtubeVideoId) {
-    return null;
-  }
-
-
-  return (
-
-    <div className="youtube-player-floating">
-
-      {/* 현재 재생 곡 제목 */}
-      <div className="youtube-player-title">
-
-        <span>
-          현재 재생
-        </span>
-
-        <strong>
-          {currentTrack.title}
-        </strong>
-
-      </div>
-
-
-      {/* 실제 YouTube Player */}
-    <YouTubePlayer
-        key={currentTrack.youtubeVideoId}
-         videoId={currentTrack.youtubeVideoId}
-        />
-
-    </div>
-  );
-}
-
-
-/**
- * 메인 App
- */
 export default function App() {
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // 음악 추가 Modal 상태
-  const [
-    isAddModalOpen,
-    setIsAddModalOpen
-  ] = useState(false);
+  // 음원 등록 핸들러
+  const handleAddMusicSubmit = async (data) => {
+    try {
+      if (data.youtubeVideoId) {
+        // YouTube 등록: videoId 문자열을 전달
+        await musicApi.createMusicFromYouTube(data.youtubeVideoId);
+      } else {
+        // 일반 등록
+        await musicApi.createMusic(data);
+      }
 
+      alert('음원이 성공적으로 등록되었습니다!');
+      setIsModalOpen(false);
+      window.location.reload(); // 등록 후 목록 갱신
+    } catch (error) {
+      console.error('음원 등록 실패:', error);
+      alert('음원 등록에 실패했습니다. (백엔드 컨트롤러 또는 API Key를 확인해 주세요)');
+    }
+  };
 
   return (
+    <AuthProvider>
+      <PlayerProvider>
+        <BrowserRouter>
+          <div className="app-container">
+            <Sidebar onOpenAddModal={() => setIsModalOpen(true)} />
 
-    <PlayerProvider>
+            <main className="main-content">
+              <Routes>
+                <Route path="/" element={<MainPage />} />
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/chart" element={<ChartPage />} />
+                <Route path="/live" element={<LivePage />} />
+                <Route path="/library" element={<LibraryPage />} />
+              </Routes>
+            </main>
 
-      <BrowserRouter>
+            {/* 음원 등록 모달 */}
+            {isModalOpen && (
+              <MusicModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                onSubmit={handleAddMusicSubmit}
+              />
+            )}
 
-        <Routes>
-
-
-          {/* =========================
-              로그인 페이지
-             ========================= */}
-
-          <Route
-            path="/login"
-            element={
-              <LoginPage />
-            }
-          />
-
-
-          {/* =========================
-              로그인 이후 메인 화면
-             ========================= */}
-
-          <Route
-            path="*"
-            element={
-
-              <div className="app-container">
-
-
-                {/* 왼쪽 Sidebar */}
-                <Sidebar
-
-                  onOpenAddModal={() =>
-                    setIsAddModalOpen(true)
-                  }
-
-                />
-
-
-                {/* =========================
-                    페이지 영역
-                   ========================= */}
-
-                <Routes>
-
-
-                  {/* 메인 페이지 */}
-                  <Route
-
-                    path="/"
-
-                    element={
-
-                      <MainPage
-
-                        isModalOpen={
-                          isAddModalOpen
-                        }
-
-                        setIsModalOpen={
-                          setIsAddModalOpen
-                        }
-
-                      />
-                    }
-
-                  />
-
-
-                  {/* 차트 */}
-                  <Route
-                    path="/charts"
-                    element={
-                      <ChartPage />
-                    }
-                  />
-
-
-                  {/* 라이브 */}
-                  <Route
-                    path="/live"
-                    element={
-                      <LivePage />
-                    }
-                  />
-
-
-                  {/* 라이브러리 */}
-                  <Route
-                    path="/library"
-                    element={
-                      <LibraryPage />
-                    }
-                  />
-
-
-                </Routes>
-
-
-                {/* =========================
-                    실제 YouTube 영상
-                   ========================= */}
-
-                <NowPlayingVideo />
-
-
-                {/* =========================
-                    하단 음악 PlayerBar
-                   ========================= */}
-
-                <PlayerBar />
-
-
-              </div>
-            }
-          />
-
-
-        </Routes>
-
-      </BrowserRouter>
-
-    </PlayerProvider>
+            <YouTubePlayer />
+            <HlsAudioPlayer />
+            <PlayerBar />
+          </div>
+        </BrowserRouter>
+      </PlayerProvider>
+    </AuthProvider>
   );
 }

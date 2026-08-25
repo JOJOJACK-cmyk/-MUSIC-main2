@@ -7,6 +7,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Entity
 @Table(name = "music")
 @Getter
@@ -42,4 +45,6 @@ public class Music {
         this.artist = artist;
         this.thumbnailUrl = thumbnailUrl;
     }
+    @OneToMany(mappedBy = "music", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ListenLog> listenLogs = new ArrayList<>();
 }

@@ -11,15 +11,21 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver;
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
+import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Configuration
@@ -34,6 +40,7 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
@@ -45,8 +52,8 @@ public class SecurityConfig {
                                 "/v3/api-docs/**",
                                 "/ws-chat/**",
                                 "/ws/**",
-                                "/api/v1/logs/**",  // 💡 청취 로그 수집 API 허용 추가
-                                "/api/logs/**"      // 💡 (경로 대비용 추가)
+                                "/api/v1/logs/**",
+                                "/api/logs/**"
                         ).permitAll()
 
                         .requestMatchers(HttpMethod.GET, "/api/musics/**", "/api/broadcast/**",  "/api/music-snapshot/**")
@@ -71,7 +78,67 @@ public class SecurityConfig {
                                 )
                         )
                         .successHandler((request, response, authentication) -> {
-                            response.sendRedirect("http://localhost:3000/");
+                            OAuth2AuthenticationToken oauthToken = (OAuth2AuthenticationToken) authentication;
+                            String registrationId = oauthToken.getAuthorizedClientRegistrationId().toLowerCase();
+                            OAuth2User oAuth2User = oauthToken.getPrincipal();
+                            Map<String, Object> attributes = oAuth2User.getAttributes();
+
+                            String nickname = "사용자";
+                            String email = "";
+                            String profileImageUrl = "";
+
+                            if ("kakao".equals(registrationId)) {
+                                if (attributes.containsKey("kakao_account")) {
+                                    Map<String, Object> kakaoAccount = (Map<String, Object>) attributes.get("kakao_account");
+                                    if (kakaoAccount != null) {
+                                        email = (String) kakaoAccount.get("email");
+                                        Map<String, Object> profile = (Map<String, Object>) kakaoAccount.get("profile");
+                                        if (profile != null) {
+                                            nickname = (String) profile.get("nickname");
+                                            profileImageUrl = (String) profile.get("profile_image_url");
+                                        }
+                                    }
+                                } else {
+                                    nickname = (String) attributes.getOrDefault("nickname", attributes.get("name"));
+                                    email = (String) attributes.get("email");
+                                    profileImageUrl = (String) attributes.getOrDefault("profileImageUrl", attributes.get("profile_image_url"));
+                                }
+                            } else if ("naver".equals(registrationId)) {
+                                if (attributes.containsKey("response")) {
+                                    Map<String, Object> naverResp = (Map<String, Object>) attributes.get("response");
+                                    if (naverResp != null) {
+                                        email = (String) naverResp.get("email");
+                                        nickname = (String) naverResp.get("nickname");
+                                        if (nickname == null || nickname.isEmpty()) {
+                                            nickname = (String) naverResp.get("name");
+                                        }
+                                        profileImageUrl = (String) naverResp.get("profile_image");
+                                    }
+                                } else {
+                                    nickname = (String) attributes.getOrDefault("nickname", attributes.get("name"));
+                                    email = (String) attributes.get("email");
+                                    profileImageUrl = (String) attributes.getOrDefault("profileImageUrl", attributes.get("profile_image"));
+                                }
+                            } else if ("google".equals(registrationId)) {
+                                nickname = (String) attributes.get("name");
+                                email = (String) attributes.get("email");
+                                profileImageUrl = (String) attributes.get("picture");
+                            }
+
+                            if (nickname == null || nickname.isEmpty()) {
+                                nickname = (String) attributes.getOrDefault("nickname", attributes.getOrDefault("name", "소셜사용자"));
+                            }
+                            if (email == null) email = "";
+                            if (profileImageUrl == null) profileImageUrl = "";
+
+                            String encodedNickname = URLEncoder.encode(nickname, StandardCharsets.UTF_8);
+                            String encodedEmail = URLEncoder.encode(email, StandardCharsets.UTF_8);
+                            String encodedProfile = URLEncoder.encode(profileImageUrl, StandardCharsets.UTF_8);
+
+                            response.sendRedirect(String.format(
+                                    "http://localhost:3000/?nickname=%s&email=%s&profileImageUrl=%s",
+                                    encodedNickname, encodedEmail, encodedProfile
+                            ));
                         })
                         .failureHandler((request, response, exception) -> {
                             exception.printStackTrace();
@@ -92,6 +159,26 @@ public class SecurityConfig {
                 );
 
         return http.build();
+    }
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+
+        // 💡 null(로컬 HTML 직접 열기) 및 localhost 모든 포트 허용
+        configuration.setAllowedOriginPatterns(List.of(
+                "http://localhost:3000",
+                "http://localhost:8080",
+                "null",
+                "*"
+        ));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"));
+        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
     }
 
     private static class CustomOAuth2AuthorizationRequestResolver implements OAuth2AuthorizationRequestResolver {
@@ -118,7 +205,7 @@ public class SecurityConfig {
 
             Map<String, Object> extraParams = new HashMap<>(req.getAdditionalParameters());
 
-            if (req.getAuthorizationUri().contains("naver")) {
+            if (req.getAuthorizationUri() != null && req.getAuthorizationUri().contains("naver")) {
                 extraParams.put("auth_type", "reprompt");
             }
 
