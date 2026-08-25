@@ -25,16 +25,14 @@ export default function App() {
   const handleAddMusicSubmit = async (data) => {
     try {
       if (data.youtubeVideoId) {
-        // YouTube 등록: videoId 문자열을 전달
         await musicApi.createMusicFromYouTube(data.youtubeVideoId);
       } else {
-        // 일반 등록
         await musicApi.createMusic(data);
       }
 
       alert('음원이 성공적으로 등록되었습니다!');
       setIsModalOpen(false);
-      window.location.reload(); // 등록 후 목록 갱신
+      window.location.reload();
     } catch (error) {
       console.error('음원 등록 실패:', error);
       alert('음원 등록에 실패했습니다. (백엔드 컨트롤러 또는 API Key를 확인해 주세요)');
@@ -52,7 +50,8 @@ export default function App() {
               <Routes>
                 <Route path="/" element={<MainPage />} />
                 <Route path="/login" element={<LoginPage />} />
-                <Route path="/chart" element={<ChartPage />} />
+                {/* 🔴 라우트 경로를 /charts 로 수정 완료 */}
+                <Route path="/charts" element={<ChartPage />} />
                 <Route path="/live" element={<LivePage />} />
                 <Route path="/library" element={<LibraryPage />} />
               </Routes>

@@ -38,18 +38,31 @@ public class MusicController {
                 .body(musicService.createMusicFromYouTube(videoId));
     }
 
-    @Operation(summary = "음원 단건 조회", description = "음원 ID(PK)를 통해 특정 음원의 상세 정보를 조회합니다.")
-    @GetMapping("/{id}")
-    public ResponseEntity<MusicDto.Response> getMusic(
-            @Parameter(description = "음원 고유 ID", example = "1", required = true)
-            @PathVariable Long id) {
-        return ResponseEntity.ok(musicService.getMusic(id));
+    // 🔴 [추가됨] 랭킹/차트 조회 엔드포인트
+    // ⚠️ 주의: 동적 경로인 getMusic("/{id}") 보다 반드시 위쪽에 위치해야 "ranking" 문자열을 id로 오인하지 않습니다.
+    @Operation(summary = "실시간 TOP 100 차트 조회", description = "실시간 음원 랭킹 및 TOP 100 차트 목록을 조회합니다.")
+    @GetMapping("/ranking")
+    public ResponseEntity<List<MusicDto.Response>> getRankingChart() {
+        // 만약 MusicService에 랭킹 조회 메서드가 있다면 연결해주시고,
+        // 우선 임시로 전체 목록이나 랭킹 데이터를 반환하도록 구성할 수 있습니다.
+        // 예시: return ResponseEntity.ok(musicService.getRankingList());
+
+        // 일단 기존 getAllMusic()을 활용하거나 랭킹 서비스로 연동하세요.
+        return ResponseEntity.ok(musicService.getAllMusic());
     }
 
     @Operation(summary = "전체 음원 목록 조회", description = "DB에 저장된 모든 음원 목록을 조회합니다.")
     @GetMapping
     public ResponseEntity<List<MusicDto.Response>> getAllMusic() {
         return ResponseEntity.ok(musicService.getAllMusic());
+    }
+
+    @Operation(summary = "음원 단건 조회", description = "음원 ID(PK)를 통해 특정 음원의 상세 정보를 조회합니다.")
+    @GetMapping("/{id}")
+    public ResponseEntity<MusicDto.Response> getMusic(
+            @Parameter(description = "음원 고유 ID", example = "1", required = true)
+            @PathVariable Long id) {
+        return ResponseEntity.ok(musicService.getMusic(id));
     }
 
     @Operation(summary = "음원 정보 수정", description = "기존 음원의 제목, 아티스트 등의 정보를 수정합니다.")

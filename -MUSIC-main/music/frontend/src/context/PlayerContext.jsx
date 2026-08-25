@@ -29,27 +29,16 @@ export const PlayerProvider = ({ children }) => {
   // =========================
   // 청취 로그 관련
   // =========================
-
-  // 이미 로그 전송에 성공한 곡 ID
   const loggedTrackIdRef = useRef(null);
-
-  // 실제 재생 누적 시간
   const playTimeCounterRef = useRef(0);
-
-  // 청취 로그 중복 요청 방지
   const isSendingLogRef = useRef(false);
 
   // =========================
   // YouTube Player 관련
   // =========================
-
-  // 실제 YouTube Player 객체
   const playerRef = useRef(null);
-
-  // 현재 볼륨
   const volumeRef = useRef(80);
 
-  // YouTubePlayer에서 생성된 실제 Player 등록
   const registerPlayer = useCallback((player) => {
     playerRef.current = player;
 
@@ -61,9 +50,7 @@ export const PlayerProvider = ({ children }) => {
   // =========================
   // 30초 청취 로그 전송
   // =========================
-
   const sendListenLog = useCallback(async (musicId) => {
-    // 1. user 객체 및 localStorage에서 사용자 식별값 탐색
     let rawUser = user;
     if (!rawUser) {
       try {
@@ -81,7 +68,6 @@ export const PlayerProvider = ({ children }) => {
       return false;
     }
 
-    // 이미 요청 중이면 중복 요청 방지
     if (isSendingLogRef.current) {
       return false;
     }
@@ -89,8 +75,6 @@ export const PlayerProvider = ({ children }) => {
     isSendingLogRef.current = true;
 
     try {
-      // 백엔드 DTO(Long userId) 타입 호환성 처리
-      // 숫자형 ID면 숫자로 전달, 이메일 문자열이면 세션 인증 활용을 위해 분기
       const isNumericId = !isNaN(rawId) && !String(rawId).includes('@');
 
       const requestBody = {
@@ -104,10 +88,6 @@ export const PlayerProvider = ({ children }) => {
         requestBody.email = String(rawId);
       }
 
-      console.log(
-        `[Log Collector] 30초 달성 요청 전송: identifier=${rawId}, musicId=${musicId}`
-      );
-
       const response = await fetch(
         'http://localhost:8080/api/v1/logs/listen',
         {
@@ -115,7 +95,7 @@ export const PlayerProvider = ({ children }) => {
           headers: {
             'Content-Type': 'application/json',
           },
-          credentials: 'include', // 스프링 시큐리티 세션 쿠키 전달
+          credentials: 'include',
           body: JSON.stringify(requestBody),
         }
       );
@@ -125,10 +105,7 @@ export const PlayerProvider = ({ children }) => {
         return true;
       }
 
-      console.error(
-        '[Log Collector] ❌ 전송 실패 응답 코드:',
-        response.status
-      );
+      console.error('[Log Collector] ❌ 전송 실패 응답 코드:', response.status);
       return false;
 
     } catch (err) {
@@ -142,7 +119,6 @@ export const PlayerProvider = ({ children }) => {
   // =========================
   // 실제 재생시간 추적
   // =========================
-
   useEffect(() => {
     if (!isPlaying || !currentTrack) {
       return;
@@ -152,17 +128,11 @@ export const PlayerProvider = ({ children }) => {
       const player = playerRef.current;
       if (!player) return;
 
-      // -------------------------
-      // 현재 실제 재생시간
-      // -------------------------
       if (typeof player.getCurrentTime === 'function') {
         const time = player.getCurrentTime() || 0;
         setCurrentTime(time);
       }
 
-      // -------------------------
-      // 영상 전체 길이
-      // -------------------------
       if (typeof player.getDuration === 'function') {
         const realDuration = player.getDuration() || 0;
         if (realDuration > 0) {
@@ -170,9 +140,6 @@ export const PlayerProvider = ({ children }) => {
         }
       }
 
-      // -------------------------
-      // 30초 청취 로그
-      // -------------------------
       playTimeCounterRef.current += 0.5;
 
       if (
@@ -196,7 +163,6 @@ export const PlayerProvider = ({ children }) => {
   // =========================
   // 음악 선택 / 재생
   // =========================
-
   const playTrack = (track) => {
     if (!track?.youtubeVideoId) {
       return;
@@ -220,7 +186,6 @@ export const PlayerProvider = ({ children }) => {
   // =========================
   // 재생 / 일시정지
   // =========================
-
   const togglePlay = () => {
     if (!currentTrack && playlist.length > 0) {
       playTrack(playlist[0]);
@@ -241,7 +206,6 @@ export const PlayerProvider = ({ children }) => {
   // =========================
   // 다음 곡
   // =========================
-
   const handleNextTrack = () => {
     if (playlist.length === 0) return;
 
@@ -276,7 +240,6 @@ export const PlayerProvider = ({ children }) => {
   // =========================
   // 이전 곡
   // =========================
-
   const handlePrevTrack = () => {
     if (playlist.length === 0) return;
 
@@ -294,7 +257,6 @@ export const PlayerProvider = ({ children }) => {
   // =========================
   // 진행바 이동
   // =========================
-
   const seekTime = (percentage) => {
     const player = playerRef.current;
     if (!player || duration <= 0) return;
@@ -307,7 +269,6 @@ export const PlayerProvider = ({ children }) => {
   // =========================
   // 볼륨
   // =========================
-
   const changeVolume = (nextVolume) => {
     const safeVolume = Math.max(0, Math.min(100, nextVolume));
     volumeRef.current = safeVolume;
@@ -322,11 +283,9 @@ export const PlayerProvider = ({ children }) => {
   // =========================
   // YouTube Player 상태 변경
   // =========================
-
   const handlePlayerStateChange = (event) => {
     const state = event.data;
 
-    // 0 = 영상 종료
     if (state === 0) {
       setIsPlaying(false);
       if (isRepeat) {
@@ -338,7 +297,6 @@ export const PlayerProvider = ({ children }) => {
       return;
     }
 
-    // 1 = 재생 중
     if (state === 1) {
       setIsPlaying(true);
       const realDuration = event.target.getDuration?.() || 0;
@@ -346,7 +304,6 @@ export const PlayerProvider = ({ children }) => {
       return;
     }
 
-    // 2 = 일시정지
     if (state === 2) {
       setIsPlaying(false);
       const time = event.target.getCurrentTime?.() || 0;
@@ -370,6 +327,9 @@ export const PlayerProvider = ({ children }) => {
         togglePlay,
         handleNextTrack,
         handlePrevTrack,
+        // ✨ HlsAudioPlayer 등에서 직관적으로 쓸 수 있도록 별칭(Alias) 추가 제공
+        playNext: handleNextTrack,
+        playPrevious: handlePrevTrack,
         seekTime,
         setVolume: changeVolume,
         setIsShuffle,

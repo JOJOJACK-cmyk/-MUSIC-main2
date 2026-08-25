@@ -16,4 +16,8 @@ export const musicApi = {
 
   updateMusic: (id, musicData) => api.put(`/api/musics/${id}`, musicData),
   deleteMusic: (id) => api.delete(`/api/musics/${id}`),
+
+  // 🔴 [추가] 실시간 TOP 100 차트/랭킹 데이터를 가져오는 API
+  // (백엔드의 MusicSnapshotController 또는 랭킹 관련 엔드포인트 주소에 맞춤)
+  getTop100Chart: () => api.get('/api/musics/ranking'),
 };
