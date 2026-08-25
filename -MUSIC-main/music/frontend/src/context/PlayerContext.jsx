@@ -12,7 +12,6 @@ import { useAuth } from './AuthContext';
 const PlayerContext = createContext(null);
 
 export const PlayerProvider = ({ children }) => {
-
   const { user } = useAuth();
 
   const [currentTrack, setCurrentTrack] = useState(null);
@@ -52,16 +51,11 @@ export const PlayerProvider = ({ children }) => {
 
   // YouTubePlayer에서 생성된 실제 Player 등록
   const registerPlayer = useCallback((player) => {
-
     playerRef.current = player;
 
-    if (
-      player &&
-      typeof player.setVolume === 'function'
-    ) {
+    if (player && typeof player.setVolume === 'function') {
       player.setVolume(volumeRef.current);
     }
-
   }, []);
 
   // =========================
@@ -69,14 +63,21 @@ export const PlayerProvider = ({ children }) => {
   // =========================
 
   const sendListenLog = useCallback(async (musicId) => {
+    // 1. user 객체 및 localStorage에서 사용자 식별값 탐색
+    let rawUser = user;
+    if (!rawUser) {
+      try {
+        const stored = localStorage.getItem('user');
+        if (stored) rawUser = JSON.parse(stored);
+      } catch (_) {}
+    }
 
-    // 로그인 사용자의 ID가 없으면 전송하지 않음
-    if (!user?.id) {
+    const rawId = rawUser?.id || rawUser?.userId || rawUser?.username || rawUser?.email;
 
+    if (!rawId) {
       console.warn(
-        '[Log Collector] 로그인 사용자 ID가 없어 청취 로그를 전송하지 않습니다.'
+        '[Log Collector] 로그인 사용자 정보가 없어 청취 로그를 전송하지 않습니다.'
       );
-
       return false;
     }
 
@@ -88,36 +89,39 @@ export const PlayerProvider = ({ children }) => {
     isSendingLogRef.current = true;
 
     try {
+      // 백엔드 DTO(Long userId) 타입 호환성 처리
+      // 숫자형 ID면 숫자로 전달, 이메일 문자열이면 세션 인증 활용을 위해 분기
+      const isNumericId = !isNaN(rawId) && !String(rawId).includes('@');
+
+      const requestBody = {
+        musicId: Number(musicId),
+        listenSeconds: 30,
+      };
+
+      if (isNumericId) {
+        requestBody.userId = Number(rawId);
+      } else {
+        requestBody.email = String(rawId);
+      }
 
       console.log(
-        `[Log Collector] 30초 달성! userId=${user.id}, musicId=${musicId}`
+        `[Log Collector] 30초 달성 요청 전송: identifier=${rawId}, musicId=${musicId}`
       );
 
       const response = await fetch(
         'http://localhost:8080/api/v1/logs/listen',
         {
           method: 'POST',
-
           headers: {
             'Content-Type': 'application/json',
           },
-
-          credentials: 'include',
-
-          body: JSON.stringify({
-            userId: user.id,
-            musicId: Number(musicId),
-            listenSeconds: 30,
-          }),
+          credentials: 'include', // 스프링 시큐리티 세션 쿠키 전달
+          body: JSON.stringify(requestBody),
         }
       );
 
       if (response.ok) {
-
-        console.log(
-          '[Log Collector] ✅ 백엔드 DB 저장 성공'
-        );
-
+        console.log('[Log Collector] ✅ 백엔드 DB 저장 성공 (200 OK)');
         return true;
       }
 
@@ -125,70 +129,42 @@ export const PlayerProvider = ({ children }) => {
         '[Log Collector] ❌ 전송 실패 응답 코드:',
         response.status
       );
-
       return false;
 
     } catch (err) {
-
-      console.error(
-        '[Log Collector] ❌ 네트워크 에러:',
-        err
-      );
-
+      console.error('[Log Collector] ❌ 네트워크 에러:', err);
       return false;
-
     } finally {
-
       isSendingLogRef.current = false;
-
     }
-
-  }, [user?.id]);
+  }, [user]);
 
   // =========================
   // 실제 재생시간 추적
   // =========================
 
   useEffect(() => {
-
-    // 재생 중이 아니거나 현재 곡이 없으면 실행하지 않음
     if (!isPlaying || !currentTrack) {
       return;
     }
 
     const interval = setInterval(() => {
-
       const player = playerRef.current;
-
-      if (!player) {
-        return;
-      }
+      if (!player) return;
 
       // -------------------------
       // 현재 실제 재생시간
       // -------------------------
-
-      if (
-        typeof player.getCurrentTime === 'function'
-      ) {
-
-        const time =
-          player.getCurrentTime() || 0;
-
+      if (typeof player.getCurrentTime === 'function') {
+        const time = player.getCurrentTime() || 0;
         setCurrentTime(time);
       }
 
       // -------------------------
       // 영상 전체 길이
       // -------------------------
-
-      if (
-        typeof player.getDuration === 'function'
-      ) {
-
-        const realDuration =
-          player.getDuration() || 0;
-
+      if (typeof player.getDuration === 'function') {
+        const realDuration = player.getDuration() || 0;
         if (realDuration > 0) {
           setDuration(realDuration);
         }
@@ -197,7 +173,6 @@ export const PlayerProvider = ({ children }) => {
       // -------------------------
       // 30초 청취 로그
       // -------------------------
-
       playTimeCounterRef.current += 0.5;
 
       if (
@@ -205,67 +180,39 @@ export const PlayerProvider = ({ children }) => {
         loggedTrackIdRef.current !== currentTrack.id &&
         !isSendingLogRef.current
       ) {
-
-        sendListenLog(currentTrack.id)
-          .then((success) => {
-
-            // 실제 DB 저장에 성공한 경우에만
-            // 이 곡을 로그 전송 완료 처리
-            if (success) {
-
-              loggedTrackIdRef.current =
-                currentTrack.id;
-            }
-
-          });
+        sendListenLog(currentTrack.id).then((success) => {
+          if (success) {
+            loggedTrackIdRef.current = currentTrack.id;
+          }
+        });
       }
-
     }, 500);
 
     return () => {
       clearInterval(interval);
     };
-
-  }, [
-    isPlaying,
-    currentTrack,
-    sendListenLog,
-  ]);
+  }, [isPlaying, currentTrack, sendListenLog]);
 
   // =========================
   // 음악 선택 / 재생
   // =========================
 
   const playTrack = (track) => {
-
     if (!track?.youtubeVideoId) {
       return;
     }
 
-    // 다른 곡으로 변경된 경우
-    // 30초 누적 시간 초기화
     if (currentTrack?.id !== track.id) {
-
       playTimeCounterRef.current = 0;
     }
 
     setCurrentTrack(track);
-
     setCurrentTime(0);
     setDuration(0);
 
-    const player =
-      playerRef.current;
-
-    if (
-      player &&
-      typeof player.loadVideoById === 'function'
-    ) {
-
-      player.loadVideoById(
-        track.youtubeVideoId
-      );
-
+    const player = playerRef.current;
+    if (player && typeof player.loadVideoById === 'function') {
+      player.loadVideoById(track.youtubeVideoId);
       player.playVideo();
     }
   };
@@ -275,39 +222,18 @@ export const PlayerProvider = ({ children }) => {
   // =========================
 
   const togglePlay = () => {
-
-    // 현재 곡이 없는데 플레이리스트가 있으면
-    // 첫 번째 곡 재생
-    if (
-      !currentTrack &&
-      playlist.length > 0
-    ) {
-
-      playTrack(
-        playlist[0]
-      );
-
+    if (!currentTrack && playlist.length > 0) {
+      playTrack(playlist[0]);
       return;
     }
 
-    const player =
-      playerRef.current;
+    const player = playerRef.current;
+    if (!player) return;
 
-    if (!player) {
-      return;
-    }
-
-    const state =
-      player.getPlayerState?.();
-
-    // YouTube 상태
-    // 1 = 재생 중
+    const state = player.getPlayerState?.();
     if (state === 1) {
-
       player.pauseVideo();
-
     } else {
-
       player.playVideo();
     }
   };
@@ -317,68 +243,34 @@ export const PlayerProvider = ({ children }) => {
   // =========================
 
   const handleNextTrack = () => {
+    if (playlist.length === 0) return;
 
-    if (playlist.length === 0) {
-      return;
-    }
-
-    const currentIndex =
-      playlist.findIndex(
-        (track) =>
-          track.id === currentTrack?.id
-      );
+    const currentIndex = playlist.findIndex(
+      (track) => track.id === currentTrack?.id
+    );
 
     if (currentIndex === -1) {
-
-      playTrack(
-        playlist[0]
-      );
-
+      playTrack(playlist[0]);
       return;
     }
 
-    // 랜덤 재생
     if (isShuffle) {
-
       if (playlist.length === 1) {
-
-        playTrack(
-          playlist[0]
-        );
-
+        playTrack(playlist[0]);
         return;
       }
 
       let randomIndex;
-
       do {
+        randomIndex = Math.floor(Math.random() * playlist.length);
+      } while (playlist[randomIndex].id === currentTrack?.id);
 
-        randomIndex =
-          Math.floor(
-            Math.random() *
-            playlist.length
-          );
-
-      } while (
-        playlist[randomIndex].id ===
-        currentTrack?.id
-      );
-
-      playTrack(
-        playlist[randomIndex]
-      );
-
+      playTrack(playlist[randomIndex]);
       return;
     }
 
-    // 일반 다음 곡
-    const nextIndex =
-      (currentIndex + 1) %
-      playlist.length;
-
-    playTrack(
-      playlist[nextIndex]
-    );
+    const nextIndex = (currentIndex + 1) % playlist.length;
+    playTrack(playlist[nextIndex]);
   };
 
   // =========================
@@ -386,32 +278,16 @@ export const PlayerProvider = ({ children }) => {
   // =========================
 
   const handlePrevTrack = () => {
+    if (playlist.length === 0) return;
 
-    if (playlist.length === 0) {
-      return;
-    }
-
-    const currentIndex =
-      playlist.findIndex(
-        (track) =>
-          track.id === currentTrack?.id
-      );
+    const currentIndex = playlist.findIndex(
+      (track) => track.id === currentTrack?.id
+    );
 
     if (currentIndex <= 0) {
-
-      playTrack(
-        playlist[
-          playlist.length - 1
-        ]
-      );
-
+      playTrack(playlist[playlist.length - 1]);
     } else {
-
-      playTrack(
-        playlist[
-          currentIndex - 1
-        ]
-      );
+      playTrack(playlist[currentIndex - 1]);
     }
   };
 
@@ -420,29 +296,12 @@ export const PlayerProvider = ({ children }) => {
   // =========================
 
   const seekTime = (percentage) => {
+    const player = playerRef.current;
+    if (!player || duration <= 0) return;
 
-    const player =
-      playerRef.current;
-
-    if (
-      !player ||
-      duration <= 0
-    ) {
-      return;
-    }
-
-    const nextTime =
-      (percentage / 100) *
-      duration;
-
-    player.seekTo(
-      nextTime,
-      true
-    );
-
-    setCurrentTime(
-      nextTime
-    );
+    const nextTime = (percentage / 100) * duration;
+    player.seekTo(nextTime, true);
+    setCurrentTime(nextTime);
   };
 
   // =========================
@@ -450,35 +309,13 @@ export const PlayerProvider = ({ children }) => {
   // =========================
 
   const changeVolume = (nextVolume) => {
+    const safeVolume = Math.max(0, Math.min(100, nextVolume));
+    volumeRef.current = safeVolume;
+    setVolumeState(safeVolume);
 
-    const safeVolume =
-      Math.max(
-        0,
-        Math.min(
-          100,
-          nextVolume
-        )
-      );
-
-    volumeRef.current =
-      safeVolume;
-
-    setVolumeState(
-      safeVolume
-    );
-
-    const player =
-      playerRef.current;
-
-    if (
-      player &&
-      typeof player.setVolume ===
-        'function'
-    ) {
-
-      player.setVolume(
-        safeVolume
-      );
+    const player = playerRef.current;
+    if (player && typeof player.setVolume === 'function') {
+      player.setVolume(safeVolume);
     }
   };
 
@@ -487,75 +324,35 @@ export const PlayerProvider = ({ children }) => {
   // =========================
 
   const handlePlayerStateChange = (event) => {
+    const state = event.data;
 
-    const state =
-      event.data;
-
-    // -------------------------
     // 0 = 영상 종료
-    // -------------------------
-
     if (state === 0) {
-
       setIsPlaying(false);
-
       if (isRepeat) {
-
-        event.target.seekTo(
-          0,
-          true
-        );
-
+        event.target.seekTo(0, true);
         event.target.playVideo();
-
       } else {
-
         handleNextTrack();
       }
-
       return;
     }
 
-    // -------------------------
     // 1 = 재생 중
-    // -------------------------
-
     if (state === 1) {
-
       setIsPlaying(true);
-
-      const realDuration =
-        event.target
-          .getDuration?.() || 0;
-
-      setDuration(
-        realDuration
-      );
-
+      const realDuration = event.target.getDuration?.() || 0;
+      setDuration(realDuration);
       return;
     }
 
-    // -------------------------
     // 2 = 일시정지
-    // -------------------------
-
     if (state === 2) {
-
       setIsPlaying(false);
-
-      const time =
-        event.target
-          .getCurrentTime?.() || 0;
-
-      setCurrentTime(
-        time
-      );
+      const time = event.target.getCurrentTime?.() || 0;
+      setCurrentTime(time);
     }
   };
-
-  // =========================
-  // Context 제공
-  // =========================
 
   return (
     <PlayerContext.Provider
@@ -566,25 +363,17 @@ export const PlayerProvider = ({ children }) => {
         duration,
         volume,
         playlist,
-
         isShuffle,
         isRepeat,
-
         setPlaylist,
-
         playTrack,
         togglePlay,
-
         handleNextTrack,
         handlePrevTrack,
-
         seekTime,
-
         setVolume: changeVolume,
-
         setIsShuffle,
         setIsRepeat,
-
         registerPlayer,
         handlePlayerStateChange,
       }}
@@ -594,5 +383,4 @@ export const PlayerProvider = ({ children }) => {
   );
 };
 
-export const usePlayer = () =>
-  useContext(PlayerContext);
+export const usePlayer = () => useContext(PlayerContext);
