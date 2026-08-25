@@ -18,11 +18,12 @@ export default function LoginPage() {
 
       // 💡 백엔드 응답 데이터에서 사용자 정보와 토큰 추출 (응답 구조에 유연하게 대응)
       const token = response?.accessToken || response?.token || response?.data?.accessToken;
-      const userData = {
+    const userData = {
+        id: response?.id || response?.data?.id,
         nickname: response?.nickname || response?.name || response?.data?.nickname || loginData.email.split('@')[0],
-        email: response?.email || response?.data?.email || loginData.email,
+         email: response?.email || response?.data?.email || loginData.email,
         profileImageUrl: response?.profileImageUrl || response?.data?.profileImageUrl || '',
-      };
+            };
 
       // 💡 AuthContext에 로그인 사용자 정보 등록 (전역 상태 및 로컬 스토리지 동기화)
       login(userData, token);
