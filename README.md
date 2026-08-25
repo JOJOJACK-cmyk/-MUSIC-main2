@@ -1,0 +1,7 @@
+- AWS S3 연동 설정 추가
+- S3Client 구성
+- Multipart 파일 업로드 서비스 구현
+- POST /api/s3/upload API 추가
+- Swagger 업로드 테스트 완료
+- 실제 S3 버킷 업로드 확인
+- SRS 로컬 HLS 포트 8081 설정 반영
