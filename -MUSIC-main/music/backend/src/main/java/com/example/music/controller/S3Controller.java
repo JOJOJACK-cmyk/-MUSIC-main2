@@ -27,10 +27,12 @@ public class S3Controller {
     ) {
 
         String key = s3Service.uploadFile(file);
+        String url = s3Service.getCloudFrontUrl(key);
 
         return ResponseEntity.ok(
                 Map.of(
                         "key", key,
+                        "url", url,
                         "message", "S3 파일 업로드 성공"
                 )
         );
