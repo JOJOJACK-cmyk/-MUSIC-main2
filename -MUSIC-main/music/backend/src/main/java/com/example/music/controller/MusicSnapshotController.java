@@ -28,4 +28,19 @@ public class MusicSnapshotController {
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(snapshot);
     }
+    @GetMapping(
+            value = "/top100",
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    public ResponseEntity<String> getTop100Ranking() {
+
+        String json = musicSnapshotService.getTop100Ranking();
+
+        if (json == null) {
+            return ResponseEntity.noContent().build();
+        }
+
+        return ResponseEntity.ok(json);
+    }
+
 }

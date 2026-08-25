@@ -19,10 +19,12 @@ public class S3Service {
     @Value("${aws.s3.bucket}")
     private String bucketName;
 
+    @Value("${aws.cloudfront.domain}")
+    private String cloudFrontDomain;
+
     public S3Service(S3Client s3Client) {
         this.s3Client = s3Client;
     }
-
 
     public String uploadFile(MultipartFile file) {
 
@@ -39,7 +41,6 @@ public class S3Service {
         String key =
                 "uploads/" + fileName;
 
-
         try {
 
             PutObjectRequest request =
@@ -49,7 +50,6 @@ public class S3Service {
                             .contentType(file.getContentType())
                             .build();
 
-
             s3Client.putObject(
                     request,
                     RequestBody.fromInputStream(
@@ -57,7 +57,6 @@ public class S3Service {
                             file.getSize()
                     )
             );
-
 
             return key;
 
@@ -68,5 +67,9 @@ public class S3Service {
                     e
             );
         }
+    }
+
+    public String getCloudFrontUrl(String key) {
+        return cloudFrontDomain + "/" + key;
     }
 }
