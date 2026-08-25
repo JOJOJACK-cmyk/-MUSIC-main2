@@ -49,7 +49,7 @@ public class SecurityConfig {
                                 "/api/logs/**"      // 💡 (경로 대비용 추가)
                         ).permitAll()
 
-                        .requestMatchers(HttpMethod.GET, "/api/musics/**", "/api/broadcast/**")
+                        .requestMatchers(HttpMethod.GET, "/api/musics/**", "/api/broadcast/**",  "/api/music-snapshot/**")
                         .permitAll()
 
                         .requestMatchers(
