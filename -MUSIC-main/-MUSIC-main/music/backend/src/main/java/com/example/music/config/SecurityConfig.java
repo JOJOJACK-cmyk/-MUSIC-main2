@@ -43,6 +43,7 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
                 .authorizeHttpRequests(auth -> auth
+                        // 1. 인증, OAuth, 문서, 웹소켓 등 기본 퍼블릭 경로 허용
                         .requestMatchers(
                                 "/api/auth/**",
                                 "/oauth2/**",
@@ -51,18 +52,24 @@ public class SecurityConfig {
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**",
                                 "/ws-chat/**",
-                                "/ws/**",
-                                "/api/v1/logs/**",
-                                "/api/logs/**"
+                                "/ws/**"
                         ).permitAll()
 
-                        .requestMatchers(HttpMethod.GET, "/api/musics/**", "/api/broadcast/**",  "/api/music-snapshot/**")
+                        // 2. [신규] 결제 API는 인증된 유저만 접근 가능
+                        .requestMatchers("/api/v1/payments/**").authenticated()
+
+                        // 3. [신규] 청취 로그 및 권한 검증 관련 API 인증 설정
+                        .requestMatchers("/api/v1/logs/**", "/api/logs/**").authenticated()
+
+                        // 4. 기존 음악 조회 중 일부만 허용하거나, 로그인을 강제하려면 주석 처리/수정
+                        .requestMatchers(HttpMethod.GET, "/api/musics/**", "/api/broadcast/**", "/api/music-snapshot/**")
                         .permitAll()
 
                         .requestMatchers(
                                 "/api/musics/youtube"
                         ).permitAll()
 
+                        // 5. 그 외 모든 요청은 로그인(인증)된 사용자만 접근 가능 (로그인 전 메인/주요페이지 차단)
                         .anyRequest().authenticated()
                 )
 
@@ -165,7 +172,6 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // 💡 null(로컬 HTML 직접 열기) 및 localhost 모든 포트 허용
         configuration.setAllowedOriginPatterns(List.of(
                 "http://localhost:3000",
                 "http://localhost:8080",
