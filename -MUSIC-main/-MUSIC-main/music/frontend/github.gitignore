@@ -1,0 +1,25 @@
+# 의존성 패키지 (깃허브 업로드 제외)
+node_modules
+/.pnp
+.pnp.js
+
+# 빌드 결과물
+dist
+dist-ssr
+*.local
+
+# 환경 변수 및 로그
+.env
+.env.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 에디터 설정
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
