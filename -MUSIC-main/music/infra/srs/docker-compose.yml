@@ -4,14 +4,14 @@ services:
     container_name: music-srs
 
     ports:
-      # RTMP
-      - "1935:1935"
+      # RTMP - 로컬 PC만 접근
+      - "127.0.0.1:1935:1935"
 
-      # SRS HTTP API
-      - "1985:1985"
+      # SRS HTTP API - 로컬 PC만 접근
+      - "127.0.0.1:1985:1985"
 
-      # HLS
-      - "8081:8080"
+      # HLS - 로컬 PC만 접근
+      - "127.0.0.1:8081:8080"
 
     volumes:
       - ./srs.conf:/usr/local/srs/conf/music.conf:ro
