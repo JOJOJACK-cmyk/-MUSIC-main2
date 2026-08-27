@@ -5,10 +5,29 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "tb_payment")
+@Table(
+        name = "tb_payment",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_tb_payment_order_id",
+                        columnNames = "order_id"
+                ),
+                @UniqueConstraint(
+                        name = "uk_tb_payment_payment_key",
+                        columnNames = "payment_key"
+                )
+        },
+        indexes = {
+                @Index(
+                        name = "idx_tb_payment_user_id",
+                        columnList = "user_id"
+                )
+        }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Payment {
@@ -17,30 +36,43 @@ public class Payment {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
-    private Long userId; // 결제한 유저 ID
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+            name = "user_id",
+            nullable = false,
+            foreignKey = @ForeignKey(name = "fk_tb_payment_user")
+    )
+    private User user;
+
+    @Column(name = "order_id", nullable = false)
+    private String orderId;
+
+    @Column(name = "payment_key", nullable = false)
+    private String paymentKey;
 
     @Column(nullable = false)
-    private String orderId; // 주문 고유 번호 (PG사 연동용)
+    private int amount;
+
+    @Column(name = "pass_type", nullable = false)
+    private String passType;
 
     @Column(nullable = false)
-    private String paymentKey; // PG사 승인 키
+    private String status;
 
-    @Column(nullable = false)
-    private int amount; // 결제 금액
-
-    @Column(nullable = false)
-    private String passType; // 이용권 종류 (예: 1개월 이용권, 무제한 등)
-
-    @Column(nullable = false)
-    private String status; // 결제 상태 (DONE: 완료, CANCELED: 취소 등)
-
-    @Column(nullable = false)
-    private LocalDateTime paidAt; // 결제 일시
+    @Column(name = "paid_at", nullable = false)
+    private LocalDateTime paidAt;
 
     @Builder
-    public Payment(Long userId, String orderId, String paymentKey, int amount, String passType, String status, LocalDateTime paidAt) {
-        this.userId = userId;
+    public Payment(
+            User user,
+            String orderId,
+            String paymentKey,
+            int amount,
+            String passType,
+            String status,
+            LocalDateTime paidAt
+    ) {
+        this.user = user;
         this.orderId = orderId;
         this.paymentKey = paymentKey;
         this.amount = amount;

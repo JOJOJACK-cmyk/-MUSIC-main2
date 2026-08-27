@@ -5,10 +5,19 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "tb_pass")
+@Table(
+        name = "tb_pass",
+        indexes = {
+                @Index(
+                        name = "idx_tb_pass_user_active_expire",
+                        columnList = "user_id, is_active, expire_date"
+                )
+        }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Pass {
@@ -17,24 +26,35 @@ public class Pass {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
-    private Long userId; // 이용권을 보유한 유저 ID
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+            name = "user_id",
+            nullable = false,
+            foreignKey = @ForeignKey(name = "fk_tb_pass_user")
+    )
+    private User user;
 
-    @Column(nullable = false)
-    private String passName; // 이용권 이름 (예: 스트리밍 무제한 1개월권)
+    @Column(name = "pass_name", nullable = false)
+    private String passName;
 
-    @Column(nullable = false)
-    private LocalDateTime startDate; // 이용권 시작일
+    @Column(name = "start_date", nullable = false)
+    private LocalDateTime startDate;
 
-    @Column(nullable = false)
-    private LocalDateTime expireDate; // 이용권 만료일
+    @Column(name = "expire_date", nullable = false)
+    private LocalDateTime expireDate;
 
-    @Column(nullable = false)
-    private boolean isActive; // 활성화 여부 (true: 사용 가능, false: 만료/정지)
+    @Column(name = "is_active", nullable = false)
+    private boolean isActive;
 
     @Builder
-    public Pass(Long userId, String passName, LocalDateTime startDate, LocalDateTime expireDate, boolean isActive) {
-        this.userId = userId;
+    public Pass(
+            User user,
+            String passName,
+            LocalDateTime startDate,
+            LocalDateTime expireDate,
+            boolean isActive
+    ) {
+        this.user = user;
         this.passName = passName;
         this.startDate = startDate;
         this.expireDate = expireDate;
