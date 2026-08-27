@@ -7,7 +7,15 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "listen_log")
+@Table(
+        name = "listen_log",
+        indexes = {
+                @Index(
+                        name = "idx_listen_log_user_music_time",
+                        columnList = "user_id, music_id, listened_at"
+                )
+        }
+)
 @Getter
 @Setter
 public class ListenLog {
