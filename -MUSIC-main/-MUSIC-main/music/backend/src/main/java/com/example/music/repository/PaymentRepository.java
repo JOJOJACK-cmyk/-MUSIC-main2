@@ -11,7 +11,7 @@ import java.util.Optional;
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     // 특정 유저의 결제 내역 조회
-    List<Payment> findByUserId(Long userId);
+    List<Payment> findByUser_Id(Long userId);
 
     // 주문 번호로 결제 내역 단건 조회
     Optional<Payment> findByOrderId(String orderId);

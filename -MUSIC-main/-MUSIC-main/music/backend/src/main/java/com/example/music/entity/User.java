@@ -10,7 +10,15 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "users")
+@Table(
+        name = "users",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_users_provider_provider_id",
+                        columnNames = {"provider", "provider_id"}
+                )
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -31,18 +39,19 @@ public class User {
     private String nickname;
 
     @Column(nullable = false, length = 20)
-    private String role; // "ROLE_USER", "ROLE_ADMIN" 등
+    private String role;
 
     @Column(name = "profile_image_url")
     private String profileImageUrl;
 
     @Column(length = 20)
-    private String provider; // "google", "kakao" 등
+    private String provider;
 
     @Column(name = "provider_id")
     private String providerId;
 
     private LocalDateTime createdAt;
+
     private LocalDateTime updatedAt;
 
     @PrePersist
@@ -57,7 +66,15 @@ public class User {
     }
 
     @Builder
-    public User(String email, String password, String nickname, String role, String profileImageUrl, String provider, String providerId) {
+    public User(
+            String email,
+            String password,
+            String nickname,
+            String role,
+            String profileImageUrl,
+            String provider,
+            String providerId
+    ) {
         this.email = email;
         this.password = password;
         this.nickname = nickname;
@@ -68,9 +85,13 @@ public class User {
     }
 
     // 소셜 프로필 업데이트용 메서드
-    public User updateOAuthProfile(String nickname, String profileImageUrl) {
+    public User updateOAuthProfile(
+            String nickname,
+            String profileImageUrl
+    ) {
         this.nickname = nickname;
         this.profileImageUrl = profileImageUrl;
+
         return this;
     }
 }

@@ -4,8 +4,10 @@ import com.example.music.dto.PaymentRequestDto;
 import com.example.music.dto.PaymentResponseDto;
 import com.example.music.entity.Pass;
 import com.example.music.entity.Payment;
+import com.example.music.entity.User;
 import com.example.music.repository.PassRepository;
 import com.example.music.repository.PaymentRepository;
+import com.example.music.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -20,15 +22,32 @@ public class PaymentService {
 
     private final PaymentRepository paymentRepository;
     private final PassRepository passRepository;
+    private final UserRepository userRepository;
 
     @Transactional
-    public PaymentResponseDto processPayment(PaymentRequestDto requestDto) {
-        // 1. 결제 정보 검증 및 PG사 승인 로직 (여기서는 모의/성공 가정)
-        log.info("[Payment] 결제 요청 승인 중 - User: {}, Amount: {}", requestDto.getUserId(), requestDto.getAmount());
+    public PaymentResponseDto processPayment(
+            PaymentRequestDto requestDto
+    ) {
 
-        // 2. 결제 내역 저장
+        // 1. 실제 사용자 조회
+        User user = userRepository.findById(requestDto.getUserId())
+                .orElseThrow(() ->
+                        new IllegalArgumentException(
+                                "존재하지 않는 사용자입니다. ID: "
+                                        + requestDto.getUserId()
+                        )
+                );
+
+        // 2. 결제 정보 검증 및 PG사 승인 로직
+        log.info(
+                "[Payment] 결제 요청 승인 중 - User: {}, Amount: {}",
+                user.getId(),
+                requestDto.getAmount()
+        );
+
+        // 3. 결제 내역 저장
         Payment payment = Payment.builder()
-                .userId(requestDto.getUserId())
+                .user(user)
                 .orderId(requestDto.getOrderId())
                 .paymentKey(requestDto.getPaymentKey())
                 .amount(requestDto.getAmount())
@@ -39,12 +58,13 @@ public class PaymentService {
 
         paymentRepository.save(payment);
 
-        // 3. 결제 완료 시 유저에게 이용권(Pass) 발급 (예: 1개월 이용권)
+        // 4. 이용권 기간 설정
         LocalDateTime startDate = LocalDateTime.now();
-        LocalDateTime expireDate = startDate.plusMonths(1); // 1개월 뒤 만료
+        LocalDateTime expireDate = startDate.plusMonths(1);
 
+        // 5. 이용권 발급
         Pass pass = Pass.builder()
-                .userId(requestDto.getUserId())
+                .user(user)
                 .passName(requestDto.getPassType())
                 .startDate(startDate)
                 .expireDate(expireDate)
@@ -53,8 +73,16 @@ public class PaymentService {
 
         passRepository.save(pass);
 
-        log.info("[Payment] ✅ 결제 완료 및 이용권 발급 성공 - User: {}, ExpireDate: {}", requestDto.getUserId(), expireDate);
+        log.info(
+                "[Payment] 결제 완료 및 이용권 발급 성공 - User: {}, ExpireDate: {}",
+                user.getId(),
+                expireDate
+        );
 
-        return new PaymentResponseDto(payment.getOrderId(), "SUCCESS", "결제가 정상적으로 완료되었습니다.");
+        return new PaymentResponseDto(
+                payment.getOrderId(),
+                "SUCCESS",
+                "결제가 정상적으로 완료되었습니다."
+        );
     }
 }
