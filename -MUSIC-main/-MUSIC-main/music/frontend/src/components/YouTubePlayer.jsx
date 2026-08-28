@@ -30,7 +30,8 @@ export default function YouTubePlayer() {
         playerVars: {
           autoplay: 1,
           playsinline: 1,
-          controls: 0,
+          controls: 1, // 유튜브 자체 컨트롤러(화질 설정, 전체화면 버튼 포함) 활성화
+          modestbranding: 1,
           origin: window.location.origin,
         },
         events: {
@@ -87,20 +88,28 @@ export default function YouTubePlayer() {
     }
   }, [currentTrack?.youtubeVideoId]);
 
+  if (!currentTrack || !currentTrack.youtubeVideoId) {
+    return null;
+  }
+
   return (
-    <div
-      style={{
-        position: 'fixed',
-        bottom: 0,
-        right: 0,
-        width: '200px',
-        height: '120px',
-        opacity: 0,
-        pointerEvents: 'none',
-        zIndex: -1,
-      }}
-    >
-      <div ref={containerRef} />
+    <div className="youtube-player-floating">
+      {/* 상단 타이틀 바에는 곡 제목만 깔끔하게 표시합니다 */}
+      <div className="youtube-player-title" style={{ display: 'flex', alignItems: 'center', padding: '4px 8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden', width: '100%' }}>
+          <span style={{ fontSize: '11px', opacity: 0.7, flexShrink: 0 }}>NOW PLAYING</span>
+          <strong style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '12px' }}>{currentTrack.title}</strong>
+        </div>
+      </div>
+
+      {/* 유튜브 플레이어 영역 (우측 하단에 자체 톱니바퀴와 전체화면 버튼이 포함됩니다) */}
+      <div
+        ref={containerRef}
+        style={{
+          width: '100%',
+          height: '200px'
+        }}
+      />
     </div>
   );
 }
