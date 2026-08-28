@@ -4,10 +4,16 @@ import com.example.music.entity.User;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.TestPropertySource;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @SpringBootTest
+@TestPropertySource(properties = {
+        "spring.data.redis.host=localhost",
+        "spring.data.redis.port=6379"
+})
 class UserRepositoryTest {
 
     @Autowired
@@ -15,15 +21,14 @@ class UserRepositoryTest {
 
     @Test
     void saveUserTest() {
+        String uniqueEmail = "test_" + UUID.randomUUID().toString().substring(0, 8) + "@test.com";
 
-        User user = new User();
-
-        user.setEmail("test@test.com");
-        user.setPassword("1234");
-        user.setNickname("테스트회원");
-        user.setRole("USER");
-        user.setCreatedAt(LocalDateTime.now());
-        user.setUpdatedAt(LocalDateTime.now());
+        User user = User.builder()
+                .email(uniqueEmail)
+                .password("1234")
+                .nickname("테스트회원")
+                .role("USER")
+                .build();
 
         User savedUser = userRepository.save(user);
 
