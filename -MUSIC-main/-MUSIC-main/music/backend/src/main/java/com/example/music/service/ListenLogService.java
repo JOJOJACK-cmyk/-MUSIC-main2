@@ -50,7 +50,7 @@ public class ListenLogService {
         }
 
         // 🔥 3. [신규] 유저의 유효한 이용권(결제) 상태 검증
-        boolean hasValidPass = passRepository.existsByUserIdAndIsActiveTrueAndExpireDateAfter(
+        boolean hasValidPass = passRepository.existsByUser_IdAndIsActiveTrueAndExpireDateAfter(
                 user.getId(), LocalDateTime.now()
         );
 
