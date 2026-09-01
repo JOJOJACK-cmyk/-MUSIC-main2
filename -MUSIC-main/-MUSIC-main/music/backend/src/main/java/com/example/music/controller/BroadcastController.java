@@ -4,13 +4,15 @@ import com.example.music.dto.SongVoteDto; // DTO 임포트 확인
 import com.example.music.entity.Broadcast;
 import com.example.music.entity.User;
 import com.example.music.service.BroadcastService;
+import com.example.music.service.LiveViewerService;
 import com.example.music.service.SongVoteService;
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.web.bind.annotation.*;
-
+import com.example.music.dto.LiveBroadcastResponse;
 import java.util.List;
 
 @RestController
@@ -20,6 +22,8 @@ public class BroadcastController {
 
     private final BroadcastService broadcastService;
     private final SongVoteService songVoteService;
+    private final LiveViewerService liveViewerService;
+
 
     /**
      * 스트림 키 발급 및 재생성 API
@@ -92,4 +96,33 @@ public class BroadcastController {
         // 2. 갱신된 상위 순위 리스트를 바로 반환하여 시청자 화면들의 순위를 실시간 동기화
         return songVoteService.getTopSongRankings(10);
     }
+    /**
+     * 현재 실제 송출 중인 방송 목록 조회
+     * GET /api/broadcast/live
+     */
+    @GetMapping("/live")
+    public ResponseEntity<List<LiveBroadcastResponse>> getLiveBroadcasts() {
+
+        return ResponseEntity.ok(
+                broadcastService.getLiveBroadcasts()
+        );
+    }
+    /**
+     * 라이브 시청자 heartbeat
+     * POST /api/broadcast/{broadcastId}/viewers/heartbeat
+     */
+    @PostMapping("/{broadcastId}/viewers/heartbeat")
+    public ResponseEntity<Void> viewerHeartbeat(
+            @PathVariable Long broadcastId,
+            HttpSession session
+    ) {
+
+        liveViewerService.heartbeat(
+                broadcastId,
+                session.getId()
+        );
+
+        return ResponseEntity.ok().build();
+    }
+
 }

@@ -5,64 +5,83 @@ import Header from '../components/Header';
 export default function LivePage() {
   const videoRef = useRef(null);
 
-  // Spring Boot가 알려주는 실제 방송 상태
-  const [liveStatus, setLiveStatus] = useState('CHECKING');
-
-  // 영상 플레이어 상태 메시지
+  const [broadcasts, setBroadcasts] = useState([]);
+  const [selectedBroadcast, setSelectedBroadcast] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [playerMessage, setPlayerMessage] = useState('');
 
-  const hlsUrl = 'http://localhost:8081/live/livestream.m3u8';
-  const liveStatusUrl = 'http://localhost:8080/api/live/status';
+  const liveApiUrl = 'http://localhost:8080/api/broadcast/live';
 
-  // 1. Spring Boot를 통해 OBS/SRS 방송 상태 확인
+  // 1. 현재 방송 목록 조회
   useEffect(() => {
-    const checkLiveStatus = async () => {
+    const fetchLiveBroadcasts = async () => {
       try {
-        const response = await fetch(liveStatusUrl, {
+        const response = await fetch(liveApiUrl, {
           credentials: 'include',
         });
 
         if (!response.ok) {
-          throw new Error('라이브 상태 조회 실패');
+          throw new Error('라이브 방송 목록 조회 실패');
         }
 
         const data = await response.json();
 
-        setLiveStatus(data.status);
+        setBroadcasts(data);
+
+        if (data.length > 0) {
+          setSelectedBroadcast((current) => {
+            const stillLive = current
+              ? data.find(
+                  (broadcast) =>
+                    broadcast.id === current.id
+                )
+              : null;
+
+            return stillLive || data[0];
+          });
+        } else {
+          setSelectedBroadcast(null);
+        }
       } catch (error) {
-        console.error('라이브 상태 확인 실패:', error);
-        setLiveStatus('SRS_DOWN');
+        console.error(
+          '라이브 방송 조회 실패:',
+          error
+        );
+
+        setBroadcasts([]);
+        setSelectedBroadcast(null);
+      } finally {
+        setLoading(false);
       }
     };
 
-    // 페이지 들어오자마자 바로 한 번 확인
-    checkLiveStatus();
+    // 최초 조회
+    fetchLiveBroadcasts();
 
-    // 이후 3초마다 확인
-    const interval = setInterval(checkLiveStatus, 3000);
+    // 3초마다 목록 갱신
+    const interval = setInterval(
+      fetchLiveBroadcasts,
+      3000
+    );
 
     return () => {
       clearInterval(interval);
     };
   }, []);
 
-  // 2. 실제 방송이 LIVE일 때만 HLS 플레이어 연결
+  // 2. 선택된 방송 HLS 재생
   useEffect(() => {
     const video = videoRef.current;
 
-    if (!video) return;
-
-    // 방송 중이 아니면 기존 영상 연결 제거
-    if (liveStatus !== 'LIVE') {
-      video.pause();
-      video.removeAttribute('src');
-      video.load();
-
-      setPlayerMessage('');
+    if (!video || !selectedBroadcast) {
       return;
     }
 
-    setPlayerMessage('라이브 스트림 연결 중...');
+    const hlsUrl = selectedBroadcast.hlsUrl;
+
+    setPlayerMessage(
+      '라이브 스트림 연결 중...'
+    );
 
     // Chrome / Edge
     if (Hls.isSupported()) {
@@ -71,34 +90,53 @@ export default function LivePage() {
       hls.loadSource(hlsUrl);
       hls.attachMedia(video);
 
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        setPlayerMessage('');
+      hls.on(
+        Hls.Events.MANIFEST_PARSED,
+        () => {
+          setPlayerMessage('');
 
-        video.play().catch(() => {
-          console.log('브라우저 자동재생이 차단되었습니다.');
-        });
-      });
-
-      hls.on(Hls.Events.ERROR, (event, data) => {
-        console.error('HLS 오류:', data);
-
-        if (data.fatal) {
-          setPlayerMessage('라이브 영상을 불러오는 중 문제가 발생했습니다.');
+          video.play().catch(() => {
+            console.log(
+              '자동재생이 차단되었습니다.'
+            );
+          });
         }
-      });
+      );
+
+      hls.on(
+        Hls.Events.ERROR,
+        (event, data) => {
+          console.error(
+            'HLS 오류:',
+            data
+          );
+
+          if (data.fatal) {
+            setPlayerMessage(
+              '라이브 영상을 불러오는 중 문제가 발생했습니다.'
+            );
+          }
+        }
+      );
 
       return () => {
         hls.destroy();
       };
     }
 
-    // Safari 등 자체 HLS 지원 브라우저
-    if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    // Safari
+    if (
+      video.canPlayType(
+        'application/vnd.apple.mpegurl'
+      )
+    ) {
       const handleLoadedMetadata = () => {
         setPlayerMessage('');
 
         video.play().catch(() => {
-          console.log('브라우저 자동재생이 차단되었습니다.');
+          console.log(
+            '자동재생이 차단되었습니다.'
+          );
         });
       };
 
@@ -124,7 +162,51 @@ export default function LivePage() {
     setPlayerMessage(
       '이 브라우저에서는 HLS 재생을 지원하지 않습니다.'
     );
-  }, [liveStatus]);
+  }, [selectedBroadcast?.hlsUrl]);
+
+  // 3. Redis 시청자 heartbeat
+  useEffect(() => {
+    if (!selectedBroadcast?.id) {
+      return;
+    }
+
+    const sendHeartbeat = async () => {
+      try {
+        const response = await fetch(
+          `http://localhost:8080/api/broadcast/${selectedBroadcast.id}/viewers/heartbeat`,
+          {
+            method: 'POST',
+            credentials: 'include',
+          }
+        );
+
+        if (!response.ok) {
+          console.error(
+            '시청자 heartbeat 실패:',
+            response.status
+          );
+        }
+      } catch (error) {
+        console.error(
+          '시청자 heartbeat 전송 실패:',
+          error
+        );
+      }
+    };
+
+    // 방송 선택 즉시 한 번
+    sendHeartbeat();
+
+    // 이후 5초마다 heartbeat
+    const interval = setInterval(
+      sendHeartbeat,
+      5000
+    );
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [selectedBroadcast?.id]);
 
   return (
     <main className="main-content">
@@ -134,7 +216,9 @@ export default function LivePage() {
       />
 
       <div className="content-section">
-        <h2>📺 실시간 스트리밍 라이브</h2>
+        <h2>
+          📺 실시간 스트리밍 라이브
+        </h2>
 
         <p
           style={{
@@ -142,47 +226,101 @@ export default function LivePage() {
             marginTop: '12px',
           }}
         >
-          현재 방송 중인 라이브 스트림을 감상해보세요.
+          현재 방송 중인 라이브 스트림을
+          감상해보세요.
         </p>
 
-        <div
-          style={{
-            marginTop: '24px',
-            maxWidth: '1000px',
-          }}
-        >
-          {/* 방송 상태 */}
+        {/* 처음 로딩 */}
+        {loading && (
           <div
             style={{
-              marginBottom: '12px',
-              fontWeight: 'bold',
+              marginTop: '30px',
             }}
           >
-            {liveStatus === 'CHECKING' &&
-              '방송 상태 확인 중...'}
-
-            {liveStatus === 'LIVE' &&
-              '🔴 LIVE'}
-
-            {liveStatus === 'OFFLINE' &&
-              '현재 방송 중이 아닙니다.'}
-
-            {liveStatus === 'SRS_DOWN' &&
-              '스트리밍 서버에 연결할 수 없습니다.'}
+            방송 목록을 불러오는 중...
           </div>
+        )}
 
-          {/* LIVE일 때 실제 영상 */}
-          {liveStatus === 'LIVE' && (
-            <>
+        {/* 방송 없음 */}
+        {!loading &&
+          broadcasts.length === 0 && (
+            <div
+              style={{
+                marginTop: '24px',
+                maxWidth: '1000px',
+                minHeight: '400px',
+                backgroundColor: '#111',
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#aaa',
+              }}
+            >
+              현재 진행 중인 라이브 방송이
+              없습니다.
+            </div>
+          )}
+
+        {/* 선택된 메인 방송 */}
+        {!loading &&
+          selectedBroadcast && (
+            <div
+              style={{
+                marginTop: '24px',
+                maxWidth: '1000px',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  marginBottom: '10px',
+                }}
+              >
+                <span
+                  style={{
+                    fontWeight: 'bold',
+                  }}
+                >
+                  🔴 LIVE
+                </span>
+
+                <span
+                  style={{
+                    fontSize: '18px',
+                    fontWeight: 'bold',
+                  }}
+                >
+                  {selectedBroadcast.title}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  marginBottom: '12px',
+                  color: 'var(--text-sub)',
+                }}
+              >
+                방송자:{' '}
+                {selectedBroadcast.broadcaster}
+                {' · '}
+                👥{' '}
+                {selectedBroadcast.viewerCount ??
+                  0}
+                명 시청 중
+              </div>
+
               {playerMessage && (
-                <p
+                <div
                   style={{
                     marginBottom: '10px',
                     color: 'var(--text-sub)',
                   }}
                 >
                   {playerMessage}
-                </p>
+                </div>
               )}
 
               <video
@@ -194,47 +332,181 @@ export default function LivePage() {
                   width: '100%',
                   backgroundColor: '#000',
                   borderRadius: '12px',
+                  aspectRatio: '16 / 9',
                 }}
               />
-            </>
-          )}
-
-          {/* 방송 종료 상태 */}
-          {liveStatus === 'OFFLINE' && (
-            <div
-              style={{
-                width: '100%',
-                minHeight: '400px',
-                backgroundColor: '#111',
-                borderRadius: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#aaa',
-              }}
-            >
-              현재 진행 중인 라이브 방송이 없습니다.
             </div>
           )}
 
-          {/* SRS 서버 장애 */}
-          {liveStatus === 'SRS_DOWN' && (
-            <div
+        {/* 현재 방송 목록 */}
+        {broadcasts.length > 0 && (
+          <div
+            style={{
+              marginTop: '40px',
+              maxWidth: '1000px',
+            }}
+          >
+            <h3
               style={{
-                width: '100%',
-                minHeight: '400px',
-                backgroundColor: '#111',
-                borderRadius: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#aaa',
+                marginBottom: '16px',
               }}
             >
-              스트리밍 서버에 연결할 수 없습니다.
+              현재 방송 중
+            </h3>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns:
+                  'repeat(auto-fill, minmax(220px, 1fr))',
+                gap: '16px',
+              }}
+            >
+              {broadcasts.map(
+                (broadcast) => (
+                  <div
+                    key={broadcast.id}
+                    onClick={() =>
+                      setSelectedBroadcast(
+                        broadcast
+                      )
+                    }
+                    style={{
+                      cursor: 'pointer',
+                      backgroundColor:
+                        '#181818',
+                      borderRadius: '10px',
+                      overflow: 'hidden',
+                      border:
+                        selectedBroadcast?.id ===
+                        broadcast.id
+                          ? '2px solid #ff2bbd'
+                          : '2px solid transparent',
+                    }}
+                  >
+                    {/* 방송 썸네일 */}
+                    <div
+                      style={{
+                        height: '130px',
+                        backgroundColor:
+                          '#252525',
+                        position: 'relative',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {broadcast.thumbnailUrl ? (
+                        <img
+                          src={
+                            broadcast.thumbnailUrl
+                          }
+                          alt={broadcast.title}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            display: 'block',
+                          }}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            display: 'flex',
+                            alignItems:
+                              'center',
+                            justifyContent:
+                              'center',
+                            color: '#888',
+                          }}
+                        >
+                          썸네일 없음
+                        </div>
+                      )}
+
+                      {/* LIVE */}
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: '8px',
+                          left: '8px',
+                          backgroundColor:
+                            '#e91916',
+                          color: '#fff',
+                          fontSize: '12px',
+                          fontWeight: 'bold',
+                          padding: '4px 7px',
+                          borderRadius: '5px',
+                        }}
+                      >
+                        LIVE
+                      </div>
+
+                      {/* 시청자 수 */}
+                      <div
+                        style={{
+                          position: 'absolute',
+                          right: '8px',
+                          bottom: '8px',
+                          backgroundColor:
+                            'rgba(0, 0, 0, 0.75)',
+                          color: '#fff',
+                          fontSize: '12px',
+                          padding: '4px 7px',
+                          borderRadius: '5px',
+                        }}
+                      >
+                        👥{' '}
+                        {broadcast.viewerCount ??
+                          0}
+                      </div>
+                    </div>
+
+                    {/* 방송 정보 */}
+                    <div
+                      style={{
+                        padding: '12px',
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontWeight: 'bold',
+                          marginBottom: '6px',
+                        }}
+                      >
+                        {broadcast.title}
+                      </div>
+
+                      <div
+                        style={{
+                          color:
+                            'var(--text-sub)',
+                          fontSize: '14px',
+                        }}
+                      >
+                        {broadcast.broadcaster}
+                      </div>
+
+                      <div
+                        style={{
+                          color:
+                            'var(--text-sub)',
+                          fontSize: '14px',
+                          marginTop: '4px',
+                        }}
+                      >
+                        👥{' '}
+                        {broadcast.viewerCount ??
+                          0}
+                        명 시청 중
+                      </div>
+                    </div>
+                  </div>
+                )
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </main>
   );
