@@ -58,6 +58,7 @@ public class SecurityConfig {
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**",
                                 "/ws-chat/**",
+                                "/ws-stomp/**",
                                 "/ws/**"
                         ).permitAll()
 
@@ -68,7 +69,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/logs/**", "/api/logs/**").authenticated()
 
                         // 4. 기존 음악 조회 중 일부만 허용하거나, 로그인을 강제하려면 주석 처리/수정
-                        .requestMatchers(HttpMethod.GET, "/api/musics/**", "/api/broadcast/**", "/api/music-snapshot/**")
+                        .requestMatchers(HttpMethod.GET, "/api/musics/**", "/api/broadcast/**", "/api/music-snapshot/**",  "/api/live/status","/api/broadcast/*/viewers/heartbeat")
                         .permitAll()
 
                         .requestMatchers(

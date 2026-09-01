@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import LiveDetailPage from './pages/LiveDetailPage';
 import Sidebar from './components/Sidebar';
 import PlayerBar from './components/PlayerBar';
 import YouTubePlayer from './components/YouTubePlayer';
@@ -65,6 +65,7 @@ export default function App() {
                 {/* 누구나 접근 가능한 공개 페이지 */}
                 <Route path="/" element={<MainPage />} />
                 <Route path="/login" element={<LoginPage />} />
+                {/* 🔴 라우트 경로를 /charts 로 수정 완료 */}
                 <Route path="/charts" element={<ChartPage />} />
 
                 {/* 🔒 라우트 가드가 적용된 보호된 페이지 */}
@@ -95,6 +96,12 @@ export default function App() {
                     </ProtectedRoute>
                   }
                 />
+                <Route path="/live" element={<LivePage />} />
+                <Route
+                  path="/live/:broadcastId"
+                  element={<LiveDetailPage />}
+                />
+                <Route path="/library" element={<LibraryPage />} />
               </Routes>
             </main>
 
