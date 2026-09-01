@@ -92,7 +92,7 @@ export default function YouTubePlayer() {
     }
   }, [currentTrack?.youtubeVideoId]);
 
-  // 3. 💡 비로그인 사용자 1분(60초) 제한 감지 로직 추가
+  // 3. 💡 비로그인 사용자 1분(60초) 제한 감지 로직 수정 (알림 블로킹 우회 적용)
   useEffect(() => {
     // 로그인 상태이거나 플레이어가 없으면 감지할 필요 없음
     if (!isLimitedUser) return;
@@ -104,13 +104,14 @@ export default function YouTubePlayer() {
         const currentTime = player.getCurrentTime();
 
         if (currentTime >= 60) {
-          player.pauseVideo(); // 60초 도달 시 일시 정지
-          player.seekTo(0);    // 처음으로 되돌리기 (선택사항)
+          // 💡 1. 즉시 음악 정지 및 처음으로 이동하여 바로 멈추게 함
+          player.pauseVideo();
+          player.seekTo(0);
 
-          alert('비로그인 사용자는 1분까지만 미리 듣기할 수 있습니다. 전체 곡을 감상하려면 로그인해주세요!');
-
-          // 필요시 로그인 페이지로 이동하는 로직 추가 가능
-          // window.location.href = '/login';
+          // 💡 2. 브라우저 스레드가 잠기지 않도록 setTimeout으로 alert 지연 실행
+          setTimeout(() => {
+            alert('비로그인 사용자는 1분까지만 미리 듣기할 수 있습니다. 전체 곡을 감상하려면 로그인해주세요!');
+          }, 100);
         }
       }
     }, 500); // 0.5초마다 현재 재생 시간 체크
@@ -119,16 +120,21 @@ export default function YouTubePlayer() {
   }, [isLimitedUser]);
 
   return (
-    <div className="youtube-player-floating">
+    <div
+      className="youtube-player-floating"
+      style={{ display: currentTrack ? 'block' : 'none' }} // 💡 곡이 없으면 display: none으로 숨기고, 있으면 보여줌
+    >
       {/* 상단 타이틀 바에는 곡 제목만 깔끔하게 표시합니다 */}
       <div className="youtube-player-title" style={{ display: 'flex', alignItems: 'center', padding: '4px 8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden', width: '100%' }}>
           <span style={{ fontSize: '11px', opacity: 0.7, flexShrink: 0 }}>NOW PLAYING</span>
-          <strong style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '12px' }}>{currentTrack.title}</strong>
+          <strong style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '12px' }}>
+            {currentTrack?.title || '재생 중인 곡 없음'}
+          </strong>
         </div>
       </div>
 
-      {/* 유튜브 플레이어 영역 (우측 하단에 자체 톱니바퀴와 전체화면 버튼이 포함됩니다) */}
+      {/* 유튜브 플레이어 영역 */}
       <div
         ref={containerRef}
         style={{
