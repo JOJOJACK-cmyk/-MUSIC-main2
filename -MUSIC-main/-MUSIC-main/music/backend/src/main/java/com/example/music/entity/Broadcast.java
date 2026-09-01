@@ -26,6 +26,10 @@ public class Broadcast {
     @Column(name = "stream_key", nullable = false, unique = true)
     private String streamKey;
 
+    @Column(name = "thumbnail_url", length = 500)
+    private String thumbnailUrl;
+
+
     @Column(nullable = false, length = 20)
     private String status;
 

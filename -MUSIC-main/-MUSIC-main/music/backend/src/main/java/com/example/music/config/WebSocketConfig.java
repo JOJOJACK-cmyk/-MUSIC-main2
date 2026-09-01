@@ -12,17 +12,35 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // file:// 접속 및 다양한 포트 테스트를 위해 모든 Origin 허용
+
+        // 기존 채팅용 WebSocket
         registry.addEndpoint("/ws-chat")
+                .setAllowedOriginPatterns("*")
+                .withSockJS();
+
+        // 라이브 신청곡 / 투표용 WebSocket
+        registry.addEndpoint("/ws-stomp")
                 .setAllowedOriginPatterns("*")
                 .withSockJS();
     }
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        // 메시지 구독 요청 prefix
-        registry.enableSimpleBroker("/sub");
-        // 메시지 발행 요청 prefix
-        registry.setApplicationDestinationPrefixes("/pub");
+
+        // 서버 → 클라이언트 구독 경로
+        // 기존 채팅: /sub
+        // 라이브 투표: /topic
+        registry.enableSimpleBroker(
+                "/sub",
+                "/topic"
+        );
+
+        // 클라이언트 → 서버 발행 경로
+        // 기존 채팅: /pub
+        // 라이브 투표: /app
+        registry.setApplicationDestinationPrefixes(
+                "/pub",
+                "/app"
+        );
     }
 }
