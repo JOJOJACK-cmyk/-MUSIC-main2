@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-
+import LiveDetailPage from './pages/LiveDetailPage';
 import Sidebar from './components/Sidebar';
 import PlayerBar from './components/PlayerBar';
 import YouTubePlayer from './components/YouTubePlayer';
@@ -53,6 +53,10 @@ export default function App() {
                 {/* 🔴 라우트 경로를 /charts 로 수정 완료 */}
                 <Route path="/charts" element={<ChartPage />} />
                 <Route path="/live" element={<LivePage />} />
+                <Route
+                  path="/live/:broadcastId"
+                  element={<LiveDetailPage />}
+                />
                 <Route path="/library" element={<LibraryPage />} />
               </Routes>
             </main>

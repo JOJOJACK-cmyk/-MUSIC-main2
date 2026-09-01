@@ -52,6 +52,7 @@ public class SecurityConfig {
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**",
                                 "/ws-chat/**",
+                                "/ws-stomp/**",
                                 "/ws/**"
                         ).permitAll()
 
