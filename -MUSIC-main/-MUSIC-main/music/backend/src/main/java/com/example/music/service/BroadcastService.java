@@ -1,5 +1,6 @@
 package com.example.music.service;
 
+import com.example.music.dto.LiveBroadcastResponse;
 import com.example.music.entity.Broadcast;
 import com.example.music.entity.User;
 import com.example.music.repository.BroadcastRepository;
@@ -8,13 +9,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
-
+import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class BroadcastService {
 
     private final BroadcastRepository broadcastRepository;
+    private final SrsLiveStatusService srsLiveStatusService;
+    private final LiveViewerService liveViewerService;
 
     /**
      * 스트림 키 발급 및 재생성
@@ -62,4 +66,44 @@ public class BroadcastService {
             broadcast.setEndedAt(LocalDateTime.now());
         }
     }
+
+    @Transactional(readOnly = true)
+    public List<LiveBroadcastResponse> getLiveBroadcasts() {
+
+        // SRS는 이제 "현재 어떤 방송이 켜져 있는지"만 판단
+        List<String> activeStreamKeys =
+                srsLiveStatusService.getActiveStreamKeys();
+
+        if (activeStreamKeys.isEmpty()) {
+            return List.of();
+        }
+
+        List<Broadcast> broadcasts =
+                broadcastRepository.findByStreamKeyIn(
+                        activeStreamKeys
+                );
+
+        return broadcasts.stream()
+                .map(broadcast -> new LiveBroadcastResponse(
+                        broadcast.getId(),
+                        broadcast.getTitle(),
+                        broadcast.getUser().getNickname(),
+                        "LIVE",
+
+                        // 실제 시청자 수는 Redis에서
+                        liveViewerService.getViewerCount(
+                                broadcast.getId()
+                        ),
+
+                        broadcast.getThumbnailUrl(),
+
+                        "http://localhost:8081/live/"
+                                + broadcast.getStreamKey()
+                                + ".m3u8",
+
+                        broadcast.getStartedAt()
+                ))
+                .toList();
+    }
+
 }
