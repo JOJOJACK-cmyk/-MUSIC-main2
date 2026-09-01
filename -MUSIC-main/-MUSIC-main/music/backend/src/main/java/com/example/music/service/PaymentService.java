@@ -26,10 +26,10 @@ public class PaymentService {
 
     @Transactional
     public PaymentResponseDto processPayment(
-            PaymentRequestDto requestDto
+            PaymentRequestDto requestDto // <-- 인자를 requestDto 1개만 받도록 설정
     ) {
 
-        // 1. 실제 사용자 조회
+        // 1. 실제 사용자 조회 (DTO에 있는 userId 사용)
         User user = userRepository.findById(requestDto.getUserId())
                 .orElseThrow(() ->
                         new IllegalArgumentException(

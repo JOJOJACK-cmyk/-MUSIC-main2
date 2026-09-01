@@ -4,6 +4,8 @@ import com.example.music.dto.ErrorResponse;
 import io.swagger.v3.oas.annotations.Hidden;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -11,6 +13,28 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 @Hidden
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    // [신규] 401 Unauthorized: 인증 실패 (로그인 안 됨, 토큰 만료 등)
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ErrorResponse> handleAuthenticationException(AuthenticationException e) {
+        ErrorResponse response = new ErrorResponse(
+                "ERROR",
+                "UNAUTHORIZED",
+                "인증에 실패하였습니다: " + e.getMessage()
+        );
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+    }
+
+    // [신규] 403 Forbidden: 인가 실패 (권한이 없는 사용자, 청취/스트리밍 권한 부족 등)
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDeniedException(AccessDeniedException e) {
+        ErrorResponse response = new ErrorResponse(
+                "ERROR",
+                "ACCESS_DENIED",
+                "해당 리소스에 대한 접근 권한이 없습니다."
+        );
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+    }
 
     // 1. 존재하지 않는 URL 경로 요청 시 (404 Not Found)
     @ExceptionHandler(NoResourceFoundException.class)

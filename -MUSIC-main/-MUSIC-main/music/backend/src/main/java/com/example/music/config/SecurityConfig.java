@@ -1,5 +1,7 @@
 package com.example.music.config;
 
+import com.example.music.security.CustomAccessDeniedHandler;
+import com.example.music.security.CustomAuthenticationEntryPoint;
 import com.example.music.service.CustomOAuth2UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -35,6 +37,10 @@ public class SecurityConfig {
 
     private final CustomOAuth2UserService customOAuth2UserService;
     private final ClientRegistrationRepository clientRegistrationRepository;
+
+    // [추가] 인증/인가 예외 핸들러 주입
+    private final CustomAuthenticationEntryPoint authenticationEntryPoint;
+    private final CustomAccessDeniedHandler accessDeniedHandler;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -73,9 +79,10 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
 
+                // [수정] 401(인증 실패), 403(권한 부족) 커스텀 핸들러 연결
                 .exceptionHandling(exception -> exception
-                        .authenticationEntryPoint((request, response, authException) ->
-                                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized"))
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler)
                 )
 
                 .oauth2Login(oauth2 -> oauth2
