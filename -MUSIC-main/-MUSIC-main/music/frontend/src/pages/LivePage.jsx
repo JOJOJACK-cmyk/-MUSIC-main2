@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
 import Header from '../components/Header';
+import { useNavigate } from 'react-router-dom';
 
 export default function LivePage() {
   const videoRef = useRef(null);
@@ -11,6 +12,7 @@ export default function LivePage() {
   const [playerMessage, setPlayerMessage] = useState('');
 
   const liveApiUrl = 'http://localhost:8080/api/broadcast/live';
+    const navigate = useNavigate();
 
   // 1. 현재 방송 목록 조회
   useEffect(() => {
@@ -208,306 +210,462 @@ export default function LivePage() {
     };
   }, [selectedBroadcast?.id]);
 
-  return (
-    <main className="main-content">
-      <Header
-        searchTerm=""
-        setSearchTerm={() => {}}
-      />
+return (
+  <main className="main-content">
+    <Header
+      searchTerm=""
+      setSearchTerm={() => {}}
+    />
 
-      <div className="content-section">
-        <h2>
-          📺 실시간 스트리밍 라이브
-        </h2>
+    <div
+      className="content-section"
+      style={{
+        maxWidth: '1400px',
+        margin: '0 auto',
+        paddingBottom: '60px',
+      }}
+    >
+      {/* 페이지 제목 */}
+      <div style={{ marginBottom: '24px' }}>
+        <h2>📺 실시간 스트리밍 라이브</h2>
 
         <p
           style={{
             color: 'var(--text-sub)',
-            marginTop: '12px',
+            marginTop: '8px',
           }}
         >
-          현재 방송 중인 라이브 스트림을
-          감상해보세요.
+          현재 방송 중인 라이브 스트림을 감상해보세요.
         </p>
+      </div>
 
-        {/* 처음 로딩 */}
-        {loading && (
-          <div
+      {/* 로딩 */}
+      {loading && (
+        <div
+          style={{
+            padding: '80px 0',
+            textAlign: 'center',
+            color: 'var(--text-sub)',
+          }}
+        >
+          방송 목록을 불러오는 중...
+        </div>
+      )}
+
+      {/* 방송 없음 */}
+      {!loading && broadcasts.length === 0 && (
+        <div
+          style={{
+            minHeight: '450px',
+            backgroundColor: '#111',
+            borderRadius: '14px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#aaa',
+          }}
+        >
+          현재 진행 중인 라이브 방송이 없습니다.
+        </div>
+      )}
+
+      {/* ============================= */}
+      {/* 대표 라이브 영역 */}
+      {/* ============================= */}
+      {!loading && selectedBroadcast && (
+        <>
+          <section
             style={{
-              marginTop: '30px',
+              display: 'grid',
+              gridTemplateColumns:
+                broadcasts.length > 1
+                  ? 'minmax(0, 3fr) minmax(260px, 1fr)'
+                  : '1fr',
+              gap: '18px',
             }}
           >
-            방송 목록을 불러오는 중...
-          </div>
-        )}
-
-        {/* 방송 없음 */}
-        {!loading &&
-          broadcasts.length === 0 && (
-            <div
-              style={{
-                marginTop: '24px',
-                maxWidth: '1000px',
-                minHeight: '400px',
-                backgroundColor: '#111',
-                borderRadius: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#aaa',
-              }}
-            >
-              현재 진행 중인 라이브 방송이
-              없습니다.
-            </div>
-          )}
-
-        {/* 선택된 메인 방송 */}
-        {!loading &&
-          selectedBroadcast && (
-            <div
-              style={{
-                marginTop: '24px',
-                maxWidth: '1000px',
-              }}
-            >
+            {/* 대표 방송 */}
+            <div>
               <div
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  marginBottom: '10px',
+                  position: 'relative',
+                  backgroundColor: '#000',
+                  borderRadius: '14px',
+                  overflow: 'hidden',
                 }}
               >
-                <span
+                <video
+                  ref={videoRef}
+                  controls
+                  autoPlay
+                  muted
                   style={{
+                    width: '100%',
+                    aspectRatio: '16 / 9',
+                    display: 'block',
+                    backgroundColor: '#000',
+                  }}
+                />
+
+                {/* LIVE 배지 */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '14px',
+                    left: '14px',
+                    padding: '5px 9px',
+                    borderRadius: '5px',
+                    backgroundColor: '#e91916',
+                    color: '#fff',
+                    fontSize: '12px',
                     fontWeight: 'bold',
                   }}
                 >
-                  🔴 LIVE
-                </span>
+                  LIVE
+                </div>
 
-                <span
+                {/* 시청자 수 */}
+                <div
                   style={{
-                    fontSize: '18px',
-                    fontWeight: 'bold',
+                    position: 'absolute',
+                    right: '14px',
+                    top: '14px',
+                    padding: '5px 9px',
+                    borderRadius: '5px',
+                    backgroundColor: 'rgba(0,0,0,0.75)',
+                    color: '#fff',
+                    fontSize: '12px',
+                  }}
+                >
+                  👥 {selectedBroadcast.viewerCount ?? 0}명
+                </div>
+              </div>
+
+              {/* 방송 정보 */}
+              <div
+                style={{
+                  padding: '16px 4px',
+                }}
+              >
+                <h3
+                  style={{
+                    fontSize: '21px',
+                    marginBottom: '7px',
                   }}
                 >
                   {selectedBroadcast.title}
-                </span>
-              </div>
+                </h3>
 
-              <div
-                style={{
-                  marginBottom: '12px',
-                  color: 'var(--text-sub)',
-                }}
-              >
-                방송자:{' '}
-                {selectedBroadcast.broadcaster}
-                {' · '}
-                👥{' '}
-                {selectedBroadcast.viewerCount ??
-                  0}
-                명 시청 중
-              </div>
-
-              {playerMessage && (
                 <div
                   style={{
-                    marginBottom: '10px',
                     color: 'var(--text-sub)',
+                    fontSize: '14px',
                   }}
                 >
-                  {playerMessage}
+                  {selectedBroadcast.broadcaster}
+                  {' · '}
+                  👥 {selectedBroadcast.viewerCount ?? 0}명 시청 중
                 </div>
-              )}
 
-              <video
-                ref={videoRef}
-                controls
-                autoPlay
-                muted
-                style={{
-                  width: '100%',
-                  backgroundColor: '#000',
-                  borderRadius: '12px',
-                  aspectRatio: '16 / 9',
-                }}
-              />
+                {playerMessage && (
+                  <div
+                    style={{
+                      color: 'var(--text-sub)',
+                      marginTop: '8px',
+                      fontSize: '13px',
+                    }}
+                  >
+                    {playerMessage}
+                  </div>
+                )}
+              </div>
             </div>
-          )}
 
-        {/* 현재 방송 목록 */}
-        {broadcasts.length > 0 && (
-          <div
+            {/* 오른쪽 추천 방송 */}
+            {broadcasts.length > 1 && (
+              <div>
+                <h3
+                  style={{
+                    marginBottom: '12px',
+                    fontSize: '16px',
+                  }}
+                >
+                  다른 라이브
+                </h3>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px',
+                  }}
+                >
+                  {broadcasts
+                    .filter(
+                      (broadcast) =>
+                        broadcast.id !== selectedBroadcast.id
+                    )
+                    .slice(0, 3)
+                    .map((broadcast) => (
+                      <div
+                        key={broadcast.id}
+                        onClick={() =>
+                          navigate(`/live/${broadcast.id}`)
+                        }
+                        style={{
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <div
+                          style={{
+                            position: 'relative',
+                            aspectRatio: '16 / 9',
+                            borderRadius: '10px',
+                            overflow: 'hidden',
+                            backgroundColor: '#222',
+                          }}
+                        >
+                          {broadcast.thumbnailUrl ? (
+                            <img
+                              src={broadcast.thumbnailUrl}
+                              alt={broadcast.title}
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
+                              }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                display: 'flex',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                color: '#888',
+                              }}
+                            >
+                              썸네일 없음
+                            </div>
+                          )}
+
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: '7px',
+                              left: '7px',
+                              backgroundColor: '#e91916',
+                              padding: '3px 6px',
+                              borderRadius: '4px',
+                              color: '#fff',
+                              fontSize: '11px',
+                              fontWeight: 'bold',
+                            }}
+                          >
+                            LIVE
+                          </div>
+
+                          <div
+                            style={{
+                              position: 'absolute',
+                              right: '7px',
+                              bottom: '7px',
+                              backgroundColor: 'rgba(0,0,0,0.75)',
+                              padding: '3px 6px',
+                              borderRadius: '4px',
+                              color: '#fff',
+                              fontSize: '11px',
+                            }}
+                          >
+                            👥 {broadcast.viewerCount ?? 0}
+                          </div>
+                        </div>
+
+                        <div
+                          style={{
+                            marginTop: '6px',
+                            fontWeight: 'bold',
+                            fontSize: '14px',
+                          }}
+                        >
+                          {broadcast.title}
+                        </div>
+
+                        <div
+                          style={{
+                            color: 'var(--text-sub)',
+                            fontSize: '12px',
+                          }}
+                        >
+                          {broadcast.broadcaster}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* ============================= */}
+          {/* 전체 라이브 목록 */}
+          {/* ============================= */}
+          <section
             style={{
-              marginTop: '40px',
-              maxWidth: '1000px',
+              marginTop: '42px',
             }}
           >
-            <h3
+            <div
               style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
                 marginBottom: '16px',
               }}
             >
-              현재 방송 중
-            </h3>
+              <h3>🔥 현재 방송 중</h3>
+
+              <span
+                style={{
+                  color: 'var(--text-sub)',
+                  fontSize: '13px',
+                }}
+              >
+                {broadcasts.length}개 방송
+              </span>
+            </div>
 
             <div
               style={{
                 display: 'grid',
                 gridTemplateColumns:
-                  'repeat(auto-fill, minmax(220px, 1fr))',
-                gap: '16px',
+                  'repeat(auto-fill, minmax(240px, 1fr))',
+                gap: '20px',
               }}
             >
-              {broadcasts.map(
-                (broadcast) => (
+              {broadcasts.map((broadcast) => (
+                <div
+                  key={broadcast.id}
+                  onClick={() =>
+                    navigate(`/live/${broadcast.id}`)
+                  }
+                  style={{
+                    cursor: 'pointer',
+                  }}
+                >
+                  {/* 썸네일 */}
                   <div
-                    key={broadcast.id}
-                    onClick={() =>
-                      setSelectedBroadcast(
-                        broadcast
-                      )
-                    }
                     style={{
-                      cursor: 'pointer',
-                      backgroundColor:
-                        '#181818',
+                      position: 'relative',
+                      aspectRatio: '16 / 9',
                       borderRadius: '10px',
                       overflow: 'hidden',
+                      backgroundColor: '#222',
                       border:
-                        selectedBroadcast?.id ===
-                        broadcast.id
+                        selectedBroadcast.id === broadcast.id
                           ? '2px solid #ff2bbd'
                           : '2px solid transparent',
                     }}
                   >
-                    {/* 방송 썸네일 */}
+                    {broadcast.thumbnailUrl ? (
+                      <img
+                        src={broadcast.thumbnailUrl}
+                        alt={broadcast.title}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                          display: 'block',
+                        }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          height: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#888',
+                        }}
+                      >
+                        썸네일 없음
+                      </div>
+                    )}
+
                     <div
                       style={{
-                        height: '130px',
-                        backgroundColor:
-                          '#252525',
-                        position: 'relative',
-                        overflow: 'hidden',
+                        position: 'absolute',
+                        top: '8px',
+                        left: '8px',
+                        backgroundColor: '#e91916',
+                        color: '#fff',
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        padding: '4px 7px',
+                        borderRadius: '4px',
                       }}
                     >
-                      {broadcast.thumbnailUrl ? (
-                        <img
-                          src={
-                            broadcast.thumbnailUrl
-                          }
-                          alt={broadcast.title}
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                            display: 'block',
-                          }}
-                        />
-                      ) : (
-                        <div
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            display: 'flex',
-                            alignItems:
-                              'center',
-                            justifyContent:
-                              'center',
-                            color: '#888',
-                          }}
-                        >
-                          썸네일 없음
-                        </div>
-                      )}
-
-                      {/* LIVE */}
-                      <div
-                        style={{
-                          position: 'absolute',
-                          top: '8px',
-                          left: '8px',
-                          backgroundColor:
-                            '#e91916',
-                          color: '#fff',
-                          fontSize: '12px',
-                          fontWeight: 'bold',
-                          padding: '4px 7px',
-                          borderRadius: '5px',
-                        }}
-                      >
-                        LIVE
-                      </div>
-
-                      {/* 시청자 수 */}
-                      <div
-                        style={{
-                          position: 'absolute',
-                          right: '8px',
-                          bottom: '8px',
-                          backgroundColor:
-                            'rgba(0, 0, 0, 0.75)',
-                          color: '#fff',
-                          fontSize: '12px',
-                          padding: '4px 7px',
-                          borderRadius: '5px',
-                        }}
-                      >
-                        👥{' '}
-                        {broadcast.viewerCount ??
-                          0}
-                      </div>
+                      LIVE
                     </div>
 
-                    {/* 방송 정보 */}
                     <div
                       style={{
-                        padding: '12px',
+                        position: 'absolute',
+                        right: '8px',
+                        bottom: '8px',
+                        backgroundColor: 'rgba(0,0,0,0.75)',
+                        color: '#fff',
+                        fontSize: '11px',
+                        padding: '4px 7px',
+                        borderRadius: '4px',
                       }}
                     >
-                      <div
-                        style={{
-                          fontWeight: 'bold',
-                          marginBottom: '6px',
-                        }}
-                      >
-                        {broadcast.title}
-                      </div>
-
-                      <div
-                        style={{
-                          color:
-                            'var(--text-sub)',
-                          fontSize: '14px',
-                        }}
-                      >
-                        {broadcast.broadcaster}
-                      </div>
-
-                      <div
-                        style={{
-                          color:
-                            'var(--text-sub)',
-                          fontSize: '14px',
-                          marginTop: '4px',
-                        }}
-                      >
-                        👥{' '}
-                        {broadcast.viewerCount ??
-                          0}
-                        명 시청 중
-                      </div>
+                      👥 {broadcast.viewerCount ?? 0}
                     </div>
                   </div>
-                )
-              )}
+
+                  {/* 카드 정보 */}
+                  <div
+                    style={{
+                      paddingTop: '10px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontWeight: 'bold',
+                        fontSize: '15px',
+                        marginBottom: '4px',
+                      }}
+                    >
+                      {broadcast.title}
+                    </div>
+
+                    <div
+                      style={{
+                        color: 'var(--text-sub)',
+                        fontSize: '13px',
+                      }}
+                    >
+                      {broadcast.broadcaster}
+                    </div>
+
+                    <div
+                      style={{
+                        color: 'var(--text-sub)',
+                        fontSize: '12px',
+                        marginTop: '3px',
+                      }}
+                    >
+                      👥 {broadcast.viewerCount ?? 0}명 시청 중
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
-        )}
-      </div>
-    </main>
-  );
+          </section>
+        </>
+      )}
+    </div>
+  </main>
+);
 }
