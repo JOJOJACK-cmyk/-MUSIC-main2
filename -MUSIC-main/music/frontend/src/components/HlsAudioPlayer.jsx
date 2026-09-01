@@ -1,10 +1,11 @@
 import React, { useEffect, useRef } from 'react';
 import Hls from 'hls.js';
 import { usePlayer } from '../context/PlayerContext';
+import { useAuth } from '../context/AuthContext'; // 💡 1. useAuth 임포트 추가
 
 export default function HlsAudioPlayer() {
-  // PlayerContext에서 다음 곡, 이전 곡 제어 함수(playNext, playPrevious)도 함께 가져옵니다.
   const { currentTrack, isPlaying, togglePlay, playNext, playPrevious } = usePlayer();
+  const { user } = useAuth(); // 💡 2. 로그인 사용자 정보 가져오기
   const audioRef = useRef(null);
 
   // 1. HLS 스트림 바인딩, 오디오 초기화 및 에러 예외 처리
@@ -25,7 +26,6 @@ export default function HlsAudioPlayer() {
         if (isPlaying) audio.play().catch(() => {});
       });
 
-      // 🔴 [추가됨] HLS 네트워크/미디어 에러 발생 시 자동 복구 예외 처리
       hls.on(Hls.Events.ERROR, (event, data) => {
         if (data.fatal) {
           switch (data.type) {
@@ -51,11 +51,9 @@ export default function HlsAudioPlayer() {
         }
       };
     } else if (audio.canPlayType('application/vnd.apple.mpegurl')) {
-      // Safari Native HLS 지원
       audio.src = currentTrack.streamUrl;
       if (isPlaying) audio.play().catch(() => {});
     } else {
-      // 일반 오디오 URL
       audio.src = currentTrack.streamUrl;
       if (isPlaying) audio.play().catch(() => {});
     }
@@ -73,7 +71,34 @@ export default function HlsAudioPlayer() {
     }
   }, [isPlaying]);
 
-  // 3. Notification / 백그라운드 미디어 컨트롤 (MediaSession API 확장)
+  // 💡 3. 비로그인 시 60초 초과 체크 로직 추가 (HTML5 audio timeupdate 이벤트 활용)
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handleTimeUpdate = () => {
+      // 로그인이 되어 있으면 체크할 필요 없음
+      if (user) return;
+
+      if (audio.currentTime >= 60) {
+        audio.pause();
+        alert('비로그인 사용자는 1분까지만 미리 듣기할 수 있습니다. 전체 곡을 감상하시려면 로그인해 주세요');
+
+        // 필요시 재생 상태를 전역과 동기화하기 위해 togglePlay 호출 (상태 꼬임 방지)
+        if (isPlaying) {
+          togglePlay();
+        }
+      }
+    };
+
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+
+    return () => {
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+    };
+  }, [user, isPlaying, togglePlay]);
+
+  // 4. Notification / 백그라운드 미디어 컨트롤 (MediaSession API 확장)
   useEffect(() => {
     if (!('mediaSession' in navigator) || !currentTrack) return;
 
@@ -92,7 +117,6 @@ export default function HlsAudioPlayer() {
     navigator.mediaSession.setActionHandler('play', () => togglePlay());
     navigator.mediaSession.setActionHandler('pause', () => togglePlay());
 
-    // 🔴 [추가됨] 모바일 잠금 화면 및 브라우저 백그라운드 다음 곡 / 이전 곡 제어 연동
     if (playNext) {
       navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
     }
