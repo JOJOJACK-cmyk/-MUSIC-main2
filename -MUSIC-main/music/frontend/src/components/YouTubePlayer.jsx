@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { usePlayer } from '../context/PlayerContext';
+import { useAuth } from '../context/AuthContext'; // 1. AuthContext 임포트
 
 export default function YouTubePlayer() {
   const containerRef = useRef(null);
@@ -10,6 +11,9 @@ export default function YouTubePlayer() {
     registerPlayer,
     handlePlayerStateChange
   } = usePlayer();
+
+  const { user } = useAuth(); // 2. 로그인 유저 정보 가져오기 (없으면 비로그인)
+  const isLimitedUser = !user; // 비로그인 여부 판단
 
   const stateHandlerRef = useRef(handlePlayerStateChange);
   useEffect(() => {
@@ -86,6 +90,32 @@ export default function YouTubePlayer() {
       player.playVideo();
     }
   }, [currentTrack?.youtubeVideoId]);
+
+  // 3. 💡 비로그인 사용자 1분(60초) 제한 감지 로직 추가
+  useEffect(() => {
+    // 로그인 상태이거나 플레이어가 없으면 감지할 필요 없음
+    if (!isLimitedUser) return;
+
+    const interval = setInterval(() => {
+      const player = playerRef.current;
+      // 플레이어가 존재하고, 현재 재생 중(YT.PlayerState.PLAYING은 보통 1)인지 확인
+      if (player && typeof player.getPlayerState === 'function' && player.getPlayerState() === window.YT?.PlayerState?.PLAYING) {
+        const currentTime = player.getCurrentTime();
+
+        if (currentTime >= 60) {
+          player.pauseVideo(); // 60초 도달 시 일시 정지
+          player.seekTo(0);    // 처음으로 되돌리기 (선택사항)
+
+          alert('비로그인 사용자는 1분까지만 미리 듣기할 수 있습니다. 전체 곡을 감상하려면 로그인해주세요!');
+
+          // 필요시 로그인 페이지로 이동하는 로직 추가 가능
+          // window.location.href = '/login';
+        }
+      }
+    }, 500); // 0.5초마다 현재 재생 시간 체크
+
+    return () => clearInterval(interval);
+  }, [isLimitedUser]);
 
   return (
     <div
