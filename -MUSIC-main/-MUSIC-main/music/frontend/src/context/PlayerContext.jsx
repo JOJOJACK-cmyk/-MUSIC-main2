@@ -88,13 +88,23 @@ export const PlayerProvider = ({ children }) => {
         requestBody.email = String(rawId);
       }
 
+      // 💡 로컬스토리지에서 인증 토큰 가져오기 (프로젝트에 맞게 'token' 또는 'accessToken' 사용)
+      const token = localStorage.getItem('token') || localStorage.getItem('accessToken');
+
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      // 💡 토큰이 존재할 경우 인증 헤더 추가
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(
         'http://localhost:8080/api/v1/logs/listen',
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: headers,
           credentials: 'include',
           body: JSON.stringify(requestBody),
         }
@@ -327,7 +337,6 @@ export const PlayerProvider = ({ children }) => {
         togglePlay,
         handleNextTrack,
         handlePrevTrack,
-        // ✨ HlsAudioPlayer 등에서 직관적으로 쓸 수 있도록 별칭(Alias) 추가 제공
         playNext: handleNextTrack,
         playPrevious: handlePrevTrack,
         seekTime,

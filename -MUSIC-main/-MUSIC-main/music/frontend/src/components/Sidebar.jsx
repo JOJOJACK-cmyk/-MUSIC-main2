@@ -21,6 +21,10 @@ export default function Sidebar({ onOpenAddModal }) {
         <NavLink to="/library" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
           <i className="fa-solid fa-lines-leaning"></i> 내 보관함
         </NavLink>
+
+        <NavLink to="/payment" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+          <i className="fa-solid fa-credit-card"></i> 이용권 결제
+        </NavLink>
       </nav>
 
       <button className="add-music-nav-btn" onClick={onOpenAddModal}>
