@@ -1,2 +1,12 @@
 # 프로젝트 제외 경로
 /-MUSIC-main/music/backend/target/
+
+# Node / Vite
+**/node_modules/
+**/dist/
+
+# Java / Maven
+**/target/
+
+# IntelliJ
+**/.idea/
