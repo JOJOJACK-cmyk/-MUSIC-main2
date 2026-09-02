@@ -83,12 +83,13 @@ public class AuthController {
                     context
             );
 
-            // 5. 프론트엔드 헤더에 바로 띄울 수 있도록 사용자 정보 반환
+            // 5. 프론트엔드 헤더 및 상태 관리에 쓸 수 있도록 role을 포함하여 사용자 정보 반환
             Map<String, Object> userInfo = new HashMap<>();
             userInfo.put("id", user.getId());
             userInfo.put("email", user.getEmail());
             userInfo.put("nickname", user.getNickname());
             userInfo.put("profileImageUrl", user.getProfileImageUrl() != null ? user.getProfileImageUrl() : "");
+            userInfo.put("role", user.getRole()); // 💡 결제/권한 확인을 위한 role 추가
 
             return ResponseEntity.ok(userInfo);
 
@@ -99,7 +100,7 @@ public class AuthController {
         }
     }
 
-    // 💡 3. 내 정보 조회 API (소셜 로그인 / 일반 로그인 후 헤더 프로필 연동)
+    // 내 정보 조회 API
     // GET /api/auth/me
     @GetMapping("/me")
     public ResponseEntity<?> getMyInfo(Authentication authentication) {
@@ -137,7 +138,7 @@ public class AuthController {
                 profileImageUrl = (String) attributes.get("picture");
             }
 
-            // DB에 저장된 유저 정보가 있다면 닉네임 최신화
+            // DB에 저장된 유저 정보가 있다면 role을 포함하여 최신화
             if (email != null && !email.isEmpty()) {
                 Optional<User> optionalUser = userRepository.findByEmail(email);
                 if (optionalUser.isPresent()) {
@@ -146,6 +147,7 @@ public class AuthController {
                     response.put("email", dbUser.getEmail());
                     response.put("nickname", dbUser.getNickname());
                     response.put("profileImageUrl", dbUser.getProfileImageUrl() != null ? dbUser.getProfileImageUrl() : profileImageUrl);
+                    response.put("role", dbUser.getRole()); // 💡 role 추가
                     return ResponseEntity.ok(response);
                 }
             }
@@ -153,10 +155,11 @@ public class AuthController {
             response.put("email", email != null ? email : "");
             response.put("nickname", nickname != null ? nickname : "소셜사용자");
             response.put("profileImageUrl", profileImageUrl != null ? profileImageUrl : "");
+            response.put("role", "USER");
             return ResponseEntity.ok(response);
         }
 
-        // B. 일반 폼 로그인 사용자인 경우 (Principal이 email 문자열인 경우)
+        // B. 일반 폼 로그인 사용자인 경우
         String email = authentication.getName();
         Optional<User> optionalUser = userRepository.findByEmail(email);
         if (optionalUser.isPresent()) {
@@ -165,13 +168,14 @@ public class AuthController {
             response.put("email", user.getEmail());
             response.put("nickname", user.getNickname());
             response.put("profileImageUrl", user.getProfileImageUrl() != null ? user.getProfileImageUrl() : "");
+            response.put("role", user.getRole()); // 💡 role 추가
             return ResponseEntity.ok(response);
         }
 
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("유저를 찾을 수 없습니다.");
     }
 
-    // 💡 4. 로그아웃 API
+    // 로그아웃 API
     // POST /api/auth/logout
     @PostMapping("/logout")
     public ResponseEntity<String> logout(HttpServletRequest request) {
