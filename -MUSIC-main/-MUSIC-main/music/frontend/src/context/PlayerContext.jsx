@@ -88,14 +88,12 @@ export const PlayerProvider = ({ children }) => {
         requestBody.email = String(rawId);
       }
 
-      // 💡 로컬스토리지에서 인증 토큰 가져오기 (프로젝트에 맞게 'token' 또는 'accessToken' 사용)
       const token = localStorage.getItem('token') || localStorage.getItem('accessToken');
 
       const headers = {
         'Content-Type': 'application/json',
       };
 
-      // 💡 토큰이 존재할 경우 인증 헤더 추가
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
@@ -127,7 +125,7 @@ export const PlayerProvider = ({ children }) => {
   }, [user]);
 
   // =========================
-  // 실제 재생시간 추적
+  // 실제 재생시간 추적 및 1분(60초) 제한 원천 통제
   // =========================
   useEffect(() => {
     if (!isPlaying || !currentTrack) {
@@ -141,6 +139,43 @@ export const PlayerProvider = ({ children }) => {
       if (typeof player.getCurrentTime === 'function') {
         const time = player.getCurrentTime() || 0;
         setCurrentTime(time);
+
+        // 💡 [결제/구독 체크 로직]
+        let rawUser = user;
+        if (!rawUser) {
+          try {
+            const stored = localStorage.getItem('user');
+            if (stored) rawUser = JSON.parse(stored);
+          } catch (_) {}
+        }
+
+        const isPremium = rawUser?.isPremium || rawUser?.subscribed || rawUser?.role === 'PREMIUM' || rawUser?.membership === 'PREMIUM';
+
+        // 💡 비회원이거나 로그인 유저인데 프리미엄이 아닌 경우 (60초 초과 시)
+        if (!isPremium && time >= 60) {
+          // 1. 유튜브 플레이어 완전 중단 및 파괴
+          try {
+            player.stopVideo();
+            player.destroy?.();
+          } catch (e) {}
+
+          playerRef.current = null;
+
+          // 2. 전역 곡 상태를 비워 플로팅 플레이어와 하단 바를 동시에 격파
+          setCurrentTrack(null);
+          setIsPlaying(false);
+          setCurrentTime(0);
+
+          // 3. 비회원은 로그인 페이지로, 미결제 회원은 결제 페이지로 안전하게 분기 이동
+          if (!rawUser) {
+            alert('로그인이 필요한 서비스입니다.');
+            window.location.href = '/login';
+          } else {
+            alert('무료 회원은 1분까지만 미리듣기가 가능합니다. 프리미엄 이용권을 구매해주세요!');
+            window.location.href = '/payment';
+          }
+          return;
+        }
       }
 
       if (typeof player.getDuration === 'function') {
@@ -168,13 +203,14 @@ export const PlayerProvider = ({ children }) => {
     return () => {
       clearInterval(interval);
     };
-  }, [isPlaying, currentTrack, sendListenLog]);
+  }, [isPlaying, currentTrack, sendListenLog, user]);
 
   // =========================
   // 음악 선택 / 재생
   // =========================
   const playTrack = (track) => {
     if (!track?.youtubeVideoId) {
+      setCurrentTrack(null);
       return;
     }
 

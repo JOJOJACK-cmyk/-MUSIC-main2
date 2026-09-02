@@ -1,28 +1,35 @@
 import React, { useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { usePlayer } from '../context/PlayerContext';
-import { useAuth } from '../context/AuthContext'; // 1. AuthContext 임포트
+import { useAuth } from '../context/AuthContext';
 
 export default function YouTubePlayer() {
   const containerRef = useRef(null);
   const playerRef = useRef(null);
+  const navigate = useNavigate();
 
   const {
     currentTrack,
     registerPlayer,
-    handlePlayerStateChange
+    handlePlayerStateChange,
+    playTrack
   } = usePlayer();
 
-  const { user } = useAuth(); // 2. 로그인 유저 정보 가져오기 (없으면 비로그인)
-  const isLimitedUser = !user; // 비로그인 여부 판단
+  const { user } = useAuth();
+
+  const isPremium = user?.isPremium || user?.subscribed || user?.role === 'PREMIUM' || user?.membership === 'PREMIUM';
+  const isLimitedUser = !user || !isPremium;
 
   const stateHandlerRef = useRef(handlePlayerStateChange);
   useEffect(() => {
     stateHandlerRef.current = handlePlayerStateChange;
   }, [handlePlayerStateChange]);
 
-  // 1. YouTube IFrame API 스크립트 로드 및 Player 객체 생성 (1회 초기화)
+  // 1. YouTube IFrame API 스크립트 로드 및 Player 객체 생성
   useEffect(() => {
     let isCancelled = false;
+
+    if (!currentTrack?.youtubeVideoId) return;
 
     const createPlayer = () => {
       if (isCancelled || playerRef.current || !containerRef.current) return;
@@ -30,11 +37,11 @@ export default function YouTubePlayer() {
       playerRef.current = new window.YT.Player(containerRef.current, {
         height: '100%',
         width: '100%',
-        videoId: currentTrack?.youtubeVideoId || '',
+        videoId: currentTrack.youtubeVideoId,
         playerVars: {
           autoplay: 1,
           playsinline: 1,
-          controls: 1, // 유튜브 자체 컨트롤러(화질 설정, 전체화면 버튼 포함) 활성화
+          controls: 1,
           modestbranding: 1,
           origin: window.location.origin,
         },
@@ -75,56 +82,49 @@ export default function YouTubePlayer() {
 
     return () => {
       isCancelled = true;
-      if (playerRef.current && typeof playerRef.current.destroy === 'function') {
-        playerRef.current.destroy();
-      }
+      try {
+        playerRef.current?.destroy?.();
+      } catch (e) {}
       playerRef.current = null;
       registerPlayer(null);
     };
-  }, [registerPlayer]);
+  }, [registerPlayer, currentTrack?.youtubeVideoId]);
 
-  // 2. 트랙이 바뀌었을 때 영상 로드 및 재생
+  // 2. 💡 [핵심 해결] 60초가 되는 순간 곡을 강제로 비우고 즉시 결제 페이지로 점프
   useEffect(() => {
-    const player = playerRef.current;
-    if (player && currentTrack?.youtubeVideoId && typeof player.loadVideoById === 'function') {
-      player.loadVideoById(currentTrack.youtubeVideoId);
-      player.playVideo();
-    }
-  }, [currentTrack?.youtubeVideoId]);
+    if (!isLimitedUser || !currentTrack) return;
 
-  // 3. 💡 비로그인 사용자 1분(60초) 제한 감지 로직 수정 (알림 블로킹 우회 적용)
-  useEffect(() => {
-    // 로그인 상태이거나 플레이어가 없으면 감지할 필요 없음
-    if (!isLimitedUser) return;
-
-    const interval = setInterval(() => {
-      const player = playerRef.current;
-      // 플레이어가 존재하고, 현재 재생 중(YT.PlayerState.PLAYING은 보통 1)인지 확인
-      if (player && typeof player.getPlayerState === 'function' && player.getPlayerState() === window.YT?.PlayerState?.PLAYING) {
-        const currentTime = player.getCurrentTime();
-
-        if (currentTime >= 60) {
-          // 💡 1. 즉시 음악 정지 및 처음으로 이동하여 바로 멈추게 함
-          player.pauseVideo();
-          player.seekTo(0);
-
-          // 💡 2. 브라우저 스레드가 잠기지 않도록 setTimeout으로 alert 지연 실행
-          setTimeout(() => {
-            alert('비로그인 사용자는 1분까지만 미리 듣기할 수 있습니다. 전체 곡을 감상하려면 로그인해주세요!');
-          }, 100);
-        }
+    const timer = setTimeout(() => {
+      // 먼저 전역 곡 데이터를 비워서 플레이어 바와 유튜브 IFrame을 동시에 폭파
+      if (typeof playTrack === 'function') {
+        try {
+          playTrack(null);
+        } catch (e) {}
       }
-    }, 500); // 0.5초마다 현재 재생 시간 체크
 
-    return () => clearInterval(interval);
-  }, [isLimitedUser]);
+      try {
+        if (playerRef.current && typeof playerRef.current.destroy === 'function') {
+          playerRef.current.destroy();
+        }
+      } catch (e) {}
+      playerRef.current = null;
+      registerPlayer(null);
+
+      // 브라우저 블로킹을 피하기 위해 alert를 띄운 후 곧바로 라우팅
+      alert('무료 회원(또는 미결제 회원)은 1분까지만 미리 듣기할 수 있습니다. 전체 곡을 감상하려면 프리미엄 이용권을 구매해주세요!');
+      navigate('/payment');
+
+    }, 60000); // 정확히 60초
+
+    return () => clearTimeout(timer);
+  }, [isLimitedUser, currentTrack, navigate, registerPlayer, playTrack]);
+
+  if (!currentTrack || !currentTrack.youtubeVideoId) {
+    return null;
+  }
 
   return (
-    <div
-      className="youtube-player-floating"
-      style={{ display: currentTrack ? 'block' : 'none' }} // 💡 곡이 없으면 display: none으로 숨기고, 있으면 보여줌
-    >
-      {/* 상단 타이틀 바에는 곡 제목만 깔끔하게 표시합니다 */}
+    <div className="youtube-player-floating">
       <div className="youtube-player-title" style={{ display: 'flex', alignItems: 'center', padding: '4px 8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden', width: '100%' }}>
           <span style={{ fontSize: '11px', opacity: 0.7, flexShrink: 0 }}>NOW PLAYING</span>
@@ -134,7 +134,6 @@ export default function YouTubePlayer() {
         </div>
       </div>
 
-      {/* 유튜브 플레이어 영역 */}
       <div
         ref={containerRef}
         style={{
