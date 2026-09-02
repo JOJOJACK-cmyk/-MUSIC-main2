@@ -20,36 +20,66 @@ export default function Header({ searchTerm, setSearchTerm }) {
 
       {/* 2. 우측 사용자 프로필 / 로그인 영역 */}
       <div className="user-profile" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <i className="fa-solid fa-bell" style={{ cursor: 'pointer' }}></i>
+        {/* 🔔 알림 버튼 */}
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={(e) => e.currentTarget.blur()}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: 'var(--text-sub)',
+            cursor: 'pointer',
+            fontSize: '16px',
+            padding: '4px',
+            outline: 'none',
+          }}
+        >
+          <i className="fa-solid fa-bell"></i>
+        </button>
 
         {user ? (
           /* 🟢 로그인 완료 상태: 닉네임 + 프로필 아바타 + 로그아웃 버튼 */
           <div className="user-info" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div
-              className="avatar"
+            {/* 👤 프로필 아바타 버튼 (클릭 시 포커스 깜빡임 방지) */}
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={(e) => e.currentTarget.blur()}
               style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                overflow: 'hidden',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                background: 'transparent',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                outline: 'none',
               }}
             >
-              {user.profileImageUrl ? (
-                <img
-                  src={user.profileImageUrl}
-                  alt={user.nickname || '프로필'}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                  }}
-                />
-              ) : (
-                <i className="fa-solid fa-user"></i>
-              )}
-            </div>
+              <div
+                className="avatar"
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {user.profileImageUrl ? (
+                  <img
+                    src={user.profileImageUrl}
+                    alt={user.nickname || '프로필'}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                ) : (
+                  <i className="fa-solid fa-user"></i>
+                )}
+              </div>
+            </button>
 
             <span
               className="user-nickname"
@@ -66,8 +96,14 @@ export default function Header({ searchTerm, setSearchTerm }) {
               {user.nickname || user.name || '사용자'}
             </span>
 
+            {/* 🚪 로그아웃 버튼 */}
             <button
-              onClick={logout}
+              type="button"
+              onClick={(e) => {
+                e.currentTarget.blur();
+                logout();
+              }}
+              tabIndex={-1}
               className="auth-nav-link"
               style={{
                 background: 'transparent',
@@ -77,6 +113,7 @@ export default function Header({ searchTerm, setSearchTerm }) {
                 color: '#aaa',
                 cursor: 'pointer',
                 fontSize: '12px',
+                outline: 'none',
               }}
             >
               로그아웃
@@ -85,12 +122,25 @@ export default function Header({ searchTerm, setSearchTerm }) {
         ) : (
           /* 🔴 비로그인 상태: 로그인 링크 + 기본 아바타 */
           <>
-            <Link to="/login" className="auth-nav-link">
+            <Link to="/login" className="auth-nav-link" style={{ outline: 'none' }}>
               로그인
             </Link>
-            <div className="avatar">
-              <i className="fa-solid fa-user"></i>
-            </div>
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={(e) => e.currentTarget.blur()}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                outline: 'none',
+              }}
+            >
+              <div className="avatar">
+                <i className="fa-solid fa-user"></i>
+              </div>
+            </button>
           </>
         )}
       </div>

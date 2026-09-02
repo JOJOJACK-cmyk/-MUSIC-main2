@@ -28,6 +28,7 @@ export default function PlayerBar() {
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   const handleProgressClick = (e) => {
+    e.currentTarget.blur();
     const rect = e.currentTarget.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const width = rect.width;
@@ -35,6 +36,7 @@ export default function PlayerBar() {
   };
 
   const handleVolumeClick = (e) => {
+    e.currentTarget.blur();
     const rect = e.currentTarget.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const width = rect.width;
@@ -65,31 +67,84 @@ export default function PlayerBar() {
       {/* 플레이어 컨트롤 (중앙) */}
       <div className="player-controls">
         <div className="control-buttons">
+          {/* 셔플 버튼 */}
           <button
+            type="button"
+            tabIndex={-1}
+            onMouseDown={(e) => e.currentTarget.blur()}
             className={isShuffle ? 'active' : ''}
-            onClick={() => setIsShuffle(!isShuffle)}
+            onClick={(e) => {
+              e.currentTarget.blur();
+              setIsShuffle(!isShuffle);
+            }}
           >
             <i className="fa-solid fa-shuffle"></i>
           </button>
-          <button onClick={handlePrevTrack}>
+
+          {/* 이전 곡 버튼 */}
+          <button
+            type="button"
+            tabIndex={-1}
+            onMouseDown={(e) => e.currentTarget.blur()}
+            onClick={(e) => {
+              e.currentTarget.blur();
+              handlePrevTrack();
+            }}
+          >
             <i className="fa-solid fa-backward-step"></i>
           </button>
-          <button className="btn-play-main" onClick={togglePlay}>
+
+          {/* 메인 재생/일시정지 버튼 */}
+          <button
+            type="button"
+            tabIndex={-1}
+            onMouseDown={(e) => e.currentTarget.blur()}
+            className="btn-play-main"
+            onClick={(e) => {
+              e.currentTarget.blur();
+              togglePlay();
+            }}
+          >
             <i className={`fa-solid ${isPlaying ? 'fa-pause' : 'fa-play'}`}></i>
           </button>
-          <button onClick={handleNextTrack}>
+
+          {/* 다음 곡 버튼 */}
+          <button
+            type="button"
+            tabIndex={-1}
+            onMouseDown={(e) => e.currentTarget.blur()}
+            onClick={(e) => {
+              e.currentTarget.blur();
+              handleNextTrack();
+            }}
+          >
             <i className="fa-solid fa-forward-step"></i>
           </button>
+
+          {/* 반복 재생 버튼 */}
           <button
+            type="button"
+            tabIndex={-1}
+            onMouseDown={(e) => e.currentTarget.blur()}
             className={isRepeat ? 'active' : ''}
-            onClick={() => setIsRepeat(!isRepeat)}
+            onClick={(e) => {
+              e.currentTarget.blur();
+              setIsRepeat(!isRepeat);
+            }}
           >
             <i className="fa-solid fa-repeat"></i>
           </button>
         </div>
+
         <div className="progress-bar-container">
           <span className="time">{formatTime(currentTime)}</span>
-          <div className="progress-bar" onClick={handleProgressClick}>
+          <div
+            className="progress-bar"
+            tabIndex={-1}
+            onMouseDown={(e) => e.currentTarget.blur()}
+            onClick={handleProgressClick}
+            style={{ outline: 'none', userSelect: 'none' }}
+          >
             <div className="progress-fill" style={{ width: `${progressPercent}%` }}></div>
           </div>
           <span className="time">{formatTime(duration)}</span>
@@ -98,8 +153,45 @@ export default function PlayerBar() {
 
       {/* 볼륨 및 기타 설정 (우측) */}
       <div className="player-extra">
-        <i className={`fa-solid ${volume === 0 ? 'fa-volume-xmark' : 'fa-volume-high'}`}></i>
-        <div className="volume-bar" onClick={handleVolumeClick}>
+        {/* 음소거/볼륨 아이콘 버튼 */}
+        <button
+          type="button"
+          tabIndex={-1}
+          onMouseDown={(e) => e.currentTarget.blur()}
+          onClick={(e) => {
+            e.currentTarget.blur();
+            setVolume(volume === 0 ? 50 : 0);
+          }}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: 'var(--text-sub)',
+            cursor: 'pointer',
+            fontSize: '16px',
+            padding: '4px 6px',
+            outline: 'none',
+            boxShadow: 'none',
+          }}
+        >
+          <i
+            className={`fa-solid ${volume === 0 ? 'fa-volume-xmark' : 'fa-volume-high'}`}
+            style={{ pointerEvents: 'none' }}
+          ></i>
+        </button>
+
+        {/* 볼륨 조절 바 (사사이익 클릭 시 생기는 시작점 잔상 오차 방지용 스타일 인라인 보완) */}
+        <div
+          className="volume-bar"
+          tabIndex={-1}
+          onMouseDown={(e) => e.currentTarget.blur()}
+          onClick={handleVolumeClick}
+          style={{
+            outline: 'none',
+            userSelect: 'none',
+            overflow: 'hidden',
+            position: 'relative',
+          }}
+        >
           <div className="volume-fill" style={{ width: `${volume}%` }}></div>
         </div>
       </div>
