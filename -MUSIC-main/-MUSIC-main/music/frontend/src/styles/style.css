@@ -24,6 +24,29 @@
     font-family: 'Noto Sans KR', sans-serif;
 }
 
+/* 🌐 모든 요소 클릭/포커스 시 생기는 아웃라인/깜빡임 전역 완벽 차단 */
+*, *:focus, *:active, *:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* 🔇 음소거 버튼 및 내부 아이콘 클릭 시 발생하는 포커스 잔상 및 흰색 세로 선 완벽 차단 */
+.player-extra button,
+.player-extra button *,
+.player-extra button i {
+    outline: none !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    background: transparent !important;
+    pointer-events: none;
+}
+
+.player-extra button {
+    pointer-events: auto !important;
+}
+
 body {
     background-color: var(--bg-main);
     color: var(--text-main);
@@ -361,6 +384,10 @@ body {
     align-items: center;
     padding: 0 28px;
     z-index: 100;
+    /* 💡 플레이어 바 영역 더블클릭/드래그 시 브라우저 팝업 및 흰 선 깜빡임 원천 차단 */
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    -webkit-touch-callout: none !important;
 }
 
 .player-track-info {
@@ -417,6 +444,8 @@ body {
     gap: 8px;
     width: 45%;
     max-width: 600px;
+    user-select: none !important;
+    -webkit-user-select: none !important;
 }
 
 .control-buttons {
@@ -480,20 +509,38 @@ body {
     border-radius: 3px;
     position: relative;
     cursor: pointer;
+    overflow: hidden;
+    transform: translateZ(0);
 }
 
 .progress-fill, .volume-fill {
     height: 100%;
     background-color: var(--primary-color);
-    border-radius: 3px;
+    border-radius: 0;
+    pointer-events: none;
+    position: absolute;
+    left: 0;
+    top: 0;
 }
 
+/* 💡 우측 볼륨 영역 완전 격리 및 렌더링 오차 전파 차단 설정 */
 .player-extra {
     display: flex;
     align-items: center;
     gap: 12px;
     width: 180px;
     color: var(--text-sub);
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    isolation: isolate;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+}
+
+.player-extra button {
+    position: relative;
+    transform: translateZ(0);
+    will-change: transform;
 }
 
 /* ==========================================
@@ -698,48 +745,34 @@ body {
 /* 현재 재생 중인 YouTube 플레이어 */
 .youtube-player-floating {
     position: fixed;
-
     right: 24px;
     bottom: 110px;
-
     width: 400px;
-
     background-color: var(--bg-sidebar);
-
     border: 1px solid rgba(224, 40, 183, 0.35);
     border-radius: 14px;
-
     padding: 12px;
-
-    box-shadow:
-        0 12px 40px rgba(0, 0, 0, 0.6);
-
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
     z-index: 90;
-
     overflow: hidden;
 }
 
 .youtube-player-title {
     display: flex;
     align-items: center;
-
     gap: 10px;
-
     margin-bottom: 10px;
-
     font-size: 13px;
 }
 
 .youtube-player-title span {
     color: var(--primary-color);
     font-weight: 700;
-
     flex-shrink: 0;
 }
 
 .youtube-player-title strong {
     color: var(--text-main);
-
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
