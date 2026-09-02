@@ -3,19 +3,22 @@ package com.example.music.service;
 import com.example.music.dto.LoginRequestDto;
 import com.example.music.dto.SignupRequestDto;
 import com.example.music.entity.User;
+import com.example.music.repository.PassRepository;
 import com.example.music.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+
 @Service
 @RequiredArgsConstructor
 public class UserService {
 
     private final UserRepository userRepository;
+    private final PassRepository passRepository;
     private final PasswordEncoder passwordEncoder;
-
 
     // 회원가입
     @Transactional
@@ -42,7 +45,6 @@ public class UserService {
         // 4. DB 저장
         userRepository.save(user);
     }
-
 
     // 일반 로그인
     @Transactional(readOnly = true)
@@ -73,7 +75,23 @@ public class UserService {
             );
         }
 
-        // 4. 로그인 성공
+        // 💡 4. 활성화되어 있고 만료일이 지나지 않은 이용권(Pass)이 있는지 확인
+        boolean hasActivePass = passRepository.existsByUser_IdAndIsActiveTrueAndExpireDateAfter(
+                user.getId(),
+                LocalDateTime.now()
+        );
+
+        // 5. 결제(이용권) 상태에 따라 동적으로 role 부여
+        if (hasActivePass) {
+            user.setRole("PREMIUM");
+        } else {
+            // 이용권이 없으면 기본 유저 권한 유지 (필요에 따라 "USER" 또는 기존 값 처리)
+            if (user.getRole() == null || user.getRole().equals("ROLE_USER")) {
+                user.setRole("USER");
+            }
+        }
+
+        // 6. 로그인 성공
         return user;
     }
 }
