@@ -37,4 +37,6 @@ public class ListenLog {
 
     @Column(name = "listened_at")
     private LocalDateTime listenedAt;
+
+
 }
