@@ -12,11 +12,25 @@ import LoginPage from './pages/LoginPage';
 import ChartPage from './pages/ChartPage';
 import LivePage from './pages/LivePage';
 import LibraryPage from './pages/LibraryPage';
+import PaymentPage from './pages/PaymentPage'; // 👈 1. 결제 페이지 임포트 추가
 
 import { PlayerProvider } from './context/PlayerContext';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { musicApi } from './api/musicApi';
 import './styles/style.css';
+
+// 🔒 비로그인 유저의 접근을 막는 라우트 가드 컴포넌트
+function ProtectedRoute({ children }) {
+  const user = localStorage.getItem('user');
+  const token = localStorage.getItem('token') || localStorage.getItem('accessToken');
+
+  if (!user && !token) {
+    alert('로그인이 필요한 서비스입니다.');
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+}
 
 export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -48,10 +62,40 @@ export default function App() {
 
             <main className="main-content">
               <Routes>
+                {/* 누구나 접근 가능한 공개 페이지 */}
                 <Route path="/" element={<MainPage />} />
                 <Route path="/login" element={<LoginPage />} />
                 {/* 🔴 라우트 경로를 /charts 로 수정 완료 */}
                 <Route path="/charts" element={<ChartPage />} />
+
+                {/* 🔒 라우트 가드가 적용된 보호된 페이지 */}
+                <Route
+                  path="/library"
+                  element={
+                    <ProtectedRoute>
+                      <LibraryPage />
+                    </ProtectedRoute>
+                  }
+                />
+
+                <Route
+                  path="/live"
+                  element={
+                    <ProtectedRoute>
+                      <LivePage />
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* 💳 2. 결제 페이지 라우트 추가 완료 */}
+                <Route
+                  path="/payment"
+                  element={
+                    <ProtectedRoute>
+                      <PaymentPage />
+                    </ProtectedRoute>
+                  }
+                />
                 <Route path="/live" element={<LivePage />} />
                 <Route
                   path="/live/:broadcastId"

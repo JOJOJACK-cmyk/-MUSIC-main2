@@ -4,17 +4,22 @@ services:
     container_name: music-srs
 
     ports:
-      # RTMP
-      - "1935:1935"
+      # RTMP - 로컬 PC만 접근
+      - "127.0.0.1:1935:1935"
 
-      # SRS HTTP API
-      - "1985:1985"
+      # SRS HTTP API - 로컬 PC만 접근
+      - "127.0.0.1:1985:1985"
 
-      # HLS
-      - "8081:8080"
+      # HLS - 로컬 PC만 접근
+      - "127.0.0.1:8081:8080"
 
     volumes:
       - ./srs.conf:/usr/local/srs/conf/music.conf:ro
+
+    # host.docker.internal이 리눅스 Docker Engine에서도 호스트 PC를 가리키도록 명시
+    # (Docker Desktop for Mac/Windows는 이미 기본 지원하지만, 명시해도 무해함)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
     command:
       - ./objs/srs

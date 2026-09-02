@@ -15,15 +15,12 @@ import org.springframework.web.bind.annotation.*;
 import com.example.music.dto.LiveBroadcastResponse;
 import java.util.List;
 import com.example.music.repository.BroadcastRepository;
+import com.example.music.security.AuthenticatedUserResolver;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 
 import java.util.Map;
-
-
-
-
 
 @RestController
 @RequestMapping("/api/broadcast")
@@ -34,34 +31,50 @@ public class BroadcastController {
     private final SongVoteService songVoteService;
     private final LiveViewerService liveViewerService;
     private final BroadcastRepository broadcastRepository;
+    private final AuthenticatedUserResolver authenticatedUserResolver;
 
     /**
      * 스트림 키 발급 및 재생성 API
      * POST /api/broadcast/stream-key
+     * [수정] 클라이언트가 보낸 User 객체를 신뢰하지 않고, 로그인 세션 기준으로 본인 것만 발급/재발급
      */
     @PostMapping("/stream-key")
-    public ResponseEntity<Broadcast> generateStreamKey(@RequestBody User user, @RequestParam(required = false) String defaultTitle) {
+    public ResponseEntity<Broadcast> generateStreamKey(
+            @RequestParam(required = false) String defaultTitle,
+            Authentication authentication
+    ) {
+        User user = authenticatedUserResolver.resolveRequiredUser(authentication);
         Broadcast broadcast = broadcastService.createOrUpdateStreamKey(user, defaultTitle);
         return ResponseEntity.ok(broadcast);
     }
 
     /**
      * 방송 정보(제목) 수정 API
-     * PATCH /api/broadcast/info?userId=1&title=새로운방송제목
+     * PATCH /api/broadcast/info?title=새로운방송제목
+     * [수정] userId를 파라미터로 받지 않고, 로그인한 본인의 방송만 수정 가능
      */
     @PatchMapping("/info")
-    public ResponseEntity<Void> updateBroadcastInfo(@RequestParam Long userId, @RequestParam String title) {
-        broadcastService.updateBroadcastInfo(userId, title);
+    public ResponseEntity<Void> updateBroadcastInfo(
+            @RequestParam String title,
+            Authentication authentication
+    ) {
+        User user = authenticatedUserResolver.resolveRequiredUser(authentication);
+        broadcastService.updateBroadcastInfo(user.getId(), title);
         return ResponseEntity.ok().build();
     }
 
     /**
      * 방송 상태(ON/OFF) 변경 API
-     * PATCH /api/broadcast/status?userId=1&status=ON
+     * PATCH /api/broadcast/status?status=ON
+     * [수정] userId를 파라미터로 받지 않고, 로그인한 본인의 방송만 상태 변경 가능
      */
     @PatchMapping("/status")
-    public ResponseEntity<Void> updateBroadcastStatus(@RequestParam Long userId, @RequestParam String status) {
-        broadcastService.updateBroadcastStatus(userId, status);
+    public ResponseEntity<Void> updateBroadcastStatus(
+            @RequestParam String status,
+            Authentication authentication
+    ) {
+        User user = authenticatedUserResolver.resolveRequiredUser(authentication);
+        broadcastService.updateBroadcastStatus(user.getId(), status);
         return ResponseEntity.ok().build();
     }
 

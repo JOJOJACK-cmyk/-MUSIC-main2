@@ -1,5 +1,7 @@
 package com.example.music.config;
 
+import com.example.music.security.CustomAccessDeniedHandler;
+import com.example.music.security.CustomAuthenticationEntryPoint;
 import com.example.music.service.CustomOAuth2UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -36,6 +38,10 @@ public class SecurityConfig {
     private final CustomOAuth2UserService customOAuth2UserService;
     private final ClientRegistrationRepository clientRegistrationRepository;
 
+    // [추가] 인증/인가 예외 핸들러 주입
+    private final CustomAuthenticationEntryPoint authenticationEntryPoint;
+    private final CustomAccessDeniedHandler accessDeniedHandler;
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
@@ -63,8 +69,14 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/logs/**", "/api/logs/**").authenticated()
 
                         // 4. 기존 음악 조회 중 일부만 허용하거나, 로그인을 강제하려면 주석 처리/수정
-                        .requestMatchers(HttpMethod.GET, "/api/musics/**", "/api/broadcast/**", "/api/music-snapshot/**",  "/api/live/status","/api/broadcast/*/viewers/heartbeat")
+                        .requestMatchers(HttpMethod.GET, "/api/musics/**", "/api/broadcast/**", "/api/music-snapshot/**",  "/api/live/status")
                         .permitAll()
+
+                        // [수정] 시청자 heartbeat는 비로그인 사용자의 시청자 수 집계를 위해 메서드 제한 없이 공개
+                        .requestMatchers("/api/broadcast/*/viewers/heartbeat").permitAll()
+
+                        // [신규] SRS 웹훅 콜백 - 로그인 사용자가 아니라 SRS 서버가 직접 호출하는 경로
+                        .requestMatchers("/api/broadcast/srs/**").permitAll()
 
                         .requestMatchers(
                                 "/api/musics/youtube"
@@ -74,9 +86,10 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
 
+                // [수정] 401(인증 실패), 403(권한 부족) 커스텀 핸들러 연결
                 .exceptionHandling(exception -> exception
-                        .authenticationEntryPoint((request, response, authException) ->
-                                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized"))
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler)
                 )
 
                 .oauth2Login(oauth2 -> oauth2
@@ -174,10 +187,7 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
 
         configuration.setAllowedOriginPatterns(List.of(
-                "http://localhost:3000",
-                "http://localhost:8080",
-                "null",
-                "*"
+                "http://localhost:3000"
         ));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"));
         configuration.setAllowedHeaders(List.of("*"));
