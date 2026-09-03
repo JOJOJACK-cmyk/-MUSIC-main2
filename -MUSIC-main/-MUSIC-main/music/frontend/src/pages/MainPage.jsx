@@ -10,45 +10,40 @@ import axios from 'axios';
 export default function MainPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [musics, setMusics] = useState([]);
+  const [trending, setTrending] = useState([]); // 실시간 인기 급상승 곡 (청취기록 기반)
   const [searchTerm, setSearchTerm] = useState('');
   const [editingMusic, setEditingMusic] = useState(null);
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
-  const { setPlaylist, currentTrack } = usePlayer();
+  const { setPlaylist } = usePlayer();
 
-  // 💡 가로 스크롤 제어를 위한 useRef
-  const scrollRef = useRef(null);
+  const scrollRef1 = useRef(null);
+  const scrollRef2 = useRef(null);
+  const scrollRef3 = useRef(null);
+  const scrollRef4 = useRef(null);
+  const scrollRef5 = useRef(null);
 
-  // 💡 좌우 화살표 클릭 시 스크롤 이동 함수
-  const scroll = (direction) => {
-    if (scrollRef.current) {
-      const { scrollLeft, clientWidth } = scrollRef.current;
+  const scroll = (ref, direction) => {
+    if (ref.current) {
+      const { scrollLeft, clientWidth } = ref.current;
       const scrollAmount = clientWidth * 0.75;
 
-      scrollRef.current.scrollTo({
+      ref.current.scrollTo({
         left: direction === 'left' ? scrollLeft - scrollAmount : scrollLeft + scrollAmount,
         behavior: 'smooth'
       });
     }
   };
 
-  // 💡 관리자 권한 및 로그인 여부 확인
   useEffect(() => {
     try {
       const rawUser = localStorage.getItem('user');
       if (rawUser) {
         const userObj = JSON.parse(rawUser);
-        if (userObj && userObj.role === 'ROLE_ADMIN') {
-          setIsAdmin(true);
-        } else {
-          setIsAdmin(false);
-        }
-      } else {
-        setIsAdmin(false);
+        setIsAdmin(userObj && (userObj.role === 'ROLE_ADMIN' || userObj.role === 'ADMIN'));
       }
     } catch (e) {
-      console.error('사용자 권한 확인 중 오류:', e);
       setIsAdmin(false);
     }
   }, []);
@@ -58,46 +53,85 @@ export default function MainPage() {
     setApiError('');
 
     try {
-      // 💡 1. 실시간 차트 목록 불러오기
-      const chartRes = await axios.get('http://localhost:8080/api/chart/realtime').catch(() => ({ data: [] }));
-      const chartItems = Array.isArray(chartRes.data) ? chartRes.data : [];
+      const musicRes = await axios.get('/api/musics').catch(() => ({ data: [] }));
+      const musicItems = Array.isArray(musicRes.data) ? musicRes.data : [];
 
-      const mappedMusics = chartItems.map((item) => ({
-        id: item.musicId || item.id,
-        title: item.title,
-        artist: item.artist,
-        thumbnailUrl: item.thumbnailUrl,
-        youtubeVideoId: item.youtubeVideoId,
-        playCount: item.playCount
-      }));
-
-      // 💡 2. 로컬스토리지에 'user' 정보가 실제로 존재할 때만 좋아요 목록을 가져옴 (로그아웃 상태면 아예 스킵)
       let likedIds = new Set();
-      const rawUser = localStorage.getItem('user');
+      try {
+        const likedRes = await axios.get('/api/musics/liked', { withCredentials: true });
+        likedIds = new Set((Array.isArray(likedRes.data) ? likedRes.data : []).map((m) => m.id));
+      } catch (e) {}
 
-      if (rawUser) {
-        try {
-          const likedRes = await axios.get('http://localhost:8080/api/musics/liked', { withCredentials: true });
-          const likedMusics = Array.isArray(likedRes.data) ? likedRes.data : [];
-          likedIds = new Set(likedMusics.map((m) => m.id));
-        } catch (e) {
-          // 인증 만료 등의 이유로 실패 시 빈 세트 유지
-        }
-      }
+      // 💡 클라이언트 방어 필터: 쇼츠/장편/비음악 영상 제외 (백엔드 필터 이중 안전장치, 90~480초)
+      const NON_MUSIC = ['shorts', '쇼츠', '#shorts', 'lyrics', '가사', '해석', '발음', 'playlist',
+        '플레이리스트', '모음', '메들리', '메드레이', 'medley', 'メドレー', 'mix', '믹스', '토크', '잡담',
+        '클립', 'special clip', '스페셜 클립', '리뷰', '커버', 'cover', '노래방', 'mr', '1시간', '1 hour',
+        'asmr', '직캠', '티저', 'teaser', '예고편',
+        '라이브', '(live', 'live ver', 'live performance', 'live tour', 'arena tour', 'ライブ', 'ライヴ',
+        'tour 20', 'cdtv', 'live 20', 'digest', '다이제스트', 'コール動画', 'メガパック', 'megapack',
+        'mega pack', 'anniversary live', '페스티벌', 'festival', 'vlf', 'concert', '콘서트',
+        '인기곡', '人気曲', 'ランキング', 'best of', 'compilation', '컴필레이션', 'top 40', 'top40', 'top 20',
+        'greatest hits', 'greatest pop', 'pop hits', 'trending pop', 'spotify hits', 'chart hits',
+        'billboard top', 'billboard songs', 'billboard hot', 'billboard hits', 'hits 20', 'mega hits',
+        'hit songs', '히트곡', 'sing-along', 'sing along', 'grammy museum', 'the icon sessions'];
+      // 쇼츠/장편/비음악 영상만 제외 (순서·개수는 서버 응답 그대로 유지 → "실시간 인기 급상승 곡" 원상)
+      const isRealSong = (item) => {
+        const title = item.title || '';
+        const lower = title.toLowerCase();
+        if (NON_MUSIC.some((kw) => lower.includes(kw))) return false;
+        if ((title.match(/#/g) || []).length >= 3) return false;
+        const d = item.durationSeconds;
+        if (d != null && (d < 90 || d > 480)) return false;
+        return true;
+      };
 
-      // 💡 3. 좋아요 여부 매핑 (비로그인 상태면 likedIds가 비어있으므로 모두 false가 됨)
-      const musicsWithLike = mappedMusics.map((music) => ({
-        ...music,
-        isLiked: likedIds.has(music.id),
-      }));
+      const KNOWN_GENRES = ['KPOP', 'JPOP', 'VTUBER', 'POP'];
+
+      // 서버 장르 값을 대문자로 정규화 (순서는 그대로 두어 상위 10곡 = 인기 급상승 유지)
+      const musicsWithLike = musicItems
+        .filter(isRealSong)
+        .map((item) => {
+          const g = (item.genre || 'POP').toUpperCase();
+          return {
+            ...item,
+            genre: KNOWN_GENRES.includes(g) ? g : 'POP',
+            isLiked: likedIds.has(item.id),
+          };
+        });
 
       setMusics(musicsWithLike);
       setPlaylist(musicsWithLike);
+
+      // 💡 "실시간 인기 급상승 곡" = DB 청취기록 기반 랭킹 (부족한 자리는 조회수 상위곡으로 채움)
+      try {
+        const chartRes = await axios.get('/api/chart/realtime');
+        const chartItems = Array.isArray(chartRes.data) ? chartRes.data : [];
+        const trendingTracks = chartItems.slice(0, 10).map((c) => ({
+          id: c.id ?? c.musicId,
+          youtubeVideoId: c.youtubeVideoId,
+          title: c.title,
+          artist: c.artist,
+          thumbnailUrl: c.thumbnailUrl,
+          listenCount: c.listenCount,
+          isLiked: likedIds.has(c.id ?? c.musicId),
+        }));
+        const have = new Set(trendingTracks.map((t) => t.id));
+        const filler = [...musicsWithLike]
+          .sort((a, b) => (Number(b.viewCount) || 0) - (Number(a.viewCount) || 0))
+          .filter((m) => !have.has(m.id));
+        setTrending([...trendingTracks, ...filler].slice(0, 10));
+      } catch (e) {
+        setTrending(
+          [...musicsWithLike]
+            .sort((a, b) => (Number(b.viewCount) || 0) - (Number(a.viewCount) || 0))
+            .slice(0, 10)
+        );
+      }
     } catch (err) {
-      console.error('추천 노래 차트 조회 실패:', err);
       setMusics([]);
+      setTrending([]);
       setPlaylist([]);
-      setApiError('Spring Boot 서버 또는 /api/chart/realtime 연결을 확인해 주세요.');
+      setApiError('Spring Boot 서버 또는 /api/musics 연결을 확인해 주세요.');
     } finally {
       setLoading(false);
     }
@@ -107,23 +141,12 @@ export default function MainPage() {
     fetchMusics();
   }, []);
 
-  // 💡 ❤️ 하트(좋아요) 토글 핸들러
   const handleToggleLike = async (musicId, nextLiked) => {
     try {
-      await axios.post(`http://localhost:8080/api/musics/${musicId}/like`, {}, {
-        withCredentials: true,
-      });
-
-      setMusics((prevMusics) =>
-        prevMusics.map((m) => (m.id === musicId ? { ...m, isLiked: nextLiked } : m))
-      );
+      await axios.post(`/api/musics/${musicId}/like`, {}, { withCredentials: true });
+      setMusics((prev) => prev.map((m) => (m.id === musicId ? { ...m, isLiked: nextLiked } : m)));
     } catch (err) {
-      console.error('좋아요 토글 실패:', err);
-      if (err.response?.status === 401 || err.response?.status === 403) {
-        alert('로그인이 필요한 서비스입니다.');
-      } else {
-        alert('좋아요 처리에 실패했습니다.');
-      }
+      alert('좋아요 처리에 실패했습니다.');
     }
   };
 
@@ -136,107 +159,173 @@ export default function MainPage() {
         await musicApi.createMusicFromYouTube(payload.youtubeVideoId);
         alert('YouTube 음원이 DB에 등록되었습니다.');
       }
-
       setIsModalOpen(false);
       setEditingMusic(null);
       await fetchMusics();
     } catch (err) {
-      console.error(err);
-
-      if (err.response?.status === 401 || err.response?.status === 403) {
-        alert('관리자 권한이 없거나 로그인이 필요합니다.');
-        return;
-      }
-
-      alert('음원 등록에 실패했습니다. 입력하신 정보나 유튜브 링크를 다시 확인해 주세요.');
+      alert('음원 등록에 실패했습니다.');
     }
   };
 
   const handleDelete = async (id) => {
     if (!window.confirm('정말 삭제하시겠습니까?')) return;
-
     try {
       await musicApi.deleteMusic(id);
       await fetchMusics();
       alert('삭제되었습니다.');
     } catch (err) {
-      if (err.response?.status === 401 || err.response?.status === 403) {
-        alert('권한이 없습니다.');
-        return;
-      }
       alert('삭제 중 오류가 발생했습니다.');
     }
   };
 
   const filteredMusics = musics.filter((m) => {
-    const title = m.title || '';
-    const artist = m.artist || '';
+    const title = (m.title || '').toLowerCase();
+    const artist = (m.artist || '').toLowerCase();
     const keyword = searchTerm.toLowerCase();
-
-    return title.toLowerCase().includes(keyword) || artist.toLowerCase().includes(keyword);
+    return title.includes(keyword) || artist.includes(keyword);
   });
 
+  // "실시간 인기 급상승 곡" = 청취기록 기반 랭킹 상위 10곡 (검색어로도 필터)
+  const top10Musics = trending.filter((m) => {
+    const kw = searchTerm.toLowerCase();
+    return (m.title || '').toLowerCase().includes(kw) || (m.artist || '').toLowerCase().includes(kw);
+  });
+
+  // 카테고리 섹션 = "지금 유튜브에서 유행하는 곡" (공식 MV 위주)
+  //  - "- Topic" 자동생성 채널(오디오 아트트랙) 제외 → 진짜 뮤직비디오만
+  //  - 현재 인기차트 진입곡(trendingRank) 순위대로 먼저, 그 뒤 조회수 높은 순으로 채움
+  //  - 같은 곡(제목) 중복·한 아티스트 몰아넣기(최대 3곡) 정리
+  const normTitle = (t) =>
+    (t || '')
+      .toLowerCase()
+      .replace(/\(.*?\)|\[.*?\]|【.*?】|feat\.?.*/g, '')
+      .replace(/official|mv|m\/v|music video|audio|performance|video|visualizer/g, '')
+      .replace(/[^a-z0-9가-힣ぁ-んァ-ン]/g, '')
+      .trim();
+
+  const isTopicChannel = (m) => /\s*-\s*topic\s*$/i.test(m.artist || '');
+
+  const popularByGenre = (genre) => {
+    const genreAll = filteredMusics.filter((m) => m.genre === genre);
+    const nonTopic = genreAll.filter((m) => !isTopicChannel(m));
+    // 공식 MV가 8곡 이상이면 Topic(오디오 아트트랙) 제외, 아니면 곡이 부족하므로 포함
+    const inGenre = nonTopic.length >= 8 ? nonTopic : genreAll;
+    const list = inGenre.slice().sort((a, b) => {
+      const ar = a.trendingRank ?? 9999;
+      const br = b.trendingRank ?? 9999;
+      if (ar !== br) return ar - br;
+      return (Number(b.viewCount) || 0) - (Number(a.viewCount) || 0);
+    });
+
+    const seenTitle = new Set();
+    const perArtist = {};
+    return list.filter((m) => {
+      const nt = normTitle(m.title);
+      if (nt && seenTitle.has(nt)) return false;
+      const ak = (m.artist || '').toLowerCase().trim();
+      perArtist[ak] = (perArtist[ak] || 0) + 1;
+      if (perArtist[ak] > 3) return false;
+      if (nt) seenTitle.add(nt);
+      return true;
+    });
+  };
+
+  const kpopMusics = popularByGenre('KPOP');
+  const jpopMusics = popularByGenre('JPOP');
+  const vtuberMusics = popularByGenre('VTUBER');
+  const popMusics = popularByGenre('POP');
+
   return (
-    <main className="main-content">
+    <div className="home-page-container" style={{ width: '100%', paddingBottom: '40px' }}>
       <Header searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
       <HeroBanner />
 
+      {/* 실시간 인기 급상승 곡 */}
       <section className="content-section">
         <div className="section-header">
           <h2>✨ 실시간 인기 급상승 곡</h2>
-          <span style={{ color: 'var(--text-sub)', fontSize: '14px' }}>
-            {musics.length}곡
-          </span>
+          <span style={{ color: 'var(--text-sub)', fontSize: '14px' }}>Top 10</span>
         </div>
-
-        {loading && <p style={{ color: 'var(--text-sub)' }}>인기 급상승 곡 목록을 불러오는 중입니다...</p>}
-
-        {!loading && apiError && (
-          <p style={{ color: '#ff6b6b', lineHeight: 1.6 }}>{apiError}</p>
-        )}
-
-        {!loading && !apiError && filteredMusics.length === 0 && (
-          <p style={{ color: 'var(--text-sub)' }}>
-            {searchTerm ? '검색 결과가 없습니다.' : '집계된 인기 곡이 없습니다.'}
-          </p>
-        )}
-
         <div className="scroll-container-wrapper">
-          <button className="scroll-btn left" onClick={() => scroll('left')} title="왼쪽으로 이동">
-            <i className="fa-solid fa-chevron-left"></i>
-          </button>
-
-          <div className="card-grid-horizontal" ref={scrollRef}>
-            {filteredMusics.map((music) => (
-              <MusicCard
-                key={music.id}
-                music={music}
-                isAdmin={isAdmin}
-                onToggleLike={handleToggleLike}
-                onEdit={(item) => {
-                  setEditingMusic(item);
-                  setIsModalOpen(true);
-                }}
-                onDelete={handleDelete}
-              />
+          <button className="scroll-btn left" onClick={() => scroll(scrollRef1, 'left')}><i className="fa-solid fa-chevron-left"></i></button>
+          <div className="card-grid-horizontal" ref={scrollRef1}>
+            {top10Musics.map((music) => (
+              <MusicCard key={music.id} music={music} isAdmin={isAdmin} onToggleLike={handleToggleLike} onEdit={(item) => { setEditingMusic(item); setIsModalOpen(true); }} onDelete={handleDelete} />
             ))}
           </div>
-
-          <button className="scroll-btn right" onClick={() => scroll('right')} title="오른쪽으로 이동">
-            <i className="fa-solid fa-chevron-right"></i>
-          </button>
+          <button className="scroll-btn right" onClick={() => scroll(scrollRef1, 'right')}><i className="fa-solid fa-chevron-right"></i></button>
         </div>
       </section>
 
-      <MusicModal
-        isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setEditingMusic(null);
-        }}
-        onSubmit={handleCreateOrUpdate}
-        initialData={editingMusic}
-      />
-    </main>
+      {/* K-POP 섹션 */}
+      <section className="content-section" style={{ marginTop: '40px' }}>
+        <div className="section-header">
+          <h2>🔥 추천 K-POP 히트곡</h2>
+          <span style={{ color: 'var(--text-sub)', fontSize: '14px' }}>{kpopMusics.length}곡</span>
+        </div>
+        <div className="scroll-container-wrapper">
+          <button className="scroll-btn left" onClick={() => scroll(scrollRef2, 'left')}><i className="fa-solid fa-chevron-left"></i></button>
+          <div className="card-grid-horizontal" ref={scrollRef2}>
+            {kpopMusics.map((music) => (
+              <MusicCard key={music.id} music={music} isAdmin={isAdmin} onToggleLike={handleToggleLike} onEdit={(item) => { setEditingMusic(item); setIsModalOpen(true); }} onDelete={handleDelete} />
+            ))}
+          </div>
+          <button className="scroll-btn right" onClick={() => scroll(scrollRef2, 'right')}><i className="fa-solid fa-chevron-right"></i></button>
+        </div>
+      </section>
+
+      {/* J-POP 섹션 */}
+      <section className="content-section" style={{ marginTop: '40px' }}>
+        <div className="section-header">
+          <h2>🎧 감성 J-POP 플레이리스트</h2>
+          <span style={{ color: 'var(--text-sub)', fontSize: '14px' }}>{jpopMusics.length}곡</span>
+        </div>
+        <div className="scroll-container-wrapper">
+          <button className="scroll-btn left" onClick={() => scroll(scrollRef3, 'left')}><i className="fa-solid fa-chevron-left"></i></button>
+          <div className="card-grid-horizontal" ref={scrollRef3}>
+            {jpopMusics.map((music) => (
+              <MusicCard key={music.id} music={music} isAdmin={isAdmin} onToggleLike={handleToggleLike} onEdit={(item) => { setEditingMusic(item); setIsModalOpen(true); }} onDelete={handleDelete} />
+            ))}
+          </div>
+          <button className="scroll-btn right" onClick={() => scroll(scrollRef3, 'right')}><i className="fa-solid fa-chevron-right"></i></button>
+        </div>
+      </section>
+
+      {/* 버튜버 섹션 */}
+      <section className="content-section" style={{ marginTop: '40px' }}>
+        <div className="section-header">
+          <h2>⭐ 버튜버 & 버추얼 아이돌 스테이지</h2>
+          <span style={{ color: 'var(--text-sub)', fontSize: '14px' }}>{vtuberMusics.length}곡</span>
+        </div>
+        <div className="scroll-container-wrapper">
+          <button className="scroll-btn left" onClick={() => scroll(scrollRef5, 'left')}><i className="fa-solid fa-chevron-left"></i></button>
+          <div className="card-grid-horizontal" ref={scrollRef5}>
+            {vtuberMusics.map((music) => (
+              <MusicCard key={music.id} music={music} isAdmin={isAdmin} onToggleLike={handleToggleLike} onEdit={(item) => { setEditingMusic(item); setIsModalOpen(true); }} onDelete={handleDelete} />
+            ))}
+          </div>
+          <button className="scroll-btn right" onClick={() => scroll(scrollRef5, 'right')}><i className="fa-solid fa-chevron-right"></i></button>
+        </div>
+      </section>
+
+      {/* POP 섹션 */}
+      <section className="content-section" style={{ marginTop: '40px', marginBottom: '60px' }}>
+        <div className="section-header">
+          <h2>🌍 트렌디한 POP 글로벌 차트</h2>
+          <span style={{ color: 'var(--text-sub)', fontSize: '14px' }}>{popMusics.length}곡</span>
+        </div>
+        <div className="scroll-container-wrapper">
+          <button className="scroll-btn left" onClick={() => scroll(scrollRef4, 'left')}><i className="fa-solid fa-chevron-left"></i></button>
+          <div className="card-grid-horizontal" ref={scrollRef4}>
+            {popMusics.map((music) => (
+              <MusicCard key={music.id} music={music} isAdmin={isAdmin} onToggleLike={handleToggleLike} onEdit={(item) => { setEditingMusic(item); setIsModalOpen(true); }} onDelete={handleDelete} />
+            ))}
+          </div>
+          <button className="scroll-btn right" onClick={() => scroll(scrollRef4, 'right')}><i className="fa-solid fa-chevron-right"></i></button>
+        </div>
+      </section>
+
+      <MusicModal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingMusic(null); }} onSubmit={handleCreateOrUpdate} initialData={editingMusic} />
+    </div>
   );
 }

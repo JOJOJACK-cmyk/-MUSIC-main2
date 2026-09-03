@@ -4,7 +4,9 @@ import com.example.music.entity.User;
 import com.example.music.repository.UserRepository;
 import com.example.music.security.CustomAccessDeniedHandler;
 import com.example.music.security.CustomAuthenticationEntryPoint;
+import com.example.music.security.TokenAuthFilter;
 import com.example.music.service.CustomOAuth2UserService;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -47,11 +49,16 @@ public class SecurityConfig {
     private final CustomAuthenticationEntryPoint authenticationEntryPoint;
     private final CustomAccessDeniedHandler accessDeniedHandler;
 
+    // Bearer 토큰 인증 필터 (SPA <-> API stateless 인증)
+    private final TokenAuthFilter tokenAuthFilter;
+    private final com.example.music.security.AuthTokenService authTokenService;
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .addFilterBefore(tokenAuthFilter, UsernamePasswordAuthenticationFilter.class)
 
                 .authorizeHttpRequests(auth -> auth
                         // 1. 인증, OAuth, 문서, 웹소켓 등 기본 퍼블릭 경로 허용
@@ -78,8 +85,9 @@ public class SecurityConfig {
                         // ==========================================
                         .requestMatchers("/api/musics/register", "/api/musics/admin/**").hasRole("ADMIN")
 
-                        // 4. 기존 음악 조회 등 퍼블릭 경로
-                        .requestMatchers(HttpMethod.GET, "/api/musics/**", "/api/broadcast/**", "/api/music-snapshot/**",  "/api/live/status")
+                        // 4. 기존 음악 조회 등 퍼블릭 경로 (차트/알림 조회 포함)
+                        .requestMatchers(HttpMethod.GET, "/api/musics/**", "/api/broadcast/**", "/api/music-snapshot/**",
+                                "/api/live/status", "/api/chart/**", "/api/notifications/**")
                         .permitAll()
 
                         // 시청자 heartbeat는 비로그인 사용자의 시청자 수 집계를 위해 메서드 제한 없이 공개
@@ -164,22 +172,26 @@ public class SecurityConfig {
 
                             // 💡 1. DB에서 해당 이메일 유저의 최신 권한(role) 조회
                             String role = "ROLE_USER";
+                            String token = "";
                             if (!email.isEmpty()) {
                                 User dbUser = userRepository.findByEmail(email).orElse(null);
-                                if (dbUser != null && dbUser.getRole() != null) {
-                                    role = dbUser.getRole();
+                                if (dbUser != null) {
+                                    if (dbUser.getRole() != null) role = dbUser.getRole();
+                                    // 💡 SPA 에서 쓸 액세스 토큰 발급 (cross-origin 세션 문제 회피)
+                                    token = authTokenService.issue(dbUser.getId());
                                 }
                             }
 
                             String encodedNickname = URLEncoder.encode(nickname, StandardCharsets.UTF_8);
                             String encodedEmail = URLEncoder.encode(email, StandardCharsets.UTF_8);
                             String encodedProfile = URLEncoder.encode(profileImageUrl, StandardCharsets.UTF_8);
-                            String encodedRole = URLEncoder.encode(role, StandardCharsets.UTF_8); // 💡 2. role 인코딩 추가
+                            String encodedRole = URLEncoder.encode(role, StandardCharsets.UTF_8);
+                            String encodedToken = URLEncoder.encode(token, StandardCharsets.UTF_8);
 
-                            // 💡 3. 리다이렉트 URL에 &role= 파라미터 포함하여 전달
+                            // 💡 리다이렉트 URL에 role, token 포함하여 전달
                             response.sendRedirect(String.format(
-                                    "http://localhost:3000/?nickname=%s&email=%s&profileImageUrl=%s&role=%s",
-                                    encodedNickname, encodedEmail, encodedProfile, encodedRole
+                                    "http://localhost:3000/?nickname=%s&email=%s&profileImageUrl=%s&role=%s&token=%s",
+                                    encodedNickname, encodedEmail, encodedProfile, encodedRole, encodedToken
                             ));
                         })
                         .failureHandler((request, response, exception) -> {
@@ -210,7 +222,7 @@ public class SecurityConfig {
         configuration.setAllowedOriginPatterns(List.of(
                 "http://localhost:3000"
         ));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
 

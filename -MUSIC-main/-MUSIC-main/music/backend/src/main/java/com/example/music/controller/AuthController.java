@@ -41,8 +41,16 @@ public class AuthController {
 
     private final UserService userService;
     private final UserRepository userRepository;
+    private final com.example.music.repository.PassRepository passRepository;
+    private final com.example.music.security.AuthTokenService authTokenService;
     private final PasswordEncoder passwordEncoder;
     private final JavaMailSender javaMailSender; // 💡 실제 이메일 전송을 위한 MailSender 주입
+
+    private boolean hasActivePass(Long userId) {
+        if (userId == null) return false;
+        return passRepository.existsByUser_IdAndIsActiveTrueAndExpireDateAfter(
+                userId, java.time.LocalDateTime.now());
+    }
 
     // 이메일 인증 코드를 임시 저장할 맵
     private final Map<String, String> verificationCodes = new ConcurrentHashMap<>();
@@ -103,6 +111,9 @@ public class AuthController {
             userInfo.put("nickname", user.getNickname());
             userInfo.put("profileImageUrl", user.getProfileImageUrl() != null ? user.getProfileImageUrl() : "");
             userInfo.put("role", user.getRole());
+            userInfo.put("premium", hasActivePass(user.getId()));
+            // 💡 SPA 에서 Authorization: Bearer 로 쓸 액세스 토큰
+            userInfo.put("token", authTokenService.issue(user.getId()));
 
             return ResponseEntity.ok(userInfo);
 
@@ -301,6 +312,7 @@ public class AuthController {
                     response.put("nickname", dbUser.getNickname());
                     response.put("profileImageUrl", dbUser.getProfileImageUrl() != null ? dbUser.getProfileImageUrl() : profileImageUrl);
                     response.put("role", dbUser.getRole());
+                    response.put("premium", hasActivePass(dbUser.getId()));
                     return ResponseEntity.ok(response);
                 }
             }
@@ -321,10 +333,55 @@ public class AuthController {
             response.put("nickname", user.getNickname());
             response.put("profileImageUrl", user.getProfileImageUrl() != null ? user.getProfileImageUrl() : "");
             response.put("role", user.getRole());
+            response.put("premium", hasActivePass(user.getId()));
             return ResponseEntity.ok(response);
         }
 
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("유저를 찾을 수 없습니다.");
+    }
+
+    // 프로필(닉네임/프로필사진) 수정 API
+    @PatchMapping("/profile")
+    public ResponseEntity<?> updateProfile(
+            @RequestBody Map<String, String> request,
+            Authentication authentication) {
+
+        if (authentication == null || !authentication.isAuthenticated()
+                || "anonymousUser".equals(authentication.getPrincipal())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("로그인이 필요합니다.");
+        }
+
+        String email = authentication.getName();
+        Optional<User> optionalUser = userRepository.findByEmail(email);
+        if (optionalUser.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("유저를 찾을 수 없습니다.");
+        }
+
+        User user = optionalUser.get();
+        String nickname = request.get("nickname");
+        String profileImageUrl = request.get("profileImageUrl");
+
+        if (nickname != null && !nickname.isBlank()) {
+            String trimmed = nickname.trim();
+            if (!trimmed.equals(user.getNickname())
+                    && userRepository.findByNickname(trimmed).isPresent()) {
+                return ResponseEntity.badRequest().body(Map.of("message", "이미 사용 중인 닉네임입니다."));
+            }
+            user.setNickname(trimmed);
+        }
+        if (profileImageUrl != null) {
+            user.setProfileImageUrl(profileImageUrl.isBlank() ? null : profileImageUrl.trim());
+        }
+        userRepository.save(user);
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("id", user.getId());
+        body.put("email", user.getEmail());
+        body.put("nickname", user.getNickname());
+        body.put("profileImageUrl", user.getProfileImageUrl() != null ? user.getProfileImageUrl() : "");
+        body.put("role", user.getRole());
+        body.put("premium", hasActivePass(user.getId()));
+        return ResponseEntity.ok(body);
     }
 
     // 로그아웃 API

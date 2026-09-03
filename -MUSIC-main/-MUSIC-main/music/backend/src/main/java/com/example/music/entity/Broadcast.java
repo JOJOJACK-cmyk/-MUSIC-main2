@@ -29,6 +29,13 @@ public class Broadcast {
     @Column(name = "thumbnail_url", length = 500)
     private String thumbnailUrl;
 
+    // 채널 소개글
+    @Column(length = 500)
+    private String description;
+
+    // 채널 배너 이미지 URL
+    @Column(name = "banner_url", length = 500)
+    private String bannerUrl;
 
     @Column(nullable = false, length = 20)
     private String status;

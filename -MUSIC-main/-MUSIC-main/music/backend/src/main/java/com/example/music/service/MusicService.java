@@ -26,19 +26,35 @@ public class MusicService {
 
     private final MusicRepository musicRepository;
     private final YouTubeApiService youTubeApiService;
-
-    // 💡 좋아요 기능에 필요한 Repository 추가 주입
     private final UserRepository userRepository;
     private final LikedMusicRepository likedMusicRepository;
 
+    // 💡 장르 판별 로직은 YouTubeApiService 를 단일 소스로 위임한다 (중복/불일치 제거)
+    public String determineGenre(String title, String artist) {
+        return youTubeApiService.determineGenre(title, artist);
+    }
+
     @Transactional
     public MusicDto.Response createMusic(MusicDto.CreateRequest request) {
-        // 중복 방지 (이미 존재하는 youtubeVideoId인지 체크)
-        musicRepository.findByYoutubeVideoId(request.getYoutubeVideoId()).ifPresent(m -> {
-            throw new IllegalArgumentException("이미 등록된 음원(영상)입니다.");
-        });
+        Optional<Music> existingMusic = musicRepository.findByYoutubeVideoId(request.getYoutubeVideoId());
 
-        Music music = musicRepository.save(request.toEntity());
+        if (existingMusic.isPresent()) {
+            return new MusicDto.Response(existingMusic.get());
+        }
+
+        String resolvedGenre = (request.getGenre() != null && !request.getGenre().isBlank())
+                ? request.getGenre().toUpperCase()
+                : determineGenre(request.getTitle(), request.getArtist());
+
+        Music musicEntity = Music.builder()
+                .youtubeVideoId(request.getYoutubeVideoId())
+                .title(request.getTitle())
+                .artist(request.getArtist())
+                .thumbnailUrl(request.getThumbnailUrl())
+                .genre(resolvedGenre)
+                .build();
+
+        Music music = musicRepository.save(musicEntity);
         return new MusicDto.Response(music);
     }
 
@@ -48,8 +64,50 @@ public class MusicService {
         return new MusicDto.Response(music);
     }
 
+    @Transactional
     public List<MusicDto.Response> getAllMusic() {
-        return musicRepository.findAll().stream()
+        List<Music> allMusic = musicRepository.findAll();
+
+        // ※ 정렬/최신곡 필터는 하지 않는다. "실시간 인기 급상승 곡"(상위 10곡)은 프론트가
+        //   API 순서 그대로 slice(0,10) 하므로 여기서 순서를 바꾸면 안 된다.
+        //   "최신곡만" 노출은 프론트의 카테고리 섹션에서만 적용한다.
+        return allMusic.stream()
+                .filter(music -> {
+                    String a = music.getArtist() != null ? music.getArtist().toLowerCase() : "";
+                    Long duration = music.getDurationSeconds();
+
+                    // 1) 제목 기반 비음악(쇼츠/토크/플레이리스트/커버 등) 또는 아티스트에 cut 포함 → 삭제
+                    boolean nonMusicTitle = youTubeApiService.isNonMusicTitle(music.getTitle()) || a.contains("cut");
+
+                    // 2) 재생 시간이 저장되어 있고 단곡 범위(90~480초)를 벗어나면(쇼츠/장편) → 삭제
+                    boolean badDuration = duration != null && !youTubeApiService.isValidSongDuration(duration);
+
+                    if (nonMusicTitle || badDuration) {
+                        try {
+                            musicRepository.delete(music);
+                        } catch (Exception e) {}
+                        return false;
+                    }
+                    return true;
+                })
+                .map(music -> {
+                    // 곡 자체(문자/아티스트/버튜버 마커)로 재판별. 단, "POP"은 판별 실패 기본값이므로
+                    // 지역 힌트로 이미 KPOP/JPOP/VTUBER 로 저장된 값을 POP 으로 덮어쓰지 않는다.
+                    String detected = determineGenre(music.getTitle(), music.getArtist());
+                    boolean stored = music.getGenre() != null && !music.getGenre().isBlank();
+                    boolean confident = !"POP".equals(detected);
+                    if (!stored || (confident && !detected.equals(music.getGenre()))) {
+                        music.update(music.getTitle(), music.getArtist(), music.getThumbnailUrl(), detected);
+                        musicRepository.save(music);
+                    }
+                    return new MusicDto.Response(music);
+                })
+                .collect(Collectors.toList());
+    }
+
+    public List<MusicDto.Response> searchMusics(String keyword) {
+        List<Music> musicList = musicRepository.findByTitleContainingIgnoreCaseOrArtistContainingIgnoreCase(keyword, keyword);
+        return musicList.stream()
                 .map(MusicDto.Response::new)
                 .collect(Collectors.toList());
     }
@@ -59,12 +117,23 @@ public class MusicService {
         Music music = musicRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("음원을 찾을 수 없습니다. id=" + id));
 
-        // 썸네일 URL이 null이거나 비어있을 경우 기존 엔티티의 썸네일 URL 유지
         String targetThumbnail = (request.getThumbnailUrl() != null && !request.getThumbnailUrl().isBlank())
                 ? request.getThumbnailUrl()
                 : music.getThumbnailUrl();
 
-        music.update(request.getTitle(), request.getArtist(), targetThumbnail);
+        String targetGenre = (request.getGenre() != null && !request.getGenre().isBlank())
+                ? request.getGenre().toUpperCase()
+                : determineGenre(
+                request.getTitle() != null ? request.getTitle() : music.getTitle(),
+                request.getArtist() != null ? request.getArtist() : music.getArtist()
+        );
+
+        music.update(
+                request.getTitle() != null ? request.getTitle() : music.getTitle(),
+                request.getArtist() != null ? request.getArtist() : music.getArtist(),
+                targetThumbnail,
+                targetGenre
+        );
         return new MusicDto.Response(music);
     }
 
@@ -75,19 +144,39 @@ public class MusicService {
         musicRepository.delete(music);
     }
 
+    // 💡 카테고리별(KPOP/JPOP/VTUBER/POP) 유튜브 최신곡 수동 동기화 (관리자용/테스트용)
+    @Transactional
+    public Map<String, Integer> syncLatestMusicForAllCategories(int perKeyword) {
+        return youTubeApiService.syncLatestMusicForAllCategories(perKeyword);
+    }
+
+    // 💡 지역별 인기 음악 차트 동기화 (저렴 - search 할당량 소진 없음)
+    @Transactional
+    public Map<String, Integer> syncTrendingMusic() {
+        return youTubeApiService.syncTrendingMusic();
+    }
+
     @Transactional
     public MusicDto.Response createMusicFromYouTube(String videoId) throws Exception {
-        // 1. YouTubeApiService를 호출하여 영상 조회 (없으면 API 호출 후 내부에서 DB 자동 캐싱 저장)
         YouTubeVideoDto video = youTubeApiService.getVideoInfo(videoId);
 
-        // 2. 캐싱되어 DB에 저장된 Music Entity를 조회하여 반환 (이중 save 충돌 방지)
         Music music = musicRepository.findByYoutubeVideoId(video.getYoutubeVideoId())
-                .orElseThrow(() -> new IllegalStateException("YouTube 음원 정보 조회 및 캐싱에 실패했습니다. videoId=" + videoId));
+                .orElseGet(() -> {
+                    String inferredGenre = determineGenre(video.getTitle(), video.getArtist());
+                    Music newMusic = Music.builder()
+                            .youtubeVideoId(video.getYoutubeVideoId())
+                            .title(video.getTitle())
+                            .artist(video.getArtist())
+                            .thumbnailUrl(video.getThumbnailUrl())
+                            .genre(inferredGenre)
+                            .durationSeconds(video.getDurationSeconds())
+                            .build();
+                    return musicRepository.save(newMusic);
+                });
 
         return new MusicDto.Response(music);
     }
 
-    // 💡 공통: 소셜 로그인 및 일반 로그인 모두 대응하여 유저를 안전하게 찾아내는 헬퍼 메서드
     private User getUserFromAuthentication(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated()
                 || "anonymousUser".equals(authentication.getPrincipal())) {
@@ -96,19 +185,12 @@ public class MusicService {
 
         String identifier = authentication.getName();
 
-        // 1. 이메일로 먼저 조회 시도
         Optional<User> userOpt = userRepository.findByEmail(identifier);
-        if (userOpt.isPresent()) {
-            return userOpt.get();
-        }
+        if (userOpt.isPresent()) return userOpt.get();
 
-        // 2. 닉네임으로 조회 시도
         userOpt = userRepository.findByNickname(identifier);
-        if (userOpt.isPresent()) {
-            return userOpt.get();
-        }
+        if (userOpt.isPresent()) return userOpt.get();
 
-        // 3. OAuth2 소셜 로그인인 경우 principal attributes에서 이메일 추출 시도
         Object principal = authentication.getPrincipal();
         if (principal instanceof OAuth2User) {
             OAuth2User oAuth2User = (OAuth2User) principal;
@@ -124,7 +206,6 @@ public class MusicService {
         throw new IllegalArgumentException("유저를 찾을 수 없습니다. (identifier: " + identifier + ")");
     }
 
-    // 💡 OAuth2 Attributes에서 플랫폼별 이메일 추출을 담당하는 보조 메서드
     private String extractEmailFromOAuth2Attributes(Map<String, Object> attributes) {
         if (attributes == null) return null;
 
@@ -134,22 +215,19 @@ public class MusicService {
                 return (String) kakaoAccount.get("email");
             }
         }
-        if (attributes.containsKey("response")) { // 네이버
+        if (attributes.containsKey("response")) {
             Map<?, ?> naverResp = (Map<?, ?>) attributes.get("response");
             if (naverResp != null && naverResp.containsKey("email")) {
                 return (String) naverResp.get("email");
             }
         }
-        if (attributes.containsKey("email")) { // 구글 등
+        if (attributes.containsKey("email")) {
             return (String) attributes.get("email");
         }
 
         return null;
     }
 
-    // ==========================================
-    // 💡 음원 좋아요(보관함 담기/취소) 토글 로직
-    // ==========================================
     @Transactional
     public boolean toggleLikeMusic(Authentication authentication, Long musicId) {
         User user = getUserFromAuthentication(authentication);
@@ -160,28 +238,21 @@ public class MusicService {
         Optional<LikedMusic> existingLike = likedMusicRepository.findByUserAndMusic(user, music);
 
         if (existingLike.isPresent()) {
-            // 이미 좋아요를 눌렀다면 삭제 (취소)
             likedMusicRepository.delete(existingLike.get());
-            return false; // 좋아요 해제됨
+            return false;
         } else {
-            // 좋아요가 없다면 새로 생성 (등록)
             LikedMusic likedMusic = LikedMusic.builder()
                     .user(user)
                     .music(music)
                     .build();
             likedMusicRepository.save(likedMusic);
-            return true; // 좋아요 등록됨
+            return true;
         }
     }
 
-    // ==========================================
-    // 💡 내 보관함(좋아요 누른 음악) 목록 조회 로직
-    // ==========================================
     public List<MusicDto.Response> getLikedMusics(Authentication authentication) {
         User user = getUserFromAuthentication(authentication);
-
         List<LikedMusic> likedMusics = likedMusicRepository.findByUser(user);
-
         return likedMusics.stream()
                 .map(liked -> new MusicDto.Response(liked.getMusic()))
                 .collect(Collectors.toList());

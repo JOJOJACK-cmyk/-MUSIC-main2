@@ -31,12 +31,16 @@ public class MusicDto {
         @Schema(description = "앨범 썸네일 이미지 URL", example = "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg")
         private String thumbnailUrl;
 
+        @Schema(description = "장르 카테고리", example = "KPOP")
+        private String genre;
+
         public Music toEntity() {
             return Music.builder()
                     .youtubeVideoId(youtubeVideoId)
                     .title(title)
                     .artist(artist)
                     .thumbnailUrl(thumbnailUrl)
+                    .genre(genre)
                     .build();
         }
     }
@@ -56,6 +60,9 @@ public class MusicDto {
 
         @Schema(description = "수정할 썸네일 URL", example = "https://example.com/new_thumb.jpg")
         private String thumbnailUrl;
+
+        @Schema(description = "수정할 장르 카테고리", example = "KPOP")
+        private String genre;
     }
 
     @Schema(name = "MusicResponse", description = "음원 정보 응답 DTO")
@@ -78,12 +85,32 @@ public class MusicDto {
         @Schema(description = "썸네일 이미지 URL", example = "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg")
         private final String thumbnailUrl;
 
+        @Schema(description = "장르 카테고리", example = "KPOP")
+        private final String genre;
+
+        @Schema(description = "재생 시간 (초)", example = "213")
+        private final Long durationSeconds;
+
+        @Schema(description = "유튜브 업로드 일시", example = "2026-08-15T09:00:00")
+        private final java.time.LocalDateTime publishedAt;
+
+        @Schema(description = "유튜브 조회수", example = "1234567")
+        private final Long viewCount;
+
+        @Schema(description = "현재 유튜브 인기차트 순위 (1위=가장 인기, null=차트 밖)", example = "5")
+        private final Integer trendingRank;
+
         public Response(Music music) {
             this.id = music.getId();
             this.youtubeVideoId = music.getYoutubeVideoId();
             this.title = music.getTitle();
             this.artist = music.getArtist();
             this.thumbnailUrl = music.getThumbnailUrl();
+            this.genre = music.getGenre();
+            this.durationSeconds = music.getDurationSeconds();
+            this.publishedAt = music.getPublishedAt();
+            this.viewCount = music.getViewCount();
+            this.trendingRank = music.getTrendingRank();
         }
     }
 }

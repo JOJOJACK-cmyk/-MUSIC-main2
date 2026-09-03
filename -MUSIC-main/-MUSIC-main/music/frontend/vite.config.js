@@ -21,6 +21,19 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      // WebSocket(STOMP/SockJS) - 세션 쿠키가 동일 출처로 전달되도록 프록시
+      '/ws-stomp': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false,
+        ws: true,
+      },
+      '/ws-chat': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false,
+        ws: true,
+      },
     },
   },
 });

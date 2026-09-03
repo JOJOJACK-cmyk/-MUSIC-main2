@@ -16,6 +16,7 @@ import PaymentPage from './pages/PaymentPage';
 
 import { PlayerProvider } from './context/PlayerContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { NotificationProvider } from './context/NotificationContext';
 import { musicApi } from './api/musicApi';
 import './styles/style.css';
 
@@ -101,6 +102,7 @@ export default function App() {
     <AuthProvider>
       <PlayerProvider>
         <BrowserRouter>
+          <NotificationProvider>
           <AuthHandler /> {/* 💡 로그인 직후 파라미터 캐치 핸들러 실행 */}
           <div className="app-container">
             {/* 💡 관리자일 때만 모달 오픈 함수 전달 */}
@@ -160,6 +162,7 @@ export default function App() {
             <HlsAudioPlayer />
             <PlayerBar />
           </div>
+          </NotificationProvider>
         </BrowserRouter>
       </PlayerProvider>
     </AuthProvider>

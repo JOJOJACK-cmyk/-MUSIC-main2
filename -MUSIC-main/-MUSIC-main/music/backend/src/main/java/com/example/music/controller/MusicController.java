@@ -50,6 +50,16 @@ public class MusicController {
         return ResponseEntity.ok(musicService.getMusic(id));
     }
 
+    // 💡 엑셀/DB 전체 대상 키워드 검색 API 추가
+    @Tag(name = "Music API", description = "일반 청취자용 음원 및 차트 조회 API")
+    @Operation(summary = "음원 키워드 검색", description = "제목 또는 아티스트에 특정 검색어가 포함된 DB 전체 음원 목록을 조회합니다.")
+    @GetMapping("/search")
+    public ResponseEntity<List<MusicDto.Response>> searchMusics(
+            @Parameter(description = "검색 키워드", example = "르세라핌", required = true)
+            @RequestParam String keyword) {
+        return ResponseEntity.ok(musicService.searchMusics(keyword));
+    }
+
     // 💡 내 보관함(좋아요 누른 음악 목록) 조회 API
     @Tag(name = "Music API", description = "일반 청취자용 음원 및 차트 조회 API")
     @Operation(summary = "내 보관함 좋아요 목록 조회", description = "현재 로그인한 유저가 좋아요를 누른 음악 목록을 조회합니다.")
@@ -110,6 +120,28 @@ public class MusicController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(musicService.createMusicFromYouTube(videoId));
+    }
+
+    @Tag(name = "Admin Music API", description = "관리자 전용 음원 등록 및 관리 시스템 API")
+    @Operation(summary = "[관리자] 카테고리별 유튜브 최신곡 일괄 동기화",
+            description = "KPOP/JPOP/VTUBER/POP 카테고리별 키워드로 유튜브 최신 음악을 검색하여 " +
+                    "쇼츠/장편 영상을 걸러낸 단곡만 DB에 등록합니다. (스케줄러가 매일 새벽 3시에 자동 수행)")
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/youtube/sync-latest")
+    public ResponseEntity<Map<String, Integer>> syncLatestMusic(
+            @Parameter(description = "카테고리 키워드당 검색 결과 수", example = "15")
+            @RequestParam(defaultValue = "15") int perKeyword) {
+        return ResponseEntity.ok(musicService.syncLatestMusicForAllCategories(perKeyword));
+    }
+
+    @Tag(name = "Admin Music API", description = "관리자 전용 음원 등록 및 관리 시스템 API")
+    @Operation(summary = "[관리자] 지역별 인기 음악 차트 동기화",
+            description = "YouTube videos.list(chart=mostPopular)로 KR/JP/US 인기 음악을 가져와 등록합니다. " +
+                    "search API 할당량을 소진하지 않아(호출당 1유닛) 언제든 실행 가능합니다.")
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/youtube/sync-trending")
+    public ResponseEntity<Map<String, Integer>> syncTrendingMusic() {
+        return ResponseEntity.ok(musicService.syncTrendingMusic());
     }
 
     @Tag(name = "Admin Music API", description = "관리자 전용 음원 등록 및 관리 시스템 API")

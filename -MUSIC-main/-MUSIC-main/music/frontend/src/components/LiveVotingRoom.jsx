@@ -30,7 +30,7 @@ const LiveVotingRoom = ({
 
     try {
       const response = await axios.get(
-        `http://localhost:8080/api/broadcast/${broadcastId}/ranking`
+        `/api/broadcast/${broadcastId}/ranking`
       );
 
       setSongList(response.data);
@@ -54,7 +54,7 @@ const LiveVotingRoom = ({
     const client = new Client({
       webSocketFactory: () =>
         new SockJS(
-          'http://localhost:8080/ws-stomp'
+          '/ws-stomp'
         ),
 
       reconnectDelay: 5000,

@@ -31,7 +31,51 @@ public class BroadcastController {
     private final SongVoteService songVoteService;
     private final LiveViewerService liveViewerService;
     private final BroadcastRepository broadcastRepository;
+    private final com.example.music.service.FollowService followService;
     private final AuthenticatedUserResolver authenticatedUserResolver;
+
+    // OBS 등 인코더가 송출할 RTMP 서버 주소 (SRS 기본값)
+    @org.springframework.beans.factory.annotation.Value("${srs.rtmp-url:rtmp://localhost:1935/live}")
+    private String rtmpIngestUrl;
+
+    /**
+     * 내 방송 정보 조회 API
+     * GET /api/broadcast/mine
+     * 프로필 설정창의 "스트리밍 설정"에서 현재 스트림키/제목/상태를 표시하기 위해 사용.
+     * 아직 방송을 만든 적이 없으면 204 No Content.
+     */
+    @GetMapping("/mine")
+    public ResponseEntity<Map<String, Object>> getMyBroadcast(Authentication authentication) {
+        User user = authenticatedUserResolver.resolveRequiredUser(authentication);
+        Map<String, Object> body = new java.util.HashMap<>();
+        body.put("ingestUrl", rtmpIngestUrl);
+        body.put("nickname", user.getNickname());
+        body.put("profileImageUrl", user.getProfileImageUrl());
+        body.put("followerCount", followService.followerCount(user.getId()));
+        return broadcastRepository.findByUser_Id(user.getId())
+                .<ResponseEntity<Map<String, Object>>>map(b -> {
+                    body.put("id", b.getId());
+                    body.put("title", b.getTitle());
+                    body.put("description", b.getDescription());
+                    body.put("bannerUrl", b.getBannerUrl());
+                    body.put("streamKey", b.getStreamKey());
+                    body.put("status", b.getStatus());
+                    body.put("startedAt", b.getStartedAt());
+                    return ResponseEntity.ok(body);
+                })
+                .orElseGet(() -> ResponseEntity.ok(body)); // 방송 미생성이어도 ingestUrl 은 안내
+    }
+
+    /** 채널 정보(제목·소개글·배너) 일괄 수정 */
+    @PatchMapping("/channel")
+    public ResponseEntity<Void> updateChannel(
+            @RequestBody Map<String, String> req,
+            Authentication authentication
+    ) {
+        User user = authenticatedUserResolver.resolveRequiredUser(authentication);
+        broadcastService.updateChannel(user, req.get("title"), req.get("description"), req.get("bannerUrl"));
+        return ResponseEntity.ok().build();
+    }
 
     /**
      * 스트림 키 발급 및 재생성 API
@@ -39,13 +83,18 @@ public class BroadcastController {
      * [수정] 클라이언트가 보낸 User 객체를 신뢰하지 않고, 로그인 세션 기준으로 본인 것만 발급/재발급
      */
     @PostMapping("/stream-key")
-    public ResponseEntity<Broadcast> generateStreamKey(
+    public ResponseEntity<Map<String, Object>> generateStreamKey(
             @RequestParam(required = false) String defaultTitle,
             Authentication authentication
     ) {
         User user = authenticatedUserResolver.resolveRequiredUser(authentication);
-        Broadcast broadcast = broadcastService.createOrUpdateStreamKey(user, defaultTitle);
-        return ResponseEntity.ok(broadcast);
+        Broadcast b = broadcastService.createOrUpdateStreamKey(user, defaultTitle);
+        Map<String, Object> body = new java.util.HashMap<>();
+        body.put("id", b.getId());
+        body.put("title", b.getTitle());
+        body.put("streamKey", b.getStreamKey());
+        body.put("status", b.getStatus());
+        return ResponseEntity.ok(body);
     }
 
     /**

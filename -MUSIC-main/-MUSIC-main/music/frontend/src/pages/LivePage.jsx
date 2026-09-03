@@ -11,7 +11,7 @@ export default function LivePage() {
   const [loading, setLoading] = useState(true);
   const [playerMessage, setPlayerMessage] = useState('');
 
-  const liveApiUrl = 'http://localhost:8080/api/broadcast/live';
+  const liveApiUrl = '/api/broadcast/live';
     const navigate = useNavigate();
 
   // 1. 현재 방송 목록 조회
@@ -175,7 +175,7 @@ export default function LivePage() {
     const sendHeartbeat = async () => {
       try {
         const response = await fetch(
-          `http://localhost:8080/api/broadcast/${selectedBroadcast.id}/viewers/heartbeat`,
+          `/api/broadcast/${selectedBroadcast.id}/viewers/heartbeat`,
           {
             method: 'POST',
             credentials: 'include',
