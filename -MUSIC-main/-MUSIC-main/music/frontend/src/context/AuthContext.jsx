@@ -1,18 +1,50 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 const AuthContext = createContext(null);
+
+const API = ''; // Vite 프록시로 동일 출처 요청 (세션 쿠키 전달)
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // 💡 이용권(구독) 상태 - 플레이어 미리듣기 제한 해제 판정의 단일 소스
+  const [subscription, setSubscription] = useState(null); // { active, passName, startDate, expireDate }
+
+  const authHeaders = () => {
+    const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
+  // 서버 기준으로 이용권 상태를 다시 불러온다 (로그인 직후 / 결제 완료 후 호출)
+  const refreshSubscription = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/api/v1/payments/subscription`, {
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSubscription(data);
+        return data;
+      }
+    } catch (_) {}
+    setSubscription(null);
+    return null;
+  }, []);
+
   useEffect(() => {
     checkAuthStatus();
   }, []);
 
+  // user 가 채워지면 이용권 상태도 동기화
+  useEffect(() => {
+    if (user) refreshSubscription();
+    else setSubscription(null);
+  }, [user, refreshSubscription]);
+
   const checkAuthStatus = async () => {
     try {
-      // 💡 1. URL SearchParams(?token=...) 및 Hash(#token=...) 모두 확인
       const urlParams = new URLSearchParams(window.location.search);
       const hashParams = new URLSearchParams(
         window.location.hash.startsWith('#')
@@ -33,9 +65,7 @@ export const AuthProvider = ({ children }) => {
         hashParams.get('nickname') ||
         hashParams.get('name');
 
-      const email =
-        urlParams.get('email') ||
-        hashParams.get('email');
+      const email = urlParams.get('email') || hashParams.get('email');
 
       const profileImageUrl =
         urlParams.get('profileImageUrl') ||
@@ -43,11 +73,8 @@ export const AuthProvider = ({ children }) => {
         urlParams.get('picture') ||
         hashParams.get('profileImageUrl');
 
-      const role =
-        urlParams.get('role') ||
-        hashParams.get('role');
+      const role = urlParams.get('role') || hashParams.get('role');
 
-      // 💡 소셜 로그인 리다이렉트로 토큰이나 닉네임이 전달된 경우
       if (token || nickname || email) {
         if (token) localStorage.setItem('accessToken', token);
 
@@ -59,19 +86,17 @@ export const AuthProvider = ({ children }) => {
             : '소셜 사용자',
           email: email ? decodeURIComponent(email) : '',
           profileImageUrl: profileImageUrl ? decodeURIComponent(profileImageUrl) : '',
-          role: role ? decodeURIComponent(role) : 'ROLE_USER', // 권한 정보가 없으면 기본 ROLE_USER
+          role: role ? decodeURIComponent(role) : 'ROLE_USER',
         };
 
         localStorage.setItem('user', JSON.stringify(socialUser));
         setUser(socialUser);
 
-        // URL 주소창에서 파라미터 깔끔하게 제거 (?token=... 제거)
         window.history.replaceState({}, document.title, window.location.pathname);
         setLoading(false);
         return;
       }
 
-      // 💡 2. 로컬 스토리지에 기존 저장된 사용자 정보 확인
       const savedUser = localStorage.getItem('user');
       const savedToken = localStorage.getItem('accessToken');
 
@@ -83,26 +108,21 @@ export const AuthProvider = ({ children }) => {
         }
       }
 
-      // 💡 3. 토큰이 있는 경우에만 백엔드 /api/auth/me 확인
-      if (savedToken) {
-        try {
-          const response = await fetch('http://localhost:8080/api/auth/me', {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${savedToken}`,
-            },
-            credentials: 'include',
-          });
+      // 토큰 유무와 무관하게 세션 기반 로그인도 있으므로 /me 를 시도한다
+      try {
+        const response = await fetch(`${API}/api/auth/me`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
+          credentials: 'include',
+        });
 
-          if (response.ok) {
-            const data = await response.json();
-            setUser(data);
-            localStorage.setItem('user', JSON.stringify(data));
-          }
-        } catch (e) {
-          // 백엔드 me 엔드포인트 미구현 시 savedUser 유지
+        if (response.ok) {
+          const data = await response.json();
+          setUser(data);
+          localStorage.setItem('user', JSON.stringify(data));
         }
+      } catch (e) {
+        // /me 실패 시 savedUser 유지
       }
     } catch (err) {
       console.warn('인증 초기화 에러:', err);
@@ -111,7 +131,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // 일반 로그인 시 호출
   const login = (userData, token) => {
     if (token) localStorage.setItem('accessToken', token);
     if (userData) {
@@ -120,16 +139,35 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // 로그아웃
   const logout = () => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('user');
     setUser(null);
+    setSubscription(null);
     window.location.href = '/';
   };
 
+  // 프리미엄 판정: 서버 구독 상태 우선, 없으면 user 객체의 힌트(role/premium) 사용
+  const isPremium = Boolean(
+    subscription?.active ||
+      user?.premium === true ||
+      ['PREMIUM', 'ROLE_ADMIN', 'ADMIN'].includes(String(user?.role || '').toUpperCase())
+  );
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, checkAuthStatus }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        setUser,
+        loading,
+        login,
+        logout,
+        checkAuthStatus,
+        subscription,
+        isPremium,
+        refreshSubscription,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

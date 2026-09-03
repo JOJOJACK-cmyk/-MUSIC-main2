@@ -1,23 +1,31 @@
 import React from 'react';
 
 export default function Top100Chart({ chartList = [], onSelectMusic }) {
+  // 💡 100곡을 초과하지 않도록 엄격하게 상위 100개만 슬라이싱
+  const limitedChartList = Array.isArray(chartList) ? chartList.slice(0, 100) : [];
+
   return (
     <div style={{ width: '100%', maxWidth: '900px', margin: '0 auto', color: '#fff' }}>
-      {/* 상단 타이틀 영역 (중복되는 이모티콘 제거 및 깔끔한 정렬) */}
+      {/* 상단 타이틀 영역 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '24px', paddingBottom: '12px', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
         <div>
           <h2 style={{ fontSize: '24px', fontWeight: '800', letterSpacing: '-0.5px', margin: '0 0 4px 0' }}>실시간 TOP 100</h2>
           <p style={{ fontSize: '13px', color: '#a1a1aa', margin: '0' }}>가장 사랑받는 인기 음악을 실시간으로 만나보세요.</p>
         </div>
-        <span style={{ fontSize: '12px', color: '#ec4899', fontWeight: '600', backgroundColor: 'rgba(236, 72, 153, 0.1)', padding: '4px 10px', borderRadius: '20px' }}>
-          매분 자동 갱신
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '12px', color: '#a1a1aa', fontWeight: '500' }}>
+            총 {limitedChartList.length}곡
+          </span>
+          <span style={{ fontSize: '12px', color: '#ec4899', fontWeight: '600', backgroundColor: 'rgba(236, 72, 153, 0.1)', padding: '4px 10px', borderRadius: '20px' }}>
+            매분 자동 갱신
+          </span>
+        </div>
       </div>
 
       {/* 차트 리스트 래퍼 */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        {chartList.length > 0 ? (
-          chartList.map((music, index) => {
+        {limitedChartList.length > 0 ? (
+          limitedChartList.map((music, index) => {
             const isTop3 = index < 3;
             return (
               <div
@@ -48,7 +56,7 @@ export default function Top100Chart({ chartList = [], onSelectMusic }) {
               >
                 {/* 좌측: 순위 + 썸네일 + 곡 정보 */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '18px', overflow: 'hidden' }}>
-                  {/* 순위 (TOP 3는 핫핑크/골드 컬러 강조) */}
+                  {/* 순위 (TOP 3는 핫핑크 컬러 강조) */}
                   <span style={{
                     width: '28px',
                     textAlign: 'center',
@@ -79,7 +87,7 @@ export default function Top100Chart({ chartList = [], onSelectMusic }) {
                   </div>
                 </div>
 
-                {/* 우측: 멜론/유튜브뮤직 스타일의 재생 버튼 */}
+                {/* 우측: 재생 버튼 */}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();

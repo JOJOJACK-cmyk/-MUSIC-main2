@@ -62,11 +62,11 @@ export default function LoginPage() {
 
     try {
       if (modalType === 'email') {
-        const res = await axios.post('http://localhost:8080/api/auth/find-email/send-code', { nickname: inputVal });
+        const res = await axios.post('/api/auth/find-email/send-code', { nickname: inputVal });
         setResultMessage(res.data.message);
         setStep(2); // 2단계로 이동
       } else {
-        const res = await axios.post('http://localhost:8080/api/auth/send-code', { email: inputVal });
+        const res = await axios.post('/api/auth/send-code', { email: inputVal });
         setResultMessage(res.data.message);
         setStep(2); // 2단계로 이동
       }
@@ -82,13 +82,13 @@ export default function LoginPage() {
 
     try {
       if (modalType === 'email') {
-        const res = await axios.post('http://localhost:8080/api/auth/find-email/verify', {
+        const res = await axios.post('/api/auth/find-email/verify', {
           nickname: inputVal,
           code: codeVal
         });
         setFinalResult(`찾은 아이디(이메일): ${res.data.email}`);
       } else {
-        const res = await axios.post('http://localhost:8080/api/auth/verify-and-reset', {
+        const res = await axios.post('/api/auth/verify-and-reset', {
           email: inputVal,
           code: codeVal
         });

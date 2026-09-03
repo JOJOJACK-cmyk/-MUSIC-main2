@@ -97,7 +97,7 @@ export const PlayerProvider = ({ children }) => {
       }
 
       const response = await fetch(
-        'http://localhost:8080/api/v1/logs/listen',
+        '/api/v1/logs/listen',
         {
           method: 'POST',
           headers: headers,
@@ -138,7 +138,6 @@ export const PlayerProvider = ({ children }) => {
         const time = player.getCurrentTime() || 0;
         setCurrentTime(time);
 
-        // 💡 [결제/구독 체크 로직 디버깅용 로그]
         let rawUser = user;
         if (!rawUser) {
           try {
@@ -147,56 +146,20 @@ export const PlayerProvider = ({ children }) => {
           } catch (_) {}
         }
 
-        // 현재 유저 객체 상태 콘솔 출력 (F12에서 확인 가능)
-        // console.log('현재 유저 객체 상태:', rawUser);
-
-        const userRole = String(rawUser?.role || '').toUpperCase();
-
-        // 💡 만약 현재 테스트 중인 계정의 이메일이나 닉네임이 결제된 계정이라면
-        // 아래 조건에 강제로 포함시켜서 1분 제한을 확실하게 면제시킬 수 있습니다.
-        const isTargetAccountPremium = rawUser?.email === 'cjsrudgh98@gmail.com' || rawUser?.nickname === '라비안';
-
-        const isPremium =
-          isTargetAccountPremium ||
-          userRole === 'PREMIUM' ||
-          userRole === 'ADMIN' ||
-          rawUser?.isPremium === true ||
-          rawUser?.subscribed === true ||
-          rawUser?.membership === 'PREMIUM';
-
-        // 1. 비회원인 경우 (60초 초과 시 로그인 페이지로)
-        if (!rawUser) {
-          if (time >= 60) {
-            try {
-              player.stopVideo();
-              player.destroy?.();
-            } catch (e) {}
-            playerRef.current = null;
-            setCurrentTrack(null);
-            setIsPlaying(false);
-            setCurrentTime(0);
-
-            alert('로그인이 필요한 서비스입니다.');
+        // 💡 로그인한 사용자는 미리듣기 제한 없음 (이용권 구매 경고창 표시하지 않음).
+        //    비로그인 사용자만 60초 이후 로그인 안내.
+        if (!rawUser && time >= 60) {
+          try {
+            player.pauseVideo?.();
+            player.seekTo?.(0, true);
+          } catch (e) {}
+          setIsPlaying(false);
+          setCurrentTime(0);
+          playTimeCounterRef.current = 0;
+          if (window.confirm('로그인하면 이어서 들을 수 있어요. 로그인 페이지로 이동할까요?')) {
             window.location.href = '/login';
-            return;
           }
-        }
-        // 2. 로그인 유저이지만 프리미엄(결제)이 아닌 경우 (60초 초과 시 결제 페이지로)
-        else if (!isPremium) {
-          if (time >= 60) {
-            try {
-              player.stopVideo();
-              player.destroy?.();
-            } catch (e) {}
-            playerRef.current = null;
-            setCurrentTrack(null);
-            setIsPlaying(false);
-            setCurrentTime(0);
-
-            alert('무료 회원은 1분까지만 미리듣기가 가능합니다. 프리미엄 이용권을 구매해주세요!');
-            window.location.href = '/payment';
-            return;
-          }
+          return;
         }
       }
 

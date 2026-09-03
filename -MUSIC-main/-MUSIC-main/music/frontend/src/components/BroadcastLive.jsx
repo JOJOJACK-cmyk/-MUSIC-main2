@@ -8,7 +8,7 @@ const BroadcastLive = () => {
 
     useEffect(() => {
         // 1. WebSocket 연결 설정 (백엔드 엔드포인트에 맞게 수정)
-        const socket = new SockJS('http://localhost:8080/ws-stomp');
+        const socket = new SockJS('/ws-stomp');
         const client = new Client({
             webSocketFactory: () => socket,
             onConnect: () => {

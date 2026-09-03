@@ -23,6 +23,7 @@ public class BroadcastService {
     private final SrsLiveStatusService srsLiveStatusService;
     private final LiveViewerService liveViewerService;
     private final SongVoteService songVoteService;
+    private final NotificationService notificationService;
 
     // [수정] HLS 주소를 하드코딩하지 않고 환경별로 설정 가능하게 분리 (기본값: 로컬 개발환경)
     @Value("${hls.base-url:http://localhost:8081}")
@@ -79,6 +80,25 @@ public class BroadcastService {
         );
     }
 
+    /** 채널 정보(제목/소개글/배너) 일괄 수정. 방송 정보가 없으면 새로 생성. */
+    @Transactional
+    public void updateChannel(User user, String title, String description, String bannerUrl) {
+        Broadcast b = broadcastRepository.findByUser_Id(user.getId())
+                .orElseGet(() -> {
+                    Broadcast nb = new Broadcast();
+                    nb.setUser(user);
+                    nb.setStatus("OFF");
+                    nb.setStreamKey("live_" + UUID.randomUUID().toString().replace("-", ""));
+                    nb.setCreatedAt(LocalDateTime.now());
+                    return nb;
+                });
+        if (title != null && !title.isBlank()) b.setTitle(title.trim());
+        if (b.getTitle() == null || b.getTitle().isBlank()) b.setTitle(user.getNickname() + "의 방송국");
+        if (description != null) b.setDescription(description.isBlank() ? null : description.trim());
+        if (bannerUrl != null) b.setBannerUrl(bannerUrl.isBlank() ? null : bannerUrl.trim());
+        broadcastRepository.save(b);
+    }
+
     /**
      * 방송 제목 수정
      */
@@ -120,6 +140,7 @@ public class BroadcastService {
                                         )
                         );
 
+        String prevStatus = broadcast.getStatus();
         broadcast.setStatus(status);
 
         // 방송 시작
@@ -131,6 +152,10 @@ public class BroadcastService {
 
             broadcast.setEndedAt(null);
 
+            // 이전에 ON 이 아니었을 때만 "라이브 시작" 알림 발행
+            if (!"ON".equalsIgnoreCase(prevStatus)) {
+                notifyLiveStart(broadcast);
+            }
         }
 
         // 방송 종료
@@ -157,6 +182,7 @@ public class BroadcastService {
         broadcastRepository.findByStreamKey(streamKey)
                 .ifPresentOrElse(broadcast -> {
 
+                    boolean wasOn = "ON".equalsIgnoreCase(broadcast.getStatus());
                     broadcast.setStatus("ON");
                     broadcast.setStartedAt(LocalDateTime.now());
                     broadcast.setEndedAt(null);
@@ -165,6 +191,10 @@ public class BroadcastService {
                             "[SRS] 방송 시작 감지 - broadcastId: {}, streamKey: {}",
                             broadcast.getId(), streamKey
                     );
+
+                    if (!wasOn) {
+                        notifyLiveStart(broadcast);
+                    }
 
                 }, () -> log.warn(
                         "[SRS] 알 수 없는 streamKey로 publish 이벤트 발생: {}", streamKey
@@ -195,6 +225,23 @@ public class BroadcastService {
                 }, () -> log.warn(
                         "[SRS] 알 수 없는 streamKey로 unpublish 이벤트 발생: {}", streamKey
                 ));
+    }
+
+    /** "OO님이 라이브를 시작했어요" 앱 내 알림 발행 (broadcasterId 포함 → 프론트에서 팔로우 여부 판별) */
+    private void notifyLiveStart(Broadcast broadcast) {
+        try {
+            Long hostId = broadcast.getUser() != null ? broadcast.getUser().getId() : null;
+            String host = broadcast.getUser() != null ? broadcast.getUser().getNickname() : "누군가";
+            notificationService.publish(
+                    "LIVE_START",
+                    host + "님이 라이브를 시작했어요",
+                    broadcast.getTitle() != null ? broadcast.getTitle() : "지금 방송 중",
+                    "/live/" + broadcast.getId(),
+                    hostId
+            );
+        } catch (Exception e) {
+            log.warn("라이브 시작 알림 발행 실패: {}", e.getMessage());
+        }
     }
 
     /**
@@ -242,6 +289,9 @@ public class BroadcastService {
                                         broadcast
                                                 .getUser()
                                                 .getNickname(),
+
+                                        // 방송자 사용자 ID (팔로우용)
+                                        broadcast.getUser().getId(),
 
                                         // 실제 SRS 송출 중이므로 LIVE
                                         "LIVE",

@@ -9,7 +9,7 @@ export default function LibraryPage() {
   // 내 보관함 좋아요 목록 불러오기
   const fetchLikedMusics = async () => {
     try {
-      const response = await axios.get('http://localhost:8080/api/musics/liked', {
+      const response = await axios.get('/api/musics/liked', {
         withCredentials: true, // 쿠키/세션 인증 포함
       });
       setLikedMusics(response.data);
@@ -27,7 +27,7 @@ export default function LibraryPage() {
   // 보관함에서 바로 좋아요 취소(해제)하기
   const handleToggleLike = async (musicId) => {
     try {
-      await axios.post(`http://localhost:8080/api/musics/${musicId}/like`, {}, {
+      await axios.post(`/api/musics/${musicId}/like`, {}, {
         withCredentials: true,
       });
       // 성공 시 목록에서 즉시 제거

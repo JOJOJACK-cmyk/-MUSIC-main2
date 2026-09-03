@@ -1,23 +1,48 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useNotifications } from '../context/NotificationContext';
+import ProfilePanel from './ProfilePanel';
+
+function timeAgo(ms) {
+  const s = Math.floor((Date.now() - ms) / 1000);
+  if (s < 60) return '방금';
+  if (s < 3600) return `${Math.floor(s / 60)}분 전`;
+  if (s < 86400) return `${Math.floor(s / 3600)}시간 전`;
+  return `${Math.floor(s / 86400)}일 전`;
+}
+
+function iconFor(type) {
+  if (type === 'LIVE_START') return 'fa-tower-broadcast';
+  if (type === 'NEW_HOT_SONG') return 'fa-fire';
+  return 'fa-bell';
+}
 
 export default function Header({ searchTerm, setSearchTerm }) {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
+  const notif = useNotifications();
+  const notifications = notif?.notifications || [];
+  const unreadCount = notif?.unreadCount || 0;
+  const openNotification = notif?.openNotification;
 
-  const handleLogoutClick = async (e) => {
-    e.currentTarget.blur();
-    try {
-      if (logout) {
-        await logout();
-      }
-    } catch (err) {
-      console.error('로그아웃 처리 중 오류:', err);
-    } finally {
-      // 💡 로그아웃 후 로컬스토리지 잔여 정보 확실히 지우고 페이지 새로고침
-      localStorage.removeItem('user');
-      window.location.href = '/';
-    }
+  const [bellOpen, setBellOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const bellRef = useRef(null);
+
+  useEffect(() => {
+    const onDown = (e) => {
+      if (bellRef.current && !bellRef.current.contains(e.target)) setBellOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, []);
+
+  const toggleBell = () => {
+    setBellOpen((v) => {
+      const next = !v;
+      if (next) notif?.markAllRead?.();
+      return next;
+    });
   };
 
   return (
@@ -35,39 +60,110 @@ export default function Header({ searchTerm, setSearchTerm }) {
 
       {/* 2. 우측 사용자 프로필 / 로그인 영역 */}
       <div className="user-profile" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        {/* 🔔 알림 버튼 */}
-        <button
-          type="button"
-          tabIndex={-1}
-          onClick={(e) => e.currentTarget.blur()}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: 'var(--text-sub)',
-            cursor: 'pointer',
-            fontSize: '16px',
-            padding: '4px',
-            outline: 'none',
-          }}
-        >
-          <i className="fa-solid fa-bell"></i>
-        </button>
+        {/* 🔔 알림 버튼 + 드롭다운 */}
+        <div ref={bellRef} style={{ position: 'relative' }}>
+          <button
+            type="button"
+            onClick={toggleBell}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: bellOpen ? '#ec4899' : 'var(--text-sub)',
+              cursor: 'pointer',
+              fontSize: '16px',
+              padding: '4px',
+              outline: 'none',
+              position: 'relative',
+            }}
+          >
+            <i className="fa-solid fa-bell"></i>
+            {unreadCount > 0 && (
+              <span
+                style={{
+                  position: 'absolute',
+                  top: -2,
+                  right: -2,
+                  minWidth: 16,
+                  height: 16,
+                  padding: '0 4px',
+                  borderRadius: 999,
+                  background: '#ec4899',
+                  color: '#fff',
+                  fontSize: 10,
+                  fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  lineHeight: 1,
+                }}
+              >
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
+
+          {bellOpen && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 40,
+                right: 0,
+                width: 320,
+                maxHeight: '70vh',
+                overflowY: 'auto',
+                background: '#0c0c0e',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 14,
+                boxShadow: '0 24px 60px rgba(0,0,0,0.6)',
+                zIndex: 3000,
+              }}
+            >
+              <div style={{ padding: '12px 14px', borderBottom: '1px solid rgba(255,255,255,0.08)', fontWeight: 700, fontSize: 13, color: '#fff' }}>
+                알림
+              </div>
+              {notifications.length === 0 ? (
+                <div style={{ padding: '28px 14px', textAlign: 'center', color: '#71717a', fontSize: 13 }}>
+                  새로운 알림이 없습니다.
+                </div>
+              ) : (
+                notifications.map((n) => (
+                  <div
+                    key={n.id}
+                    onClick={() => {
+                      openNotification?.(n);
+                      setBellOpen(false);
+                    }}
+                    style={{
+                      display: 'flex',
+                      gap: 10,
+                      padding: '11px 14px',
+                      borderBottom: '1px solid rgba(255,255,255,0.05)',
+                      cursor: 'pointer',
+                      background: n.followed ? 'rgba(0,255,163,0.06)' : 'transparent',
+                    }}
+                  >
+                    <i className={`fa-solid ${iconFor(n.type)}`} style={{ color: n.followed ? '#00FFA3' : '#ec4899', fontSize: 14, marginTop: 3 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, color: '#f4f4f5', fontWeight: 600 }}>{n.title}</div>
+                      <div style={{ fontSize: 12, color: '#a1a1aa', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {n.message}
+                      </div>
+                      <div style={{ fontSize: 10, color: '#52525b', marginTop: 3 }}>{timeAgo(n.createdAt)}</div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
 
         {user ? (
-          /* 🟢 로그인 완료 상태: 닉네임 + 프로필 아바타 + 로그아웃 버튼 */
-          <div className="user-info" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {/* 👤 프로필 아바타 버튼 (클릭 시 포커스 깜빡임 방지) */}
+          /* 🟢 로그인 상태: 프로필 아바타(클릭 시 설정창) + 닉네임 */
+          <div className="user-info" style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' }}>
             <button
               type="button"
-              tabIndex={-1}
-              onClick={(e) => e.currentTarget.blur()}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                padding: 0,
-                cursor: 'pointer',
-                outline: 'none',
-              }}
+              onClick={() => setProfileOpen((v) => !v)}
+              style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', outline: 'none' }}
             >
               <div
                 className="avatar"
@@ -79,6 +175,7 @@ export default function Header({ searchTerm, setSearchTerm }) {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  border: profileOpen ? '2px solid #ec4899' : '2px solid transparent',
                 }}
               >
                 {user.profileImageUrl ? (
@@ -98,6 +195,7 @@ export default function Header({ searchTerm, setSearchTerm }) {
 
             <span
               className="user-nickname"
+              onClick={() => setProfileOpen((v) => !v)}
               style={{
                 color: '#fff',
                 fontSize: '14px',
@@ -106,53 +204,23 @@ export default function Header({ searchTerm, setSearchTerm }) {
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
+                cursor: 'pointer',
               }}
             >
               {user.nickname || user.name || '사용자'}
             </span>
 
-            {/* 🚪 로그아웃 버튼 */}
-            <button
-              type="button"
-              onClick={handleLogoutClick}
-              tabIndex={-1}
-              className="auth-nav-link"
-              style={{
-                background: 'transparent',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                borderRadius: '16px',
-                padding: '4px 10px',
-                color: '#aaa',
-                cursor: 'pointer',
-                fontSize: '12px',
-                outline: 'none',
-              }}
-            >
-              로그아웃
-            </button>
+            {profileOpen && <ProfilePanel onClose={() => setProfileOpen(false)} />}
           </div>
         ) : (
-          /* 🔴 비로그인 상태: 로그인 링크 + 기본 아바타 */
+          /* 🔴 비로그인 상태 */
           <>
             <Link to="/login" className="auth-nav-link" style={{ outline: 'none' }}>
               로그인
             </Link>
-            <button
-              type="button"
-              tabIndex={-1}
-              onClick={(e) => e.currentTarget.blur()}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                padding: 0,
-                cursor: 'pointer',
-                outline: 'none',
-              }}
-            >
-              <div className="avatar">
-                <i className="fa-solid fa-user"></i>
-              </div>
-            </button>
+            <div className="avatar">
+              <i className="fa-solid fa-user"></i>
+            </div>
           </>
         )}
       </div>

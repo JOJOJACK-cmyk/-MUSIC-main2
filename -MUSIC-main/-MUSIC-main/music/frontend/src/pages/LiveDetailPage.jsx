@@ -5,6 +5,7 @@ import Hls from 'hls.js';
 import Header from '../components/Header';
 import LiveVotingRoom from '../components/LiveVotingRoom';
 import LiveChat from '../components/LiveChat';
+import FollowButton from '../components/FollowButton';
 import { useAuth } from '../context/AuthContext';
 
 export default function LiveDetailPage() {
@@ -19,7 +20,7 @@ export default function LiveDetailPage() {
   const [playerMessage, setPlayerMessage] = useState('');
 
   const liveApiUrl =
-    'http://localhost:8080/api/broadcast/live';
+    '/api/broadcast/live';
 
   // 현재 로그인 사용자 이름
   const currentUserName =
@@ -175,7 +176,7 @@ export default function LiveDetailPage() {
     const sendHeartbeat = async () => {
       try {
         await fetch(
-          `http://localhost:8080/api/broadcast/${broadcast.id}/viewers/heartbeat`,
+          `/api/broadcast/${broadcast.id}/viewers/heartbeat`,
           {
             method: 'POST',
             credentials: 'include',
@@ -369,12 +370,15 @@ export default function LiveDetailPage() {
               <div
                 style={{
                   color: 'var(--text-sub)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  flexWrap: 'wrap',
                 }}
               >
-                방송자: {broadcast.broadcaster}
-                {' · '}
-                👥 {broadcast.viewerCount ?? 0}명
-                시청 중
+                <span>방송자: {broadcast.broadcaster}</span>
+                <FollowButton channelUserId={broadcast.broadcasterId} size="sm" />
+                <span>· 👥 {broadcast.viewerCount ?? 0}명 시청 중</span>
               </div>
             </div>
 

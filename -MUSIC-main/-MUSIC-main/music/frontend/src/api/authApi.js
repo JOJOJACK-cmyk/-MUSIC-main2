@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const BACKEND_URL = 'http://localhost:8080';
+const BACKEND_URL = ''; // Vite 프록시 경유 (세션 쿠키가 동일 출처로 유지됨)
 
 // 쿠키 및 세션 전달 활성화
 axios.defaults.withCredentials = true;
