@@ -43,6 +43,10 @@ export const AuthProvider = ({ children }) => {
         urlParams.get('picture') ||
         hashParams.get('profileImageUrl');
 
+      const role =
+        urlParams.get('role') ||
+        hashParams.get('role');
+
       // 💡 소셜 로그인 리다이렉트로 토큰이나 닉네임이 전달된 경우
       if (token || nickname || email) {
         if (token) localStorage.setItem('accessToken', token);
@@ -55,6 +59,7 @@ export const AuthProvider = ({ children }) => {
             : '소셜 사용자',
           email: email ? decodeURIComponent(email) : '',
           profileImageUrl: profileImageUrl ? decodeURIComponent(profileImageUrl) : '',
+          role: role ? decodeURIComponent(role) : 'ROLE_USER', // 권한 정보가 없으면 기본 ROLE_USER
         };
 
         localStorage.setItem('user', JSON.stringify(socialUser));

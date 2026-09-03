@@ -1,5 +1,7 @@
 package com.example.music.config;
 
+import com.example.music.entity.User;
+import com.example.music.repository.UserRepository;
 import com.example.music.security.CustomAccessDeniedHandler;
 import com.example.music.security.CustomAuthenticationEntryPoint;
 import com.example.music.service.CustomOAuth2UserService;
@@ -9,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -32,13 +35,15 @@ import java.util.Map;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity // @PreAuthorize 등 메서드 단위 인가 제어를 위해 활성화
 @RequiredArgsConstructor
 public class SecurityConfig {
 
     private final CustomOAuth2UserService customOAuth2UserService;
     private final ClientRegistrationRepository clientRegistrationRepository;
+    private final UserRepository userRepository; // 💡 DB에서 유저 정보를 조회하기 위해 추가
 
-    // [추가] 인증/인가 예외 핸들러 주입
+    // 인증/인가 예외 핸들러 주입
     private final CustomAuthenticationEntryPoint authenticationEntryPoint;
     private final CustomAccessDeniedHandler accessDeniedHandler;
 
@@ -62,31 +67,36 @@ public class SecurityConfig {
                                 "/ws/**"
                         ).permitAll()
 
-                        // 2. [신규] 결제 API는 인증된 유저만 접근 가능
-                        .requestMatchers("/api/v1/payments/**").authenticated()
+                        // 2. 결제 API는 인증된 유저만 접근 가능
+                        .requestMatchers("/api/v1/payments/**", "/api/payments/**").authenticated()
 
-                        // 3. [신규] 청취 로그 및 권한 검증 관련 API 인증 설정
+                        // 3. 청취 로그 및 권한 검증 관련 API 인증 설정
                         .requestMatchers("/api/v1/logs/**", "/api/logs/**").authenticated()
 
-                        // 4. 기존 음악 조회 중 일부만 허용하거나, 로그인을 강제하려면 주석 처리/수정
+                        // ==========================================
+                        // 관리자(ADMIN) 권한 전용 API 경로 설정
+                        // ==========================================
+                        .requestMatchers("/api/musics/register", "/api/musics/admin/**").hasRole("ADMIN")
+
+                        // 4. 기존 음악 조회 등 퍼블릭 경로
                         .requestMatchers(HttpMethod.GET, "/api/musics/**", "/api/broadcast/**", "/api/music-snapshot/**",  "/api/live/status")
                         .permitAll()
 
-                        // [수정] 시청자 heartbeat는 비로그인 사용자의 시청자 수 집계를 위해 메서드 제한 없이 공개
+                        // 시청자 heartbeat는 비로그인 사용자의 시청자 수 집계를 위해 메서드 제한 없이 공개
                         .requestMatchers("/api/broadcast/*/viewers/heartbeat").permitAll()
 
-                        // [신규] SRS 웹훅 콜백 - 로그인 사용자가 아니라 SRS 서버가 직접 호출하는 경로
+                        // SRS 웹훅 콜백 - 로그인 사용자가 아니라 SRS 서버가 직접 호출하는 경로
                         .requestMatchers("/api/broadcast/srs/**").permitAll()
 
                         .requestMatchers(
                                 "/api/musics/youtube"
                         ).permitAll()
 
-                        // 5. 그 외 모든 요청은 로그인(인증)된 사용자만 접근 가능 (로그인 전 메인/주요페이지 차단)
+                        // 5. 그 외 모든 요청은 로그인(인증)된 사용자만 접근 가능
                         .anyRequest().authenticated()
                 )
 
-                // [수정] 401(인증 실패), 403(권한 부족) 커스텀 핸들러 연결
+                // 401(인증 실패), 403(권한 부족) 커스텀 핸들러 연결
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler)
@@ -152,13 +162,24 @@ public class SecurityConfig {
                             if (email == null) email = "";
                             if (profileImageUrl == null) profileImageUrl = "";
 
+                            // 💡 1. DB에서 해당 이메일 유저의 최신 권한(role) 조회
+                            String role = "ROLE_USER";
+                            if (!email.isEmpty()) {
+                                User dbUser = userRepository.findByEmail(email).orElse(null);
+                                if (dbUser != null && dbUser.getRole() != null) {
+                                    role = dbUser.getRole();
+                                }
+                            }
+
                             String encodedNickname = URLEncoder.encode(nickname, StandardCharsets.UTF_8);
                             String encodedEmail = URLEncoder.encode(email, StandardCharsets.UTF_8);
                             String encodedProfile = URLEncoder.encode(profileImageUrl, StandardCharsets.UTF_8);
+                            String encodedRole = URLEncoder.encode(role, StandardCharsets.UTF_8); // 💡 2. role 인코딩 추가
 
+                            // 💡 3. 리다이렉트 URL에 &role= 파라미터 포함하여 전달
                             response.sendRedirect(String.format(
-                                    "http://localhost:3000/?nickname=%s&email=%s&profileImageUrl=%s",
-                                    encodedNickname, encodedEmail, encodedProfile
+                                    "http://localhost:3000/?nickname=%s&email=%s&profileImageUrl=%s&role=%s",
+                                    encodedNickname, encodedEmail, encodedProfile, encodedRole
                             ));
                         })
                         .failureHandler((request, response, exception) -> {

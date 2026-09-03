@@ -14,7 +14,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    // [신규] 401 Unauthorized: 인증 실패 (로그인 안 됨, 토큰 만료 등)
+    // 401 Unauthorized: 인증 실패 (로그인 안 됨, 토큰 만료 등)
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ErrorResponse> handleAuthenticationException(AuthenticationException e) {
         ErrorResponse response = new ErrorResponse(
@@ -25,7 +25,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
     }
 
-    // [신규] 403 Forbidden: 인가 실패 (권한이 없는 사용자, 청취/스트리밍 권한 부족 등)
+    // 403 Forbidden: 인가 실패 (권한이 없는 사용자 등)
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDeniedException(AccessDeniedException e) {
         ErrorResponse response = new ErrorResponse(
@@ -36,7 +36,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
     }
 
-    // 1. 존재하지 않는 URL 경로 요청 시 (404 Not Found)
+    // 404 Not Found: 존재하지 않는 URL 경로 요청 시
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFoundException(NoResourceFoundException e) {
         ErrorResponse response = new ErrorResponse(
@@ -47,26 +47,27 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
     }
 
-    // 2. 잘못된 인자나 입력값 문제 발생 시 (400 Bad Request)
+    // 400 Bad Request: 잘못된 인자나 입력값 문제 발생 시 (유튜브 링크 오류 등 차단)
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgumentException(IllegalArgumentException e) {
         ErrorResponse response = new ErrorResponse(
                 "ERROR",
                 "BAD_REQUEST",
-                e.getMessage()
+                "유효하지 않은 요청이거나 지원하지 않는 유튜브 링크입니다."
         );
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
-    // 3. 그 외 예상치 못한 모든 서버 에러 처리 (500 Internal Server Error)
+    // 500 Internal Server Error: 그 외 예상치 못한 모든 서버 에러 처리
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneralException(Exception e) {
+        // 서버 콘솔에는 원본 에러 스택을 남겨서 디버깅 가능하게 유지
         e.printStackTrace();
 
         ErrorResponse response = new ErrorResponse(
                 "ERROR",
                 "INTERNAL_SERVER_ERROR",
-                "서버 내부 오류가 발생했습니다. 관리자에게 문의하세요."
+                "음원 처리 중 오류가 발생했습니다. 입력하신 정보나 유튜브 링크를 다시 확인해 주세요."
         );
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }

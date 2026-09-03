@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import LiveDetailPage from './pages/LiveDetailPage';
 import Sidebar from './components/Sidebar';
 import PlayerBar from './components/PlayerBar';
@@ -12,7 +12,7 @@ import LoginPage from './pages/LoginPage';
 import ChartPage from './pages/ChartPage';
 import LivePage from './pages/LivePage';
 import LibraryPage from './pages/LibraryPage';
-import PaymentPage from './pages/PaymentPage'; // 👈 1. 결제 페이지 임포트 추가
+import PaymentPage from './pages/PaymentPage';
 
 import { PlayerProvider } from './context/PlayerContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -32,10 +32,54 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
+// 💡 소셜 로그인 직후 URL 파라미터를 감지하여 localStorage에 저장하는 컴포넌트
+function AuthHandler() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const email = params.get('email');
+
+    if (email) {
+      const userData = {
+        nickname: params.get('nickname') || '사용자',
+        email: email,
+        profileImageUrl: params.get('profileImageUrl') || '',
+        role: params.get('role') || 'ROLE_USER', // 💡 백엔드가 넘겨준 role을 여기서 받아서 저장합니다!
+      };
+
+      localStorage.setItem('user', JSON.stringify(userData));
+
+      // URL을 깔끔하게 정리 (파라미터 제거)
+      navigate(location.pathname, { replace: true });
+
+      // 상태 반영을 위해 새로고침
+      window.location.reload();
+    }
+  }, [location, navigate]);
+
+  return null;
+}
+
 export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // 음원 등록 핸들러
+  // 💡 로컬스토리지에서 관리자(ROLE_ADMIN) 여부 확인
+  let isAdmin = false;
+  try {
+    const rawUser = localStorage.getItem('user');
+    if (rawUser) {
+      const userObj = JSON.parse(rawUser);
+      // ROLE_ADMIN 또는 ADMIN 모두 허용
+      const role = userObj.role ? userObj.role.toUpperCase() : '';
+      isAdmin = role === 'ROLE_ADMIN' || role === 'ADMIN';
+    }
+  } catch (e) {
+    console.error(e);
+  }
+
+  // 음원 등록 핸들러 (관리자만 실행 가능하도록 방어)
   const handleAddMusicSubmit = async (data) => {
     try {
       if (data.youtubeVideoId) {
@@ -57,15 +101,19 @@ export default function App() {
     <AuthProvider>
       <PlayerProvider>
         <BrowserRouter>
+          <AuthHandler /> {/* 💡 로그인 직후 파라미터 캐치 핸들러 실행 */}
           <div className="app-container">
-            <Sidebar onOpenAddModal={() => setIsModalOpen(true)} />
+            {/* 💡 관리자일 때만 모달 오픈 함수 전달 */}
+            <Sidebar
+              onOpenAddModal={isAdmin ? () => setIsModalOpen(true) : null}
+              isAdmin={isAdmin}
+            />
 
             <main className="main-content">
               <Routes>
                 {/* 누구나 접근 가능한 공개 페이지 */}
                 <Route path="/" element={<MainPage />} />
                 <Route path="/login" element={<LoginPage />} />
-                {/* 🔴 라우트 경로를 /charts 로 수정 완료 */}
                 <Route path="/charts" element={<ChartPage />} />
 
                 {/* 🔒 라우트 가드가 적용된 보호된 페이지 */}
@@ -87,7 +135,6 @@ export default function App() {
                   }
                 />
 
-                {/* 💳 2. 결제 페이지 라우트 추가 완료 */}
                 <Route
                   path="/payment"
                   element={
@@ -96,17 +143,12 @@ export default function App() {
                     </ProtectedRoute>
                   }
                 />
-                <Route path="/live" element={<LivePage />} />
-                <Route
-                  path="/live/:broadcastId"
-                  element={<LiveDetailPage />}
-                />
-                <Route path="/library" element={<LibraryPage />} />
+                <Route path="/live/:broadcastId" element={<LiveDetailPage />} />
               </Routes>
             </main>
 
             {/* 음원 등록 모달 */}
-            {isModalOpen && (
+            {isModalOpen && isAdmin && (
               <MusicModal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
