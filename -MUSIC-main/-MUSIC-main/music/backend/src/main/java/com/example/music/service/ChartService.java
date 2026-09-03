@@ -49,13 +49,16 @@ public class ChartService {
                 Long musicId = Long.valueOf(tuple.getValue());
                 Long listenCount = tuple.getScore() != null ? tuple.getScore().longValue() : 0L;
 
-                // DB에서 음원 정보 조회 (없을 경우 기본값 처리)
+                // 💡 DB에서 음원 조회 (없을 경우 차트 목록에서 제외)
                 Music music = musicRepository.findById(musicId).orElse(null);
+                if (music == null) {
+                    continue; // 삭제되거나 존재하지 않는 음원은 건너뜀
+                }
 
-                String title = (music != null) ? music.getTitle() : "삭제된 음원";
-                String artist = (music != null) ? music.getArtist() : "알 수 없음";
-                String youtubeVideoId = (music != null) ? music.getYoutubeVideoId() : "";
-                String thumbnailUrl = (music != null) ? music.getThumbnailUrl() : "";
+                String title = music.getTitle();
+                String artist = music.getArtist();
+                String youtubeVideoId = music.getYoutubeVideoId();
+                String thumbnailUrl = music.getThumbnailUrl();
 
                 // 회원님께서 정의하신 MusicRankingDto 레코드 규격에 맞게 매핑
                 MusicRankingDto dto = new MusicRankingDto(

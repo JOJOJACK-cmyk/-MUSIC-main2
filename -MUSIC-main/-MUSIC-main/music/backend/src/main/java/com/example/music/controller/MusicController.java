@@ -10,9 +10,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/musics")
@@ -22,7 +25,7 @@ public class MusicController {
     private final MusicService musicService;
 
     // ==========================================
-    // 1. 일반 사용자용 API (목록 및 차트 조회)
+    // 1. 일반 사용자용 API (목록, 차트 조회 및 좋아요)
     // ==========================================
     @Tag(name = "Music API", description = "일반 청취자용 음원 및 차트 조회 API")
     @Operation(summary = "실시간 TOP 100 차트 조회", description = "실시간 음원 랭킹 및 TOP 100 차트 목록을 조회합니다.")
@@ -45,6 +48,43 @@ public class MusicController {
             @Parameter(description = "음원 고유 ID", example = "1", required = true)
             @PathVariable Long id) {
         return ResponseEntity.ok(musicService.getMusic(id));
+    }
+
+    // 💡 내 보관함(좋아요 누른 음악 목록) 조회 API
+    @Tag(name = "Music API", description = "일반 청취자용 음원 및 차트 조회 API")
+    @Operation(summary = "내 보관함 좋아요 목록 조회", description = "현재 로그인한 유저가 좋아요를 누른 음악 목록을 조회합니다.")
+    @GetMapping("/liked")
+    public ResponseEntity<?> getLikedMusics(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()
+                || "anonymousUser".equals(authentication.getPrincipal())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("로그인이 필요한 서비스입니다.");
+        }
+
+        List<MusicDto.Response> likedMusics = musicService.getLikedMusics(authentication);
+        return ResponseEntity.ok(likedMusics);
+    }
+
+    // 💡 음원 좋아요(내 보관함 담기/취소) 토글 API
+    @Tag(name = "Music API", description = "일반 청취자용 음원 및 차트 조회 API")
+    @Operation(summary = "음원 좋아요 토글", description = "특정 음원에 대한 좋아요(내 보관함 등록/취소)를 수행합니다.")
+    @PostMapping("/{id}/like")
+    public ResponseEntity<?> toggleLikeMusic(
+            @Parameter(description = "음원 고유 ID", example = "1", required = true)
+            @PathVariable Long id,
+            Authentication authentication) {
+
+        if (authentication == null || !authentication.isAuthenticated()
+                || "anonymousUser".equals(authentication.getPrincipal())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("로그인이 필요한 서비스입니다.");
+        }
+
+        boolean isLiked = musicService.toggleLikeMusic(authentication, id);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("liked", isLiked);
+        response.put("message", isLiked ? "내 보관함에 추가되었습니다." : "보관함에서 취소되었습니다.");
+
+        return ResponseEntity.ok(response);
     }
 
 

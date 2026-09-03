@@ -5,6 +5,21 @@ import { useAuth } from '../context/AuthContext';
 export default function Header({ searchTerm, setSearchTerm }) {
   const { user, logout } = useAuth();
 
+  const handleLogoutClick = async (e) => {
+    e.currentTarget.blur();
+    try {
+      if (logout) {
+        await logout();
+      }
+    } catch (err) {
+      console.error('로그아웃 처리 중 오류:', err);
+    } finally {
+      // 💡 로그아웃 후 로컬스토리지 잔여 정보 확실히 지우고 페이지 새로고침
+      localStorage.removeItem('user');
+      window.location.href = '/';
+    }
+  };
+
   return (
     <header className="top-header">
       {/* 1. 검색바 영역 */}
@@ -99,10 +114,7 @@ export default function Header({ searchTerm, setSearchTerm }) {
             {/* 🚪 로그아웃 버튼 */}
             <button
               type="button"
-              onClick={(e) => {
-                e.currentTarget.blur();
-                logout();
-              }}
+              onClick={handleLogoutClick}
               tabIndex={-1}
               className="auth-nav-link"
               style={{

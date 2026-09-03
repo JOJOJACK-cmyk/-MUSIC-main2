@@ -29,11 +29,16 @@ public class UserService {
             throw new IllegalArgumentException("이미 사용 중인 이메일입니다.");
         }
 
-        // 2. 비밀번호 암호화
+        // 💡 2. 닉네임 중복 검사 추가
+        if (userRepository.existsByNickname(requestDto.getNickname())) {
+            throw new IllegalArgumentException("이미 사용 중인 닉네임입니다.");
+        }
+
+        // 3. 비밀번호 암호화
         String encodedPassword =
                 passwordEncoder.encode(requestDto.getPassword());
 
-        // 3. User 엔티티 생성
+        // 4. User 엔티티 생성
         User user = User.builder()
                 .email(requestDto.getEmail())
                 .password(encodedPassword)
@@ -42,7 +47,7 @@ public class UserService {
                 .role("ROLE_USER")
                 .build();
 
-        // 4. DB 저장
+        // 5. DB 저장
         userRepository.save(user);
     }
 
