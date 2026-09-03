@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { usePlayer } from '../context/PlayerContext';
 
 export default function MusicCard({
@@ -6,7 +6,7 @@ export default function MusicCard({
   onEdit,
   onDelete,
   onToggleLike,
-  isAdmin // 💡 MainPage에서 전달받은 관리자 여부 props 추가
+  isAdmin // 💡 MainPage에서 전달받은 관리자 여부 props
 }) {
   const {
     playTrack,
@@ -15,8 +15,13 @@ export default function MusicCard({
     isPlaying
   } = usePlayer();
 
-  // 좋아요 상태 관리 (초기값은 music 객체에 있는 값 또는 false)
+  // 좋아요 상태 관리
   const [isLiked, setIsLiked] = useState(music.isLiked || false);
+
+  // 💡 부모 컴포넌트에서 내려주는 music.isLiked 값이 변경될 때마다(로그아웃 또는 동기화 시) 상태 즉시 업데이트
+  useEffect(() => {
+    setIsLiked(music.isLiked || false);
+  }, [music.isLiked]);
 
   const isCurrent = currentTrack?.id === music.id;
 
@@ -32,7 +37,7 @@ export default function MusicCard({
   const handleLikeClick = (e) => {
     e.stopPropagation(); // 카드 전체 재생 이벤트 방지
     const nextLiked = !isLiked;
-    setIsLiked(nextLiked);
+    setIsLiked(nextLiked); // 낙관적 업데이트(UI 먼저 반영)
 
     if (onToggleLike) {
       onToggleLike(music.id, nextLiked);

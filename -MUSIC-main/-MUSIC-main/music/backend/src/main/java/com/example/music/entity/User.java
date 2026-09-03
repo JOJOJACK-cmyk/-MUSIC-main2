@@ -35,7 +35,8 @@ public class User {
     @Column(nullable = true)
     private String password;
 
-    @Column(nullable = false, length = 50)
+    // 💡 닉네임 중복 방지를 위해 unique = true 추가
+    @Column(nullable = false, length = 50, unique = true)
     private String nickname;
 
     @Column(nullable = false, length = 20)
