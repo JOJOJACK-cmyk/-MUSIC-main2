@@ -5,7 +5,8 @@ export default function MusicCard({
   music,
   onEdit,
   onDelete,
-  onToggleLike
+  onToggleLike,
+  isAdmin // 💡 MainPage에서 전달받은 관리자 여부 props 추가
 }) {
   const {
     playTrack,
@@ -83,12 +84,12 @@ export default function MusicCard({
         {music.artist || '아티스트 미상'}
       </p>
 
-      {/* 하단 액션 영역 (좋아요 + 수정 + 삭제) */}
+      {/* 하단 액션 영역 (좋아요 + 관리자 전용 수정/삭제) */}
       <div
         className="card-actions"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* ❤️ 좋아요 버튼 (수정/삭제 버튼 옆) */}
+        {/* ❤️ 좋아요 버튼은 누구나 볼 수 있음 */}
         <button
           onClick={handleLikeClick}
           style={{ background: 'none', border: 'none', cursor: 'pointer' }}
@@ -100,16 +101,21 @@ export default function MusicCard({
           ></i>
         </button>
 
-        {onEdit && (
-          <button onClick={() => onEdit(music)}>
-            <i className="fa-solid fa-pen-to-square"></i>
-          </button>
-        )}
+        {/* 💡 오직 관리자(isAdmin이 true)일 때만 수정/삭제 버튼이 렌더링됨 */}
+        {isAdmin && (
+          <>
+            {onEdit && (
+              <button onClick={() => onEdit(music)} title="수정">
+                <i className="fa-solid fa-pen-to-square"></i>
+              </button>
+            )}
 
-        {onDelete && (
-          <button onClick={() => onDelete(music.id)}>
-            <i className="fa-solid fa-trash"></i>
-          </button>
+            {onDelete && (
+              <button onClick={() => onDelete(music.id)} title="삭제">
+                <i className="fa-solid fa-trash"></i>
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>

@@ -13,7 +13,29 @@ export default function MainPage() {
   const [editingMusic, setEditingMusic] = useState(null);
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false); // 💡 관리자 여부를 상태로 관리
   const { setPlaylist, currentTrack } = usePlayer();
+
+  // 💡 마운트될 때 및 로컬스토리지 변경 시 관리자 권한 엄격 체크
+  useEffect(() => {
+    try {
+      const rawUser = localStorage.getItem('user');
+      if (rawUser) {
+        const userObj = JSON.parse(rawUser);
+        // role이 'ROLE_ADMIN'인지 정확히 확인
+        if (userObj && userObj.role === 'ROLE_ADMIN') {
+          setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
+        }
+      } else {
+        setIsAdmin(false);
+      }
+    } catch (e) {
+      console.error('사용자 권한 확인 중 오류:', e);
+      setIsAdmin(false);
+    }
+  }, []);
 
   const fetchMusics = async () => {
     setLoading(true);
@@ -53,14 +75,13 @@ export default function MainPage() {
       await fetchMusics();
     } catch (err) {
       console.error(err);
-      const message = err.response?.data?.message;
 
       if (err.response?.status === 401 || err.response?.status === 403) {
-        alert('로그인이 필요한 기능입니다.');
+        alert('관리자 권한이 없거나 로그인이 필요합니다.');
         return;
       }
 
-      alert(message || '요청 처리 중 오류가 발생했습니다.');
+      alert('음원 등록에 실패했습니다. 입력하신 정보나 유튜브 링크를 다시 확인해 주세요.');
     }
   };
 
@@ -73,10 +94,10 @@ export default function MainPage() {
       alert('삭제되었습니다.');
     } catch (err) {
       if (err.response?.status === 401 || err.response?.status === 403) {
-        alert('로그인이 필요한 기능입니다.');
+        alert('권한이 없습니다.');
         return;
       }
-      alert(err.response?.data?.message || '삭제 중 오류가 발생했습니다.');
+      alert('삭제 중 오류가 발생했습니다.');
     }
   };
 
@@ -92,6 +113,8 @@ export default function MainPage() {
     <main className="main-content">
       <Header searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
       <HeroBanner />
+
+      {/* 💡 중복되던 메인 화면의 '+ 음원 등록' 버튼 영역을 제거하여 사이드바 버튼만 남김 */}
 
       <section className="content-section">
         <div className="section-header">
@@ -118,6 +141,7 @@ export default function MainPage() {
             <MusicCard
               key={music.id}
               music={music}
+              isAdmin={isAdmin} // 💡 MusicCard로 관리자 여부 전달
               onEdit={(item) => {
                 setEditingMusic(item);
                 setIsModalOpen(true);

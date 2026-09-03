@@ -57,7 +57,7 @@ public class OAuthAttributes {
                 .build();
     }
 
-    // 💡 Naver 파싱 (새로 추가된 부분)
+    // Naver 파싱
     private static OAuthAttributes ofNaver(String userNameAttributeName, Map<String, Object> attributes) {
         Map<String, Object> response = (Map<String, Object>) attributes.get("response");
 
@@ -75,7 +75,7 @@ public class OAuthAttributes {
                 .nickname(nickname)
                 .email(email)
                 .profileImageUrl(profileImageUrl)
-                .role("ROLE_USER")
+                .role("ROLE_USER") // 신규 가입 시 기본 권한
                 .build();
     }
 }
