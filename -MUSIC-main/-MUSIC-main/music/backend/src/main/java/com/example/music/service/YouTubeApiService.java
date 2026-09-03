@@ -15,6 +15,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 @Slf4j
@@ -109,5 +111,67 @@ public class YouTubeApiService {
             log.error("YouTube API 호출 중 오류 발생", e);
             throw new RuntimeException("YouTube API 연동 실패: " + e.getMessage());
         }
+    }
+
+    /**
+     * 💡 유튜브 플레이리스트 ID를 받아 내부의 영상 목록을 일괄 조회하고 DB에 자동 동기화
+     */
+    @Transactional
+    public List<YouTubeVideoDto> syncPlaylist(String playlistId) {
+        log.info("[YouTube Playlist Sync] 플레이리스트 동기화 시작. playlistId: {}", playlistId);
+        List<YouTubeVideoDto> syncedVideos = new ArrayList<>();
+
+        try {
+            // YouTube Data API v3 - playlistItems 엔드포인트 호출
+            String url = "https://www.googleapis.com/youtube/v3/playlistItems"
+                    + "?part=snippet"
+                    + "&maxResults=50" // 한 번에 가져올 최대 개수 (최대 50개)
+                    + "&playlistId=" + playlistId
+                    + "&key=" + apiKey;
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .GET()
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(
+                    request,
+                    HttpResponse.BodyHandlers.ofString()
+            );
+
+            JsonNode root = objectMapper.readTree(response.body());
+            JsonNode items = root.get("items");
+
+            if (items == null || !items.isArray()) {
+                log.warn("플레이리스트에 영상이 없거나 잘못된 플레이리스트 ID입니다: {}", playlistId);
+                return syncedVideos;
+            }
+
+            // 플레이리스트 안의 각 영상 순회
+            for (JsonNode item : items) {
+                JsonNode snippet = item.get("snippet");
+                if (snippet != null && snippet.has("resourceId")) {
+                    JsonNode resourceId = snippet.get("resourceId");
+                    if (resourceId.has("videoId")) {
+                        String videoId = resourceId.get("videoId").asText();
+
+                        try {
+                            // 이미 만들어둔 단건 조회/캐싱 메서드 활용 (DB에 없으면 자동 저장됨!)
+                            YouTubeVideoDto videoDto = getVideoInfo(videoId);
+                            syncedVideos.add(videoDto);
+                        } catch (Exception e) {
+                            log.error("개별 영상 동기화 중 오류 발생 (videoId: {}): {}", videoId, e.getMessage());
+                        }
+                    }
+                }
+            }
+
+            log.info("[YouTube Playlist Sync] 플레이리스트 동기화 완료. 총 {}곡 처리됨.", syncedVideos.size());
+        } catch (Exception e) {
+            log.error("YouTube 플레이리스트 API 호출 중 오류 발생", e);
+            throw new RuntimeException("YouTube 플레이리스트 연동 실패: " + e.getMessage());
+        }
+
+        return syncedVideos;
     }
 }
