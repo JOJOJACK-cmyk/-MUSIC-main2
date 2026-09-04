@@ -17,7 +17,7 @@ public class MusicSyncScheduler {
 
     private final YouTubeApiService youTubeApiService;
 
-    private static final int RESULTS_PER_KEYWORD = 25;
+    private static final int RESULTS_PER_KEYWORD = 15;
 
     // "실시간 인기 급상승 곡" 기본 음원 확보용 큐레이션 재생목록
     private static final String BASE_PLAYLIST_ID = "PL4fGSI1pDJn6O1LS0XSdF3RyO0Rq_LDeI";
@@ -59,18 +59,19 @@ public class MusicSyncScheduler {
         put("POP", 150);
     }};
 
-    // 💡 1. 서버 기동 후 10초 뒤: 재생목록 + 인기차트 + 부족한 카테고리 보충
+    // 💡 1. 서버 기동 후 10초 뒤: 저비용 동기화만 (재생목록 1유닛 · 인기차트 ~9유닛 · 메타데이터 배치).
+    //    ⚠️ search.list(호출당 100유닛) 를 쓰는 ensureDepth/카테고리검색은 여기서 하지 않는다
+    //       (개발 중 잦은 재시작마다 할당량이 순삭됨). 그건 격일 새벽 3시 dailySync 에서만.
     @Scheduled(initialDelay = 10_000, fixedRate = Long.MAX_VALUE)
     public void initialSync() {
-        log.info("⏰ [스케줄러] 서버 기동 후 최신곡 동기화 시작...");
+        log.info("⏰ [스케줄러] 서버 기동 후 저비용 동기화 시작...");
         syncBasePlaylist();
         syncTrending();
         pruneMetadata();
-        ensureDepth();
     }
 
-    // 💡 2. 매일 새벽 3시: 전체 갱신 + 카테고리 대량 검색
-    @Scheduled(cron = "0 0 3 * * *")
+    // 💡 2. 격일 새벽 3시: 전체 갱신 + 카테고리 대량 검색 (search.list 다수 → 할당량 큰 작업)
+    @Scheduled(cron = "0 0 3 */2 * *")
     public void dailySync() {
         log.info("⏰ [스케줄러] 정기(새벽 3시) 유튜브 최신곡 자동 동기화 시작...");
         syncBasePlaylist();

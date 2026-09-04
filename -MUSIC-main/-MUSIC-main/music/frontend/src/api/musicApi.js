@@ -17,6 +17,9 @@ export const musicApi = {
   updateMusic: (id, musicData) => api.put(`/api/musics/${id}`, musicData),
   deleteMusic: (id) => api.delete(`/api/musics/${id}`),
 
+  // 관리자: DB 전체 재검증 → 비음악 영상 정리
+  revalidateCatalog: () => api.post('/api/musics/admin/revalidate'),
+
   // 🔴 실시간 TOP 100 차트 = DB 청취기록 기반 랭킹 (없으면 서버가 조회수 상위로 폴백)
   getTop100Chart: () => api.get('/api/chart/realtime'),
 };

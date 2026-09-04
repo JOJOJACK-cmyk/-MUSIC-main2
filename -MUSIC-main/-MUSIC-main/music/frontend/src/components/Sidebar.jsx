@@ -1,7 +1,28 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
+import { musicApi } from '../api/musicApi';
 
 export default function Sidebar({ onOpenAddModal }) {
+  const [cleaning, setCleaning] = useState(false);
+
+  const handleRevalidate = async () => {
+    if (cleaning) return;
+    if (!window.confirm('DB의 모든 곡을 유튜브에서 다시 확인해 음악이 아닌 영상을 삭제합니다. 진행할까요?')) return;
+    setCleaning(true);
+    try {
+      const res = await musicApi.revalidateCatalog();
+      const d = res.data || res;
+      let msg = `정리 완료: ${d.checked}곡 검사 / ${d.removed}곡 삭제`;
+      if (d.failed) msg += ` / ${d.failed}곡 삭제실패`;
+      if (d.apiError) msg += `\n(유튜브 API 오류 ${d.apiError}건 — 할당량 문제일 수 있음)`;
+      alert(msg);
+      window.location.reload();
+    } catch (e) {
+      alert('정리 실패: ' + (e?.response?.data?.message || e.message));
+    } finally {
+      setCleaning(false);
+    }
+  };
   // 💡 관리자 여부 판별 (디버깅 로그 포함)
   let isAdmin = false;
   try {
@@ -12,9 +33,9 @@ export default function Sidebar({ onOpenAddModal }) {
       const userObj = JSON.parse(rawUser);
       console.log('파싱된 유저 객체:', userObj);
 
-      // role 값이 ROLE_ADMIN, ADMIN, admin 등 어떤 형식이든 관리자로 인정
+      // 관리자 + 부 관리자 모두 콘텐츠 관리 UI 노출
       const role = userObj.role ? userObj.role.toUpperCase() : '';
-      if (role === 'ROLE_ADMIN' || role === 'ADMIN') {
+      if (['ROLE_ADMIN', 'ADMIN', 'ROLE_SUB_ADMIN', 'SUB_ADMIN'].includes(role)) {
         isAdmin = true;
       }
     }
@@ -97,16 +118,27 @@ export default function Sidebar({ onOpenAddModal }) {
 
       {/* 💡 관리자 계정일 때만 '음원 등록' 버튼 노출 */}
       {isAdmin && (
-        <button
-          className="add-music-nav-btn"
-          tabIndex={-1}
-          onClick={(e) => {
-            e.currentTarget.blur();
-            onOpenAddModal && onOpenAddModal();
-          }}
-        >
-          <i className="fa-solid fa-plus"></i> 음원 등록
-        </button>
+        <>
+          <button
+            className="add-music-nav-btn"
+            tabIndex={-1}
+            onClick={(e) => {
+              e.currentTarget.blur();
+              onOpenAddModal && onOpenAddModal();
+            }}
+          >
+            <i className="fa-solid fa-plus"></i> 음원 등록
+          </button>
+          <button
+            className="add-music-nav-btn"
+            tabIndex={-1}
+            disabled={cleaning}
+            onClick={(e) => { e.currentTarget.blur(); handleRevalidate(); }}
+            style={{ marginTop: 8, background: 'transparent', border: '1px solid var(--primary-color)' }}
+          >
+            <i className="fa-solid fa-broom"></i> {cleaning ? '정리 중…' : '카탈로그 정리'}
+          </button>
+        </>
       )}
     </aside>
   );

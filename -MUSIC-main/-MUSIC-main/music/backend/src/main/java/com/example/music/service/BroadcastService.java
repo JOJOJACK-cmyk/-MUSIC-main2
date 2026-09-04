@@ -80,9 +80,9 @@ public class BroadcastService {
         );
     }
 
-    /** 채널 정보(제목/소개글/배너) 일괄 수정. 방송 정보가 없으면 새로 생성. */
+    /** 채널 정보(제목/소개글/배너/카테고리) 일괄 수정. 방송 정보가 없으면 새로 생성. */
     @Transactional
-    public void updateChannel(User user, String title, String description, String bannerUrl) {
+    public void updateChannel(User user, String title, String description, String bannerUrl, String category) {
         Broadcast b = broadcastRepository.findByUser_Id(user.getId())
                 .orElseGet(() -> {
                     Broadcast nb = new Broadcast();
@@ -96,6 +96,7 @@ public class BroadcastService {
         if (b.getTitle() == null || b.getTitle().isBlank()) b.setTitle(user.getNickname() + "의 방송국");
         if (description != null) b.setDescription(description.isBlank() ? null : description.trim());
         if (bannerUrl != null) b.setBannerUrl(bannerUrl.isBlank() ? null : bannerUrl.trim());
+        if (category != null) b.setCategory(category.isBlank() ? null : category.trim());
         broadcastRepository.save(b);
     }
 
@@ -257,7 +258,8 @@ public class BroadcastService {
         try {
             activeStreamKeys = srsLiveStatusService.getActiveStreamKeys();
         } catch (IllegalStateException e) {
-            log.warn("SRS 서버에 연결할 수 없어 라이브 목록을 빈 값으로 반환합니다.", e);
+            // SRS 미기동은 로컬 개발에서 흔하므로 스택트레이스 없이 한 줄만
+            log.debug("SRS 미연결 - 라이브 목록 비움: {}", e.getMessage());
             return List.of();
         }
 
@@ -315,7 +317,10 @@ public class BroadcastService {
 
                                         // 방송 시작 시간
                                         broadcast
-                                                .getStartedAt()
+                                                .getStartedAt(),
+
+                                        // 콘텐츠 카테고리
+                                        broadcast.getCategory()
                                 )
                 )
                 .toList();

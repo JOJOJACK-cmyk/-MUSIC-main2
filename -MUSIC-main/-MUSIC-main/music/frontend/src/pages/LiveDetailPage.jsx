@@ -203,7 +203,7 @@ export default function LiveDetailPage() {
   }, [broadcast?.id]);
 
   return (
-    <main className="main-content">
+    <>
       <Header
         searchTerm=""
         setSearchTerm={() => {}}
@@ -427,6 +427,6 @@ export default function LiveDetailPage() {
           </>
         )}
       </div>
-    </main>
+    </>
   );
 }

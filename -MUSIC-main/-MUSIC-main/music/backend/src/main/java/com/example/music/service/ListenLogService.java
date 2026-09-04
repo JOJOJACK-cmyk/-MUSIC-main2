@@ -49,15 +49,18 @@ public class ListenLogService {
             return;
         }
 
-        // 🔥 3. [신규] 유저의 유효한 이용권(결제) 상태 검증
+        // 🔥 3. 이용권(결제) 상태 검증 — 관리자/부관리자는 이용권 없이도 청취 기록 인정
         boolean hasValidPass = passRepository.existsByUser_IdAndIsActiveTrueAndExpireDateAfter(
                 user.getId(), LocalDateTime.now()
         );
+        String role = user.getRole() == null ? "" : user.getRole().toUpperCase();
+        boolean isStaff = role.equals("ROLE_ADMIN") || role.equals("ADMIN")
+                || role.equals("ROLE_SUB_ADMIN") || role.equals("SUB_ADMIN");
 
-        if (!hasValidPass) {
-            log.warn("[Log Collector] ⚠️ 유효한 이용권이 없는 사용자입니다. 청취 기록 및 차트 반영을 생략합니다 - User: {} ({})",
-                    user.getId(), user.getEmail());
-            throw new IllegalStateException("노래를 온전히 청취하려면 이용권 구매가 필요합니다.");
+        if (!hasValidPass && !isStaff) {
+            // 무료 회원의 미리듣기는 차트에 반영하지 않는다 (에러 아님 — 조용히 스킵)
+            log.debug("[Log Collector] 이용권 없는 회원 - 청취 기록/차트 반영 생략: user={}", user.getId());
+            return;
         }
 
         // 4. 30초 쿨다운 중복 방어 (DB 조회)

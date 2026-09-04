@@ -139,20 +139,44 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    // 💡 서버 세션(JSESSIONID)을 무효화하지 않으면 새로고침 시 /api/auth/me 가
+    //    세션 쿠키로 다시 인증되어 로그아웃이 되지 않는다.
+    try {
+      await fetch(`${API}/api/auth/logout`, {
+        method: 'POST',
+        headers: { ...authHeaders() },
+        credentials: 'include',
+      });
+    } catch (_) {
+      // 네트워크 오류가 나도 로컬 상태는 정리하고 진행
+    }
+
     localStorage.removeItem('accessToken');
+    localStorage.removeItem('token');
     localStorage.removeItem('user');
     setUser(null);
     setSubscription(null);
-    window.location.href = '/';
+
+    // 남아있을 수 있는 쿠키를 클라이언트에서도 제거 시도
+    document.cookie = 'JSESSIONID=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT';
+
+    window.location.replace('/');
   };
 
-  // 프리미엄 판정: 서버 구독 상태 우선, 없으면 user 객체의 힌트(role/premium) 사용
-  const isPremium = Boolean(
-    subscription?.active ||
-      user?.premium === true ||
-      ['PREMIUM', 'ROLE_ADMIN', 'ADMIN'].includes(String(user?.role || '').toUpperCase())
-  );
+  // 💡 프리미엄(유료 이용권) 판정: 오직 서버의 유효한 이용권(tb_pass) 상태만 신뢰한다.
+  //    role/premium 힌트로 판정하면 "구매 안 했는데 구매됨" 버그가 생긴다.
+  const isPremium = Boolean(subscription?.active);
+
+  // 권한 판정
+  const roleUpper = String(user?.role || '').toUpperCase();
+  // 최고 관리자: 권한 부여 등 민감한 관리 기능 (관리자만)
+  const isSuperAdmin = ['ROLE_ADMIN', 'ADMIN'].includes(roleUpper);
+  // 관리자(부 관리자 포함): 음원 등록/수정/삭제 등 콘텐츠 관리
+  const isAdmin = isSuperAdmin || ['ROLE_SUB_ADMIN', 'SUB_ADMIN'].includes(roleUpper);
+
+  // 미리듣기 제한 해제 판정의 단일 소스: 유료 이용권 보유자 또는 관리자
+  const hasFullAccess = Boolean(isPremium || isAdmin);
 
   return (
     <AuthContext.Provider
@@ -165,6 +189,9 @@ export const AuthProvider = ({ children }) => {
         checkAuthStatus,
         subscription,
         isPremium,
+        isAdmin,
+        isSuperAdmin,
+        hasFullAccess,
         refreshSubscription,
       }}
     >

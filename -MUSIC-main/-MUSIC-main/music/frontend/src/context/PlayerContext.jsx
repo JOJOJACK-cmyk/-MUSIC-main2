@@ -11,11 +11,22 @@ import { useAuth } from './AuthContext';
 
 const PlayerContext = createContext(null);
 
+// 무료(비로그인 또는 미결제) 회원의 세션 누적 미리듣기 허용 시간(초)
+export const PREVIEW_LIMIT_SECONDS = 60;
+
 export const PlayerProvider = ({ children }) => {
-  const { user } = useAuth();
+  const { user, hasFullAccess } = useAuth();
 
   const [currentTrack, setCurrentTrack] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  // =========================
+  // 무료 회원 미리듣기 제한
+  // =========================
+  // 세션 동안 실제로 재생된 시간의 누적(초). 곡을 바꿔도 초기화되지 않는다.
+  const previewSecondsRef = useRef(0);
+  // 누적 60초를 초과해 재생이 잠긴 상태 (결제/로그인 전까지 재생 불가)
+  const [previewLocked, setPreviewLocked] = useState(false);
 
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -123,7 +134,37 @@ export const PlayerProvider = ({ children }) => {
   }, [user]);
 
   // =========================
-  // 실제 재생시간 추적 및 1분(60초) 제한 통제
+  // 이용권 상태가 바뀌면(결제/로그인) 미리듣기 카운터 초기화
+  // =========================
+  useEffect(() => {
+    if (hasFullAccess) {
+      previewSecondsRef.current = 0;
+      setPreviewLocked(false);
+    }
+  }, [hasFullAccess]);
+
+  // 로그인 계정이 바뀌면(로그인/로그아웃) 미리듣기 카운터를 새로 시작
+  useEffect(() => {
+    previewSecondsRef.current = 0;
+    setPreviewLocked(false);
+  }, [user?.email]);
+
+  // 무료 회원의 미리듣기 잠금: 플레이어를 실제로 정지하고 곡을 비운다.
+  const lockPreview = useCallback(() => {
+    const player = playerRef.current;
+    try {
+      player?.pauseVideo?.();
+      player?.stopVideo?.();
+    } catch (e) {}
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setCurrentTrack(null); // YouTube IFrame 언마운트 → 영상 완전 정지
+    playTimeCounterRef.current = 0;
+    setPreviewLocked(true);
+  }, []);
+
+  // =========================
+  // 실제 재생시간 추적 및 세션 누적 1분(60초) 제한 통제
   // =========================
   useEffect(() => {
     if (!isPlaying || !currentTrack) {
@@ -134,31 +175,22 @@ export const PlayerProvider = ({ children }) => {
       const player = playerRef.current;
       if (!player) return;
 
+      let time = 0;
       if (typeof player.getCurrentTime === 'function') {
-        const time = player.getCurrentTime() || 0;
+        time = player.getCurrentTime() || 0;
         setCurrentTime(time);
+      }
 
-        let rawUser = user;
-        if (!rawUser) {
-          try {
-            const stored = localStorage.getItem('user');
-            if (stored) rawUser = JSON.parse(stored);
-          } catch (_) {}
-        }
-
-        // 💡 로그인한 사용자는 미리듣기 제한 없음 (이용권 구매 경고창 표시하지 않음).
-        //    비로그인 사용자만 60초 이후 로그인 안내.
-        if (!rawUser && time >= 60) {
-          try {
-            player.pauseVideo?.();
-            player.seekTo?.(0, true);
-          } catch (e) {}
-          setIsPlaying(false);
-          setCurrentTime(0);
-          playTimeCounterRef.current = 0;
-          if (window.confirm('로그인하면 이어서 들을 수 있어요. 로그인 페이지로 이동할까요?')) {
-            window.location.href = '/login';
-          }
+      // 💡 무료(비로그인 또는 미결제) 회원 제한:
+      //    ① 세션 누적 재생시간이 60초를 넘거나
+      //    ② 재생 위치(스크럽/강제 건너뛰기 포함)가 60초를 넘으면 즉시 잠금
+      if (!hasFullAccess) {
+        previewSecondsRef.current += 0.5;
+        if (
+          previewSecondsRef.current >= PREVIEW_LIMIT_SECONDS ||
+          time >= PREVIEW_LIMIT_SECONDS
+        ) {
+          lockPreview();
           return;
         }
       }
@@ -188,22 +220,29 @@ export const PlayerProvider = ({ children }) => {
     return () => {
       clearInterval(interval);
     };
-  }, [isPlaying, currentTrack, sendListenLog, user]);
+  }, [isPlaying, currentTrack, sendListenLog, user, hasFullAccess, lockPreview]);
 
   // =========================
   // 음악 선택 / 재생
   // =========================
-  const playTrack = (track) => {
+  const playTrack = useCallback((track) => {
     if (!track?.youtubeVideoId) {
       setCurrentTrack(null);
       return;
     }
 
-    if (currentTrack?.id !== track.id) {
-      playTimeCounterRef.current = 0;
+    // 무료 회원이 누적 60초를 모두 소진했으면 재생 자체를 차단
+    if (!hasFullAccess && previewSecondsRef.current >= PREVIEW_LIMIT_SECONDS) {
+      setPreviewLocked(true);
+      return;
     }
 
-    setCurrentTrack(track);
+    setCurrentTrack((prev) => {
+      if (prev?.id !== track.id) {
+        playTimeCounterRef.current = 0;
+      }
+      return track;
+    });
     setCurrentTime(0);
     setDuration(0);
 
@@ -212,12 +251,18 @@ export const PlayerProvider = ({ children }) => {
       player.loadVideoById(track.youtubeVideoId);
       player.playVideo();
     }
-  };
+  }, [hasFullAccess]);
 
   // =========================
   // 재생 / 일시정지
   // =========================
   const togglePlay = () => {
+    // 무료 회원이 미리듣기 시간을 모두 소진한 경우 재생 차단
+    if (!hasFullAccess && previewSecondsRef.current >= PREVIEW_LIMIT_SECONDS) {
+      setPreviewLocked(true);
+      return;
+    }
+
     if (!currentTrack && playlist.length > 0) {
       playTrack(playlist[0]);
       return;
@@ -328,6 +373,10 @@ export const PlayerProvider = ({ children }) => {
         playlist,
         isShuffle,
         isRepeat,
+        previewLocked,
+        hasFullAccess,
+        previewLimitSeconds: PREVIEW_LIMIT_SECONDS,
+        dismissPreviewLock: () => setPreviewLocked(false),
         setPlaylist,
         playTrack,
         togglePlay,

@@ -103,7 +103,7 @@ public class MusicController {
     // ==========================================
     @Tag(name = "Admin Music API", description = "관리자 전용 음원 등록 및 관리 시스템 API")
     @Operation(summary = "[관리자] 음원 직접 등록", description = "제목, 아티스트, YouTube Video ID 등의 정보를 직접 입력하여 음원을 등록합니다.")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','SUB_ADMIN')")
     @PostMapping
     public ResponseEntity<MusicDto.Response> createMusic(@Valid @RequestBody MusicDto.CreateRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(musicService.createMusic(request));
@@ -111,7 +111,7 @@ public class MusicController {
 
     @Tag(name = "Admin Music API", description = "관리자 전용 음원 등록 및 관리 시스템 API")
     @Operation(summary = "[관리자] YouTube 음원 메타데이터 연동 및 캐싱 등록", description = "YouTube Video ID를 기반으로 메타데이터를 조회하여 DB에 캐싱하고 음원으로 등록합니다.")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','SUB_ADMIN')")
     @PostMapping("/youtube")
     public ResponseEntity<MusicDto.Response> createMusicFromYouTube(
             @Parameter(description = "YouTube 동영상 ID", example = "dQw4w9WgXcQ", required = true)
@@ -126,7 +126,7 @@ public class MusicController {
     @Operation(summary = "[관리자] 카테고리별 유튜브 최신곡 일괄 동기화",
             description = "KPOP/JPOP/VTUBER/POP 카테고리별 키워드로 유튜브 최신 음악을 검색하여 " +
                     "쇼츠/장편 영상을 걸러낸 단곡만 DB에 등록합니다. (스케줄러가 매일 새벽 3시에 자동 수행)")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','SUB_ADMIN')")
     @PostMapping("/youtube/sync-latest")
     public ResponseEntity<Map<String, Integer>> syncLatestMusic(
             @Parameter(description = "카테고리 키워드당 검색 결과 수", example = "15")
@@ -138,15 +138,24 @@ public class MusicController {
     @Operation(summary = "[관리자] 지역별 인기 음악 차트 동기화",
             description = "YouTube videos.list(chart=mostPopular)로 KR/JP/US 인기 음악을 가져와 등록합니다. " +
                     "search API 할당량을 소진하지 않아(호출당 1유닛) 언제든 실행 가능합니다.")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','SUB_ADMIN')")
     @PostMapping("/youtube/sync-trending")
     public ResponseEntity<Map<String, Integer>> syncTrendingMusic() {
         return ResponseEntity.ok(musicService.syncTrendingMusic());
     }
 
     @Tag(name = "Admin Music API", description = "관리자 전용 음원 등록 및 관리 시스템 API")
+    @Operation(summary = "[관리자] 카탈로그 재검증(비음악 영상 정리)",
+            description = "DB의 모든 곡을 videos.list 로 다시 확인해 '진짜 곡' 기준을 못 통과하는 항목(인터뷰·라이브클립·쇼츠 등)을 삭제합니다. videos.list 는 저렴(50건당 1유닛).")
+    @PreAuthorize("hasAnyRole('ADMIN','SUB_ADMIN')")
+    @PostMapping("/admin/revalidate")
+    public ResponseEntity<Map<String, Integer>> revalidateCatalog() {
+        return ResponseEntity.ok(musicService.pruneNonMusicCatalog());
+    }
+
+    @Tag(name = "Admin Music API", description = "관리자 전용 음원 등록 및 관리 시스템 API")
     @Operation(summary = "[관리자] 음원 정보 수정", description = "기존 음원의 제목, 아티스트 등의 정보를 수정합니다.")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','SUB_ADMIN')")
     @PutMapping("/{id}")
     public ResponseEntity<MusicDto.Response> updateMusic(
             @Parameter(description = "수정할 음원 고유 ID", example = "1", required = true)
@@ -157,7 +166,7 @@ public class MusicController {
 
     @Tag(name = "Admin Music API", description = "관리자 전용 음원 등록 및 관리 시스템 API")
     @Operation(summary = "[관리자] 음원 삭제", description = "음원 ID를 받아 DB에서 해당 음원을 삭제합니다.")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','SUB_ADMIN')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteMusic(
             @Parameter(description = "삭제할 음원 고유 ID", example = "1", required = true)

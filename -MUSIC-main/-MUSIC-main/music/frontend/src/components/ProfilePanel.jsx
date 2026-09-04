@@ -2,9 +2,11 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../context/AuthContext';
 import { getNotifPrefs, setNotifPrefs, useNotifications } from '../context/NotificationContext';
+import { LIVE_CATEGORIES } from '../constants/liveCategories';
 
 const API = ''; // Vite 프록시로 동일 출처 요청 (세션 쿠키 전달)
-const GREEN = '#00FFA3'; // 치지직 시그니처 그린
+const ACCENT = '#F244CB';        // 앱 시그니처 마젠타
+const ACCENT_DEEP = '#E028B7';
 
 const authHeaders = () => {
   const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
@@ -25,29 +27,40 @@ const TABS = [
   { key: 'subscription', label: '내 구독', icon: 'fa-ticket' },
   { key: 'noti', label: '알림', icon: 'fa-bell' },
   { key: 'account', label: '내 정보', icon: 'fa-user' },
+  // superAdmin 전용 (아래 render 에서 필터)
+  { key: 'roles', label: '권한 관리', icon: 'fa-user-shield', superAdminOnly: true },
 ];
 
+const ROLE_OPTIONS = [
+  { value: 'ROLE_USER', label: '일반 회원' },
+  { value: 'ROLE_SUB_ADMIN', label: '부 관리자' },
+  { value: 'ROLE_ADMIN', label: '관리자' },
+];
+const roleLabel = (r) => ROLE_OPTIONS.find((o) => o.value === r)?.label || (r || '일반 회원');
+
 const field = {
-  width: '100%', background: '#101216', border: '1px solid #2a2e35', borderRadius: 8,
-  padding: '10px 12px', color: '#e9edf1', fontSize: 13, outline: 'none',
+  width: '100%', background: '#12060f', border: '1px solid #3a1f33', borderRadius: 9,
+  padding: '10px 12px', color: '#efe6ec', fontSize: 13, outline: 'none',
 };
-const fieldLabel = { display: 'block', fontSize: 12, color: '#8b93a1', marginBottom: 6, fontWeight: 600 };
+const fieldLabel = { display: 'block', fontSize: 12, color: '#a98db9', marginBottom: 6, fontWeight: 600 };
 const primaryBtn = {
-  background: GREEN, color: '#04160f', border: 'none', borderRadius: 8,
+  background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT_DEEP})`, color: '#fff', border: 'none', borderRadius: 9,
   padding: '9px 16px', fontSize: 13, fontWeight: 800, cursor: 'pointer',
+  boxShadow: '0 6px 16px -6px rgba(224,40,183,0.6)',
 };
 const ghostBtn = {
-  background: 'transparent', color: '#c7ccd4', border: '1px solid #363b44', borderRadius: 8,
+  background: 'transparent', color: '#d9c7d4', border: '1px solid #412a3c', borderRadius: 9,
   padding: '9px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
 };
-const dangerBtn = { ...ghostBtn, borderColor: '#5b2b2b', color: '#ff8b8b' };
-const sectionTitle = { fontSize: 15, fontWeight: 800, color: '#f2f4f7', margin: '0 0 4px' };
-const sectionDesc = { fontSize: 12, color: '#8b93a1', margin: '0 0 18px' };
-const card = { background: '#181b20', border: '1px solid #262a31', borderRadius: 12, padding: 16 };
+const dangerBtn = { ...ghostBtn, borderColor: '#6b2b3f', color: '#ff8bab' };
+const sectionTitle = { fontSize: 15, fontWeight: 800, color: '#f6eef4', margin: '0 0 4px' };
+const sectionDesc = { fontSize: 12, color: '#a98db9', margin: '0 0 18px' };
+const card = { background: '#1d0819', border: '1px solid #38213230', borderRadius: 12, padding: 16 };
 
 export default function ProfilePanel({ onClose }) {
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   const [tab, setTab] = useState('studio');
+  const visibleTabs = TABS.filter((t) => !t.superAdminOnly || isSuperAdmin);
   const overlayRef = useRef(null);
 
   useEffect(() => {
@@ -61,52 +74,68 @@ export default function ProfilePanel({ onClose }) {
       ref={overlayRef}
       onMouseDown={(e) => e.target === overlayRef.current && onClose()}
       style={{
-        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.62)', backdropFilter: 'blur(3px)',
+        position: 'fixed', inset: 0,
+        background: 'radial-gradient(circle at 50% 0%, rgba(224,40,183,0.16), rgba(0,0,0,0.72) 60%)',
+        backdropFilter: 'blur(5px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 5000,
       }}
     >
       <div
         style={{
-          width: 820, maxWidth: '95vw', height: 580, maxHeight: '92vh', background: '#141517',
-          border: '1px solid #2a2e35', borderRadius: 16, display: 'flex', overflow: 'hidden',
-          boxShadow: '0 30px 80px rgba(0,0,0,0.6)',
+          width: 830, maxWidth: '95vw', height: 584, maxHeight: '92vh', background: '#180712',
+          border: '1px solid #3a1f33', borderRadius: 18, display: 'flex', overflow: 'hidden',
+          boxShadow: '0 40px 100px -20px rgba(224,40,183,0.35), 0 20px 60px rgba(0,0,0,0.6)',
         }}
       >
         {/* 좌측 내비 */}
-        <aside style={{ width: 208, background: '#0e0f11', borderRight: '1px solid #23262c', padding: '20px 12px', display: 'flex', flexDirection: 'column', gap: 3 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 8px 16px' }}>
-            <Avatar url={user?.profileImageUrl} size={36} />
+        <aside style={{ width: 214, background: '#0a0308', borderRight: '1px solid #23161f', padding: '20px 12px', display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 8px 18px' }}>
+            <div style={{ borderRadius: '50%', padding: 2, background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT_DEEP})` }}>
+              <Avatar url={user?.profileImageUrl} size={34} />
+            </div>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#f2f4f7', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#f6eef4', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {user?.nickname || '사용자'}
               </div>
-              <div style={{ fontSize: 11, color: '#6b7280' }}>내 채널 관리</div>
+              <div style={{ fontSize: 11, color: '#8a6f83' }}>내 채널 관리</div>
             </div>
           </div>
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 8,
-                border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 13, fontWeight: 600,
-                background: tab === t.key ? '#1c1f24' : 'transparent',
-                color: tab === t.key ? GREEN : '#a7adb8',
-              }}
-            >
-              <i className={`fa-solid ${t.icon}`} style={{ width: 16, textAlign: 'center' }} />
-              {t.label}
-            </button>
-          ))}
+          {visibleTabs.map((t) => {
+            const active = tab === t.key;
+            return (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 11, padding: '9px 12px', borderRadius: 9,
+                  border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 13, fontWeight: 600,
+                  position: 'relative', transition: 'background 0.15s ease, color 0.15s ease',
+                  background: active ? 'rgba(224,40,183,0.14)' : 'transparent',
+                  color: active ? ACCENT : '#a98db9',
+                }}
+                onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+                onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'transparent'; }}
+              >
+                {active && (
+                  <span style={{
+                    position: 'absolute', left: 0, top: 8, bottom: 8, width: 3, borderRadius: 3,
+                    background: `linear-gradient(${ACCENT}, ${ACCENT_DEEP})`,
+                  }} />
+                )}
+                <i className={`fa-solid ${t.icon}`} style={{ width: 16, textAlign: 'center' }} />
+                {t.label}
+              </button>
+            );
+          })}
           <div style={{ flex: 1 }} />
           <LogoutButton />
         </aside>
 
         {/* 우측 콘텐츠 */}
-        <section style={{ flex: 1, position: 'relative', overflowY: 'auto', padding: '22px 26px' }}>
+        <section style={{ flex: 1, position: 'relative', overflowY: 'auto', padding: '24px 28px' }}>
           <button
             onClick={onClose}
-            style={{ position: 'absolute', top: 16, right: 18, background: 'transparent', border: 'none', color: '#6b7280', fontSize: 16, cursor: 'pointer' }}
+            style={{ position: 'absolute', top: 16, right: 18, background: 'transparent', border: 'none', color: '#8a6f83', fontSize: 16, cursor: 'pointer' }}
           >
             <i className="fa-solid fa-xmark" />
           </button>
@@ -117,6 +146,7 @@ export default function ProfilePanel({ onClose }) {
           {tab === 'subscription' && <SubscriptionTab />}
           {tab === 'noti' && <NotiTab />}
           {tab === 'account' && <AccountTab user={user} />}
+          {tab === 'roles' && isSuperAdmin && <RolesTab me={user} />}
         </section>
       </div>
     </div>
@@ -128,15 +158,15 @@ export default function ProfilePanel({ onClose }) {
 /* ---------- 공용 ---------- */
 function Avatar({ url, size = 40 }) {
   return (
-    <div style={{ width: size, height: size, borderRadius: '50%', overflow: 'hidden', background: '#23262c', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-      {url ? <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => (e.currentTarget.style.display = 'none')} /> : <i className="fa-solid fa-user" style={{ color: '#8b93a1', fontSize: size * 0.4 }} />}
+    <div style={{ width: size, height: size, borderRadius: '50%', overflow: 'hidden', background: '#33202e', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      {url ? <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => (e.currentTarget.style.display = 'none')} /> : <i className="fa-solid fa-user" style={{ color: '#a98db9', fontSize: size * 0.4 }} />}
     </div>
   );
 }
 function LogoutButton() {
   const { logout } = useAuth();
   return (
-    <button onClick={logout} style={{ ...ghostBtn, width: '100%', borderColor: '#33383f', color: '#8b93a1' }}>
+    <button onClick={logout} style={{ ...ghostBtn, width: '100%', borderColor: '#412a3c', color: '#a98db9' }}>
       <i className="fa-solid fa-right-from-bracket" style={{ marginRight: 6 }} />
       로그아웃
     </button>
@@ -203,7 +233,7 @@ function StudioTab() {
       <div style={{ ...card, marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ width: 10, height: 10, borderRadius: '50%', background: live ? '#ff4d4f' : '#4b5563' }} />
-          <span style={{ fontSize: 14, fontWeight: 700, color: live ? '#ff6b6b' : '#c7ccd4' }}>{live ? '방송 중' : '오프라인'}</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: live ? '#ff6b6b' : '#d9c7d4' }}>{live ? '방송 중' : '오프라인'}</span>
         </div>
         <button style={live ? dangerBtn : primaryBtn} disabled={busy || !key} onClick={toggleLive}>
           {live ? '방송 종료' : '방송 시작'}
@@ -222,9 +252,9 @@ function StudioTab() {
           <i className="fa-solid fa-rotate" style={{ marginRight: 6 }} />
           {key ? '스트림 키 재발급' : '스트림 키 발급'}
         </button>
-        <div style={{ marginTop: 16, padding: 12, background: '#101216', border: '1px solid #262a31', borderRadius: 8, fontSize: 12, color: '#8b93a1', lineHeight: 1.7 }}>
-          <b style={{ color: '#c7ccd4' }}>연결 방법</b><br />
-          OBS → 설정 → 방송 → 서비스 <span style={{ color: GREEN }}>사용자 지정</span> → 서버에 스트림 URL, 스트림 키 붙여넣기 → 송출 시작
+        <div style={{ marginTop: 16, padding: 12, background: '#12060f', border: '1px solid #33202e', borderRadius: 8, fontSize: 12, color: '#a98db9', lineHeight: 1.7 }}>
+          <b style={{ color: '#d9c7d4' }}>연결 방법</b><br />
+          OBS → 설정 → 방송 → 서비스 <span style={{ color: ACCENT }}>사용자 지정</span> → 서버에 스트림 URL, 스트림 키 붙여넣기 → 송출 시작
         </div>
       </div>
     </div>
@@ -237,7 +267,7 @@ function ChannelTab({ user }) {
   const [followers, setFollowers] = useState(0);
   const [followerList, setFollowerList] = useState(null);
   const [showFollowers, setShowFollowers] = useState(false);
-  const [form, setForm] = useState({ title: '', description: '', bannerUrl: '' });
+  const [form, setForm] = useState({ title: '', description: '', bannerUrl: '', category: '' });
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -248,7 +278,12 @@ function ChannelTab({ user }) {
         const d = await r.json();
         setB(d);
         setFollowers(d.followerCount || 0);
-        setForm({ title: d.title || '', description: d.description || '', bannerUrl: d.bannerUrl || '' });
+        setForm({
+          title: d.title || '',
+          description: d.description || '',
+          bannerUrl: d.bannerUrl || '',
+          category: d.category || '',
+        });
       }
     } catch (_) {}
   }, []);
@@ -288,13 +323,13 @@ function ChannelTab({ user }) {
 
       {/* 채널 프리뷰 카드 */}
       <div style={{ ...card, padding: 0, overflow: 'hidden', marginBottom: 14 }}>
-        <div style={{ height: 84, background: form.bannerUrl ? `center/cover no-repeat url(${form.bannerUrl})` : 'linear-gradient(120deg,#12352a,#0e1f19)' }} />
+        <div style={{ height: 84, background: form.bannerUrl ? `center/cover no-repeat url(${form.bannerUrl})` : 'linear-gradient(120deg,#3a1030,#1a0716)' }} />
         <div style={{ padding: '0 16px 16px', marginTop: -22, display: 'flex', gap: 12, alignItems: 'flex-end' }}>
-          <div style={{ border: '3px solid #181b20', borderRadius: '50%' }}><Avatar url={user?.profileImageUrl} size={52} /></div>
+          <div style={{ border: '3px solid #1d0819', borderRadius: '50%' }}><Avatar url={user?.profileImageUrl} size={52} /></div>
           <div style={{ flex: 1, paddingBottom: 2 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#f2f4f7' }}>{user?.nickname || '사용자'}</div>
-            <button onClick={loadFollowers} style={{ background: 'none', border: 'none', color: '#8b93a1', fontSize: 12, cursor: 'pointer', padding: 0, marginTop: 2 }}>
-              <i className="fa-solid fa-heart" style={{ color: GREEN, marginRight: 4 }} />팔로워 {followers.toLocaleString()}명 <i className={`fa-solid fa-chevron-${showFollowers ? 'up' : 'down'}`} style={{ fontSize: 9 }} />
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#f6eef4' }}>{user?.nickname || '사용자'}</div>
+            <button onClick={loadFollowers} style={{ background: 'none', border: 'none', color: '#a98db9', fontSize: 12, cursor: 'pointer', padding: 0, marginTop: 2 }}>
+              <i className="fa-solid fa-heart" style={{ color: ACCENT, marginRight: 4 }} />팔로워 {followers.toLocaleString()}명 <i className={`fa-solid fa-chevron-${showFollowers ? 'up' : 'down'}`} style={{ fontSize: 9 }} />
             </button>
           </div>
           <div style={{ display: 'flex', gap: 8, paddingBottom: 2 }}>
@@ -305,13 +340,13 @@ function ChannelTab({ user }) {
           </div>
         </div>
         {showFollowers && (
-          <div style={{ borderTop: '1px solid #23262c', padding: '10px 16px', maxHeight: 140, overflowY: 'auto' }}>
-            {followerList === null ? <div style={{ fontSize: 12, color: '#6b7280' }}>불러오는 중…</div>
-              : followerList.length === 0 ? <div style={{ fontSize: 12, color: '#6b7280' }}>아직 팔로워가 없어요.</div>
+          <div style={{ borderTop: '1px solid #33202e', padding: '10px 16px', maxHeight: 140, overflowY: 'auto' }}>
+            {followerList === null ? <div style={{ fontSize: 12, color: '#8a6f83' }}>불러오는 중…</div>
+              : followerList.length === 0 ? <div style={{ fontSize: 12, color: '#8a6f83' }}>아직 팔로워가 없어요.</div>
               : followerList.map((f) => (
                 <div key={f.userId} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0' }}>
                   <Avatar url={f.profileImageUrl} size={24} />
-                  <span style={{ fontSize: 12, color: '#c7ccd4' }}>{f.nickname}</span>
+                  <span style={{ fontSize: 12, color: '#d9c7d4' }}>{f.nickname}</span>
                 </div>
               ))}
           </div>
@@ -329,13 +364,29 @@ function ChannelTab({ user }) {
           <textarea style={{ ...field, resize: 'vertical', minHeight: 60 }} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} maxLength={500} placeholder="채널을 소개해 주세요" />
         </div>
         <div>
+          <label style={fieldLabel}>콘텐츠 카테고리</label>
+          <select
+            style={{ ...field, cursor: 'pointer' }}
+            value={form.category}
+            onChange={(e) => setForm({ ...form, category: e.target.value })}
+          >
+            <option value="">선택 안 함</option>
+            {LIVE_CATEGORIES.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+          <div style={{ fontSize: 11, color: '#8a6f83', marginTop: 5 }}>
+            방송이 켜지면 메인 화면의 해당 카테고리 칸에 노출됩니다.
+          </div>
+        </div>
+        <div>
           <label style={fieldLabel}>배너 이미지 URL</label>
           <input style={field} value={form.bannerUrl} onChange={(e) => setForm({ ...form, bannerUrl: e.target.value })} placeholder="https://..." />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 12, color: live ? '#ff6b6b' : '#8b93a1' }}>상태: {live ? '🔴 방송 중' : '⚫ 오프라인'}</span>
+          <span style={{ fontSize: 12, color: live ? '#ff6b6b' : '#a98db9' }}>상태: {live ? '🔴 방송 중' : '⚫ 오프라인'}</span>
           <button style={{ ...primaryBtn, marginLeft: 'auto' }} disabled={busy} onClick={save}>채널 정보 저장</button>
-          {saved && <span style={{ fontSize: 12, color: GREEN }}>저장됨</span>}
+          {saved && <span style={{ fontSize: 12, color: ACCENT }}>저장됨</span>}
         </div>
       </div>
     </div>
@@ -348,10 +399,10 @@ function ClipsTab() {
     <div>
       <h3 style={sectionTitle}>내 클립</h3>
       <p style={sectionDesc}>라이브 시청 중 만든 짧은 영상 클립이 여기에 모입니다.</p>
-      <div style={{ ...card, textAlign: 'center', padding: '48px 16px', color: '#6b7280' }}>
+      <div style={{ ...card, textAlign: 'center', padding: '48px 16px', color: '#8a6f83' }}>
         <i className="fa-solid fa-scissors" style={{ fontSize: 28, marginBottom: 12, display: 'block' }} />
         <div style={{ fontSize: 13 }}>아직 만든 클립이 없어요.</div>
-        <div style={{ fontSize: 12, marginTop: 4 }}>라이브 방송 화면의 <b style={{ color: '#c7ccd4' }}>클립 만들기</b> 버튼으로 생성할 수 있어요.</div>
+        <div style={{ fontSize: 12, marginTop: 4 }}>라이브 방송 화면의 <b style={{ color: '#d9c7d4' }}>클립 만들기</b> 버튼으로 생성할 수 있어요.</div>
       </div>
     </div>
   );
@@ -382,9 +433,9 @@ function FollowingTab({ onClose }) {
       <p style={sectionDesc}>팔로우한 채널이 라이브를 시작하면 알림을 받습니다.</p>
 
       {list === null ? (
-        <div style={{ color: '#6b7280', fontSize: 13, padding: 20 }}>불러오는 중…</div>
+        <div style={{ color: '#8a6f83', fontSize: 13, padding: 20 }}>불러오는 중…</div>
       ) : list.length === 0 ? (
-        <div style={{ ...card, textAlign: 'center', padding: '44px 16px', color: '#6b7280' }}>
+        <div style={{ ...card, textAlign: 'center', padding: '44px 16px', color: '#8a6f83' }}>
           <i className="fa-solid fa-heart" style={{ fontSize: 24, marginBottom: 10, display: 'block' }} />
           <div style={{ fontSize: 13 }}>팔로우한 채널이 없어요.</div>
           <div style={{ fontSize: 12, marginTop: 4 }}>라이브 방송 화면에서 채널을 팔로우해 보세요.</div>
@@ -395,11 +446,11 @@ function FollowingTab({ onClose }) {
             <div key={c.userId} style={{ ...card, padding: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
               <Avatar url={c.profileImageUrl} size={40} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#f2f4f7', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#f6eef4', display: 'flex', alignItems: 'center', gap: 6 }}>
                   {c.nickname}
                   {c.live && <span style={{ fontSize: 10, fontWeight: 800, color: '#fff', background: '#ff4d4f', borderRadius: 4, padding: '1px 5px' }}>LIVE</span>}
                 </div>
-                <div style={{ fontSize: 11, color: '#8b93a1' }}>팔로워 {(c.followerCount || 0).toLocaleString()}명</div>
+                <div style={{ fontSize: 11, color: '#a98db9' }}>팔로워 {(c.followerCount || 0).toLocaleString()}명</div>
               </div>
               {c.live && c.broadcastId && (
                 <button style={{ ...primaryBtn, padding: '6px 12px' }} onClick={() => { window.location.href = `/live/${c.broadcastId}`; onClose(); }}>
@@ -417,7 +468,7 @@ function FollowingTab({ onClose }) {
 
 /* ---------- 내 구독 (이용권) ---------- */
 function SubscriptionTab() {
-  const { subscription, isPremium, refreshSubscription } = useAuth();
+  const { subscription, isPremium, isAdmin, refreshSubscription } = useAuth();
   useEffect(() => { refreshSubscription?.(); }, [refreshSubscription]);
   const expire = subscription?.expireDate ? new Date(subscription.expireDate) : null;
 
@@ -429,16 +480,21 @@ function SubscriptionTab() {
         {isPremium ? (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-              <span style={{ fontSize: 11, fontWeight: 800, color: '#04160f', background: GREEN, borderRadius: 20, padding: '4px 10px' }}>이용 중</span>
-              <span style={{ color: '#e9edf1', fontSize: 14, fontWeight: 700 }}>{subscription?.passName || '프리미엄 이용권'}</span>
+              <span style={{ fontSize: 11, fontWeight: 800, color: '#fff', background: ACCENT, borderRadius: 20, padding: '4px 10px' }}>이용 중</span>
+              <span style={{ color: '#efe6ec', fontSize: 14, fontWeight: 700 }}>{subscription?.passName || '프리미엄 이용권'}</span>
             </div>
-            {expire && <div style={{ fontSize: 13, color: '#a7adb8' }}>{expire.toLocaleDateString('ko-KR')} 까지</div>}
+            {expire && <div style={{ fontSize: 13, color: '#a98db9' }}>{expire.toLocaleDateString('ko-KR')} 까지</div>}
           </>
+        ) : isAdmin ? (
+          <div>
+            <div style={{ color: '#efe6ec', fontSize: 14, fontWeight: 700 }}>관리자 계정</div>
+            <div style={{ fontSize: 12, color: '#a98db9', marginTop: 4 }}>관리자는 이용권 없이 전곡 재생이 가능합니다.</div>
+          </div>
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
             <div>
-              <div style={{ color: '#e9edf1', fontSize: 14, fontWeight: 700 }}>무료 회원</div>
-              <div style={{ fontSize: 12, color: '#8b93a1', marginTop: 4 }}>로그인 사용자는 전곡 재생이 가능합니다.</div>
+              <div style={{ color: '#efe6ec', fontSize: 14, fontWeight: 700 }}>무료 회원</div>
+              <div style={{ fontSize: 12, color: '#a98db9', marginTop: 4 }}>이용권 미보유 시 곡당·전체 미리듣기가 1분으로 제한됩니다.</div>
             </div>
             <button style={primaryBtn} onClick={() => (window.location.href = '/payment')}>이용권 보기</button>
           </div>
@@ -453,12 +509,12 @@ function NotiTab() {
   const [prefs, setPrefs] = useState(getNotifPrefs());
   const toggle = (k) => { const n = { ...prefs, [k]: !prefs[k] }; setPrefs(n); setNotifPrefs(n); };
   const Item = ({ k, title, desc }) => (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 0', borderBottom: '1px solid #23262c' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 0', borderBottom: '1px solid #33202e' }}>
       <div>
-        <div style={{ fontSize: 13, color: '#e9edf1', fontWeight: 600 }}>{title}</div>
-        <div style={{ fontSize: 12, color: '#8b93a1', marginTop: 2 }}>{desc}</div>
+        <div style={{ fontSize: 13, color: '#efe6ec', fontWeight: 600 }}>{title}</div>
+        <div style={{ fontSize: 12, color: '#a98db9', marginTop: 2 }}>{desc}</div>
       </div>
-      <button onClick={() => toggle(k)} style={{ width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', background: prefs[k] ? GREEN : '#363b44', position: 'relative', flexShrink: 0 }}>
+      <button onClick={() => toggle(k)} style={{ width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer', background: prefs[k] ? ACCENT : '#412a3c', position: 'relative', flexShrink: 0 }}>
         <span style={{ position: 'absolute', top: 2, left: prefs[k] ? 22 : 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'left 0.15s' }} />
       </button>
     </div>
@@ -512,13 +568,142 @@ function AccountTab({ user }) {
         </div>
         <div>
           <label style={fieldLabel}>이메일</label>
-          <input style={{ ...field, color: '#6b7280' }} value={user?.email || ''} readOnly />
+          <input style={{ ...field, color: '#8a6f83' }} value={user?.email || ''} readOnly />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button style={primaryBtn} disabled={saving} onClick={save}>{saving ? '저장 중…' : '변경사항 저장'}</button>
-          {msg && <span style={{ fontSize: 12, color: msg.ok ? GREEN : '#ff6b6b' }}>{msg.text}</span>}
+          {msg && <span style={{ fontSize: 12, color: msg.ok ? ACCENT : '#ff6b6b' }}>{msg.text}</span>}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ---------- 권한 관리 (최고 관리자 전용) ---------- */
+function RolesTab({ me }) {
+  const [q, setQ] = useState('');
+  const [users, setUsers] = useState(null);
+  const [edited, setEdited] = useState({});
+  const [savingId, setSavingId] = useState(null);
+  const [rowMsg, setRowMsg] = useState({});
+
+  const load = useCallback(async (query = '') => {
+    setUsers(null);
+    try {
+      const r = await req(`/api/admin/users${query ? `?q=${encodeURIComponent(query)}` : ''}`);
+      setUsers(r.ok ? await r.json() : []);
+    } catch {
+      setUsers([]);
+    }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const roleColor = (r) =>
+    r === 'ROLE_ADMIN' ? ACCENT : r === 'ROLE_SUB_ADMIN' ? '#f0b429' : '#a98db9';
+
+  const saveRole = async (u) => {
+    const next = edited[u.id];
+    if (!next || next === u.role) return;
+    setSavingId(u.id);
+    setRowMsg((m) => ({ ...m, [u.id]: null }));
+    try {
+      const r = await req(`/api/admin/users/${u.id}/role`, {
+        method: 'PATCH',
+        body: JSON.stringify({ role: next }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (r.ok) {
+        setUsers((list) => list.map((x) => (x.id === u.id ? { ...x, role: data.role } : x)));
+        setEdited((e) => { const n = { ...e }; delete n[u.id]; return n; });
+        setRowMsg((m) => ({ ...m, [u.id]: { ok: true, text: '변경됨' } }));
+      } else {
+        setRowMsg((m) => ({ ...m, [u.id]: { ok: false, text: data.message || '실패' } }));
+      }
+    } catch {
+      setRowMsg((m) => ({ ...m, [u.id]: { ok: false, text: '네트워크 오류' } }));
+    }
+    setSavingId(null);
+  };
+
+  return (
+    <div>
+      <h3 style={sectionTitle}>권한 관리</h3>
+      <p style={sectionDesc}>
+        회원에게 <b>부 관리자</b> 또는 <b>관리자</b> 권한을 부여합니다. 이 메뉴는 관리자에게만 보입니다.
+      </p>
+
+      <form
+        onSubmit={(e) => { e.preventDefault(); load(q.trim()); }}
+        style={{ display: 'flex', gap: 8, marginBottom: 14 }}
+      >
+        <input
+          style={field}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="이메일 또는 닉네임 검색"
+        />
+        <button type="submit" style={{ ...ghostBtn, flexShrink: 0 }}>검색</button>
+      </form>
+
+      {users === null ? (
+        <div style={{ fontSize: 13, color: '#8a6f83', padding: 20 }}>불러오는 중…</div>
+      ) : users.length === 0 ? (
+        <div style={{ ...card, textAlign: 'center', color: '#8a6f83', fontSize: 13 }}>
+          검색 결과가 없습니다.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {users.map((u) => {
+            const isMe = me?.id != null && u.id === me.id;
+            const cur = edited[u.id] ?? u.role ?? 'ROLE_USER';
+            const dirty = cur !== (u.role ?? 'ROLE_USER');
+            const rm = rowMsg[u.id];
+            return (
+              <div key={u.id} style={{ ...card, display: 'flex', alignItems: 'center', gap: 12, padding: 12 }}>
+                <Avatar url={u.profileImageUrl} size={38} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#f6eef4', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {u.nickname}
+                    {isMe && <span style={{ fontSize: 10, color: '#8a6f83' }}>(나)</span>}
+                    <span style={{ fontSize: 10, fontWeight: 700, color: roleColor(u.role), border: `1px solid ${roleColor(u.role)}55`, borderRadius: 6, padding: '1px 6px' }}>
+                      {roleLabel(u.role)}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#8a6f83', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {u.email}
+                  </div>
+                </div>
+
+                <select
+                  style={{ ...field, width: 116, cursor: isMe ? 'not-allowed' : 'pointer', opacity: isMe ? 0.5 : 1 }}
+                  value={cur}
+                  disabled={isMe}
+                  onChange={(e) => setEdited((prev) => ({ ...prev, [u.id]: e.target.value }))}
+                >
+                  {ROLE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+
+                <button
+                  style={{
+                    ...primaryBtn, padding: '8px 12px', flexShrink: 0,
+                    opacity: !dirty || savingId === u.id ? 0.45 : 1,
+                    cursor: !dirty || savingId === u.id ? 'default' : 'pointer',
+                  }}
+                  disabled={isMe || !dirty || savingId === u.id}
+                  onClick={() => saveRole(u)}
+                >
+                  {savingId === u.id ? '…' : '저장'}
+                </button>
+                {rm && (
+                  <span style={{ fontSize: 11, color: rm.ok ? ACCENT : '#ff8bab', flexShrink: 0 }}>{rm.text}</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

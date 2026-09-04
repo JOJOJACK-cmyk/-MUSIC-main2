@@ -1,24 +1,17 @@
 import React, { useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { usePlayer } from '../context/PlayerContext';
-import { useAuth } from '../context/AuthContext';
 
 export default function YouTubePlayer() {
   const containerRef = useRef(null);
   const playerRef = useRef(null);
-  const navigate = useNavigate();
 
   const {
     currentTrack,
     registerPlayer,
     handlePlayerStateChange,
-    playTrack
   } = usePlayer();
 
-  const { user } = useAuth();
-
-  const isPremium = user?.isPremium || user?.subscribed || user?.role === 'PREMIUM' || user?.membership === 'PREMIUM';
-  const isLimitedUser = !user || !isPremium;
+  // 미리듣기 60초 제한은 PlayerContext 한 곳에서 통제한다. (여기서 중복 처리하지 않음)
 
   const stateHandlerRef = useRef(handlePlayerStateChange);
   useEffect(() => {
@@ -89,35 +82,6 @@ export default function YouTubePlayer() {
       registerPlayer(null);
     };
   }, [registerPlayer, currentTrack?.youtubeVideoId]);
-
-  // 2. 💡 [핵심 해결] 60초가 되는 순간 곡을 강제로 비우고 즉시 결제 페이지로 점프
-  useEffect(() => {
-    if (!isLimitedUser || !currentTrack) return;
-
-    const timer = setTimeout(() => {
-      // 먼저 전역 곡 데이터를 비워서 플레이어 바와 유튜브 IFrame을 동시에 폭파
-      if (typeof playTrack === 'function') {
-        try {
-          playTrack(null);
-        } catch (e) {}
-      }
-
-      try {
-        if (playerRef.current && typeof playerRef.current.destroy === 'function') {
-          playerRef.current.destroy();
-        }
-      } catch (e) {}
-      playerRef.current = null;
-      registerPlayer(null);
-
-      // 브라우저 블로킹을 피하기 위해 alert를 띄운 후 곧바로 라우팅
-      alert('무료 회원(또는 미결제 회원)은 1분까지만 미리 듣기할 수 있습니다. 전체 곡을 감상하려면 프리미엄 이용권을 구매해주세요!');
-      navigate('/payment');
-
-    }, 60000); // 정확히 60초
-
-    return () => clearTimeout(timer);
-  }, [isLimitedUser, currentTrack, navigate, registerPlayer, playTrack]);
 
   if (!currentTrack || !currentTrack.youtubeVideoId) {
     return null;

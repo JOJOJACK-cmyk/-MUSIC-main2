@@ -1,22 +1,26 @@
 import React, { useEffect, useState } from 'react';
+import axios from 'axios';
 import Header from '../components/Header';
-import Top100Chart from '../components/Top100Chart'; // 👈 차트 UI 컴포넌트 임포트
-import { musicApi } from '../api/musicApi';         // 👈 musicApi 임포트
-import { usePlayer } from '../context/PlayerContext'; // 👈 플레이어 컨텍스트 임포트
+import Top100Chart from '../components/Top100Chart';
+import MusicCard from '../components/MusicCard';
+import { musicApi } from '../api/musicApi';
+import { usePlayer } from '../context/PlayerContext';
 
 export default function ChartPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [chartList, setChartList] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { playTrack } = usePlayer();
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const { playTrack, setPlaylist } = usePlayer();
 
-  // 1. 컴포넌트 마운트 시 실시간 TOP 100 차트 데이터 호출
+  const isSearching = searchTerm.trim().length > 0;
+
   useEffect(() => {
     const fetchChartData = async () => {
       try {
         setLoading(true);
         const response = await musicApi.getTop100Chart();
-        // 백엔드 응답 구조에 맞춰 데이터 세팅 (response.data 또는 response)
         setChartList(response.data || response);
       } catch (error) {
         console.error('TOP 100 차트 데이터를 불러오는 데 실패했습니다:', error);
@@ -24,33 +28,80 @@ export default function ChartPage() {
         setLoading(false);
       }
     };
-
     fetchChartData();
   }, []);
 
-  // 2. 차트에서 곡 선택 시 재생
-  const handleSelectMusic = (music) => {
-    playTrack(music);
-  };
+  // 🔎 검색: DB 전체 + 부족하면 유튜브에서 보강 (백엔드 /api/musics/search)
+  useEffect(() => {
+    const kw = searchTerm.trim();
+    if (!kw) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const ctrl = new AbortController();
+    const t = setTimeout(async () => {
+      try {
+        const res = await axios.get('/api/musics/search', {
+          params: { keyword: kw },
+          signal: ctrl.signal,
+        });
+        const items = Array.isArray(res.data) ? res.data : [];
+        setSearchResults(items);
+        setPlaylist(items);
+      } catch (e) {
+        if (e.name !== 'CanceledError' && e.code !== 'ERR_CANCELED') setSearchResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 500);
+    return () => { clearTimeout(t); ctrl.abort(); };
+  }, [searchTerm, setPlaylist]);
+
+  const handleSelectMusic = (music) => playTrack(music);
 
   return (
-    <main className="main-content">
+    <>
       <Header searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
 
       <div className="content-section">
-        <h2>🔥 TOP 100 차트</h2>
-
-        {loading ? (
-          <p style={{ color: 'var(--text-sub)', marginTop: '12px' }}>
-            실시간 음원 차트 TOP 100을 불러오는 중입니다...
-          </p>
+        {isSearching ? (
+          <>
+            <div className="section-header">
+              <h2>🔎 “{searchTerm.trim()}” 검색 결과</h2>
+              <span style={{ color: 'var(--text-sub)', fontSize: 14 }}>
+                {searching ? '검색 중…' : `${searchResults.length}곡`}
+              </span>
+            </div>
+            {!searching && searchResults.length === 0 ? (
+              <div className="lib-state">
+                <i className="fa-solid fa-magnifying-glass" />
+                “{searchTerm.trim()}”에 해당하는 곡이 없습니다.
+              </div>
+            ) : (
+              <div className="library-grid">
+                {searchResults.map((music) => (
+                  <MusicCard key={music.id} music={music} onToggleLike={() => {}} />
+                ))}
+              </div>
+            )}
+          </>
         ) : (
-          <div style={{ marginTop: '20px' }}>
-            {/* 리스트가 비어있을 때의 예외 처리 및 차트 컴포넌트 렌더링 */}
-            <Top100Chart chartList={chartList} onSelectMusic={handleSelectMusic} />
-          </div>
+          <>
+            <h2>🔥 TOP 100 차트</h2>
+            {loading ? (
+              <p style={{ color: 'var(--text-sub)', marginTop: '12px' }}>
+                실시간 음원 차트 TOP 100을 불러오는 중입니다...
+              </p>
+            ) : (
+              <div style={{ marginTop: '20px' }}>
+                <Top100Chart chartList={chartList} onSelectMusic={handleSelectMusic} />
+              </div>
+            )}
+          </>
         )}
       </div>
-    </main>
+    </>
   );
 }

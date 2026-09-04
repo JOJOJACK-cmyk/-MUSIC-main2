@@ -9,16 +9,22 @@ import com.example.music.repository.LikedMusicRepository;
 import com.example.music.repository.MusicRepository;
 import com.example.music.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -28,6 +34,19 @@ public class MusicService {
     private final YouTubeApiService youTubeApiService;
     private final UserRepository userRepository;
     private final LikedMusicRepository likedMusicRepository;
+
+    // 검색어별 마지막 유튜브 보강 시각 (재검색·할당량 낭비 방지, 재시작 시 초기화)
+    private final Map<String, Instant> youtubeSearchAt = new ConcurrentHashMap<>();
+    private static final Duration YT_SEARCH_TTL = Duration.ofHours(12);
+    private static final int DB_ENOUGH_RESULTS = 20;   // 이보다 적으면 유튜브에서 보강
+    // search.list 는 결과 수와 무관하게 100유닛 → 한 번 쓸 때 최대치(50)로 뽑아 최대한 많이 확보
+    private static final int YT_FETCH_PER_SEARCH = 45;
+
+    // 할당량/레이트리밋(403·429) 초과 시 전체 유튜브 보강을 이 시각까지 중단
+    private volatile Instant youtubeCooldownUntil = Instant.EPOCH;
+    private static final Duration YT_COOLDOWN = Duration.ofMinutes(20);
+    // 동시 검색이 유튜브를 몰아치지 않도록 직렬화
+    private final Object youtubeLock = new Object();
 
     // 💡 장르 판별 로직은 YouTubeApiService 를 단일 소스로 위임한다 (중복/불일치 제거)
     public String determineGenre(String title, String artist) {
@@ -71,13 +90,15 @@ public class MusicService {
         // ※ 정렬/최신곡 필터는 하지 않는다. "실시간 인기 급상승 곡"(상위 10곡)은 프론트가
         //   API 순서 그대로 slice(0,10) 하므로 여기서 순서를 바꾸면 안 된다.
         //   "최신곡만" 노출은 프론트의 카테고리 섹션에서만 적용한다.
-        return allMusic.stream()
+        return dedupeByTitle(allMusic).stream()
                 .filter(music -> {
                     String a = music.getArtist() != null ? music.getArtist().toLowerCase() : "";
                     Long duration = music.getDurationSeconds();
 
-                    // 1) 제목 기반 비음악(쇼츠/토크/플레이리스트/커버 등) 또는 아티스트에 cut 포함 → 삭제
-                    boolean nonMusicTitle = youTubeApiService.isNonMusicTitle(music.getTitle()) || a.contains("cut");
+                    // 1) 제목 기반 비음악(쇼츠/토크/플레이리스트/커버 등) · 아티스트 cut · 비공식 채널 → 삭제
+                    boolean nonMusicTitle = youTubeApiService.isNonMusicTitle(music.getTitle())
+                            || a.contains("cut")
+                            || youTubeApiService.isNonMusicChannel(music.getArtist());
 
                     // 2) 재생 시간이 저장되어 있고 단곡 범위(90~480초)를 벗어나면(쇼츠/장편) → 삭제
                     boolean badDuration = duration != null && !youTubeApiService.isValidSongDuration(duration);
@@ -105,11 +126,79 @@ public class MusicService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * 제목·아티스트 키워드 검색.
+     * DB에 등록된 곡이 부족하면(그리고 최근에 안 했으면) YouTube 검색으로 곡을 즉시 가져와 등록한 뒤 다시 조회한다.
+     * (HTTP 호출이 있으므로 트랜잭션 밖에서 수행 — NOT_SUPPORTED)
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public List<MusicDto.Response> searchMusics(String keyword) {
-        List<Music> musicList = musicRepository.findByTitleContainingIgnoreCaseOrArtistContainingIgnoreCase(keyword, keyword);
-        return musicList.stream()
+        String kw = keyword == null ? "" : keyword.trim();
+        if (kw.isBlank()) return List.of();
+
+        List<Music> local =
+                musicRepository.findByTitleContainingIgnoreCaseOrArtistContainingIgnoreCase(kw, kw);
+
+        if (shouldEnrichFromYoutube(kw, local.size())) {
+            synchronized (youtubeLock) {
+                // 락 대기 중 다른 요청이 이미 채웠거나 쿨다운에 걸렸을 수 있으니 재확인
+                if (shouldEnrichFromYoutube(kw, local.size())) {
+                    youtubeSearchAt.put(kw.toLowerCase(), Instant.now());
+                    try {
+                        youTubeApiService.syncLatestMusicByKeyword(kw, YT_FETCH_PER_SEARCH);
+                    } catch (YouTubeApiService.QuotaExceededException qe) {
+                        youtubeCooldownUntil = Instant.now().plus(YT_COOLDOWN);
+                        log.warn("[Search] 유튜브 검색 할당량 초과 - {}분간 보강 중단", YT_COOLDOWN.toMinutes());
+                    } catch (Exception e) {
+                        log.warn("[Search] 유튜브 보강 실패 (keyword='{}'): {}", kw, e.getMessage());
+                    }
+                    local = musicRepository.findByTitleContainingIgnoreCaseOrArtistContainingIgnoreCase(kw, kw);
+                }
+            }
+        }
+
+        return dedupeByTitle(local).stream()
                 .map(MusicDto.Response::new)
                 .collect(Collectors.toList());
+    }
+
+    /** 같은 곡이 다른 videoId 로 여러 개 들어온 경우 정리 — 정규화한 (제목|아티스트) 기준, 조회수 높은 것만 남긴다. */
+    private List<Music> dedupeByTitle(List<Music> list) {
+        java.util.LinkedHashMap<String, Music> best = new java.util.LinkedHashMap<>();
+        for (Music m : list) {
+            String key = normalizeForDedupe(m.getTitle()) + "|" + normalizeForDedupe(m.getArtist());
+            Music cur = best.get(key);
+            if (cur == null) {
+                best.put(key, m);
+            } else {
+                long a = m.getViewCount() == null ? 0 : m.getViewCount();
+                long b = cur.getViewCount() == null ? 0 : cur.getViewCount();
+                if (a > b) best.put(key, m);
+            }
+        }
+        return new java.util.ArrayList<>(best.values());
+    }
+
+    private String normalizeForDedupe(String s) {
+        if (s == null) return "";
+        String x = s.toLowerCase();
+        // 아티스트: "- topic" 접미사 제거
+        x = x.replaceAll("\\s*-\\s*topic\\s*$", "");
+        // 제목: 괄호/대괄호 안, feat, official/mv/audio/video 등 표기 제거
+        x = x.replaceAll("\\(.*?\\)|\\[.*?\\]|【.*?】", "");
+        x = x.replaceAll("feat\\.?.*|ft\\.?.*", "");
+        x = x.replaceAll("official|m/v|mv|music video|lyric video|visualizer|audio|performance video|color coded", "");
+        // 영문/숫자/한글/가나만 남김
+        x = x.replaceAll("[^a-z0-9\\uac00-\\ud7a3\\u3040-\\u30ff]", "");
+        return x.trim();
+    }
+
+    private boolean shouldEnrichFromYoutube(String keyword, int localCount) {
+        if (keyword.length() < 2) return false;               // 1글자 검색은 유튜브 호출 안 함
+        if (localCount >= DB_ENOUGH_RESULTS) return false;     // 이미 충분
+        if (Instant.now().isBefore(youtubeCooldownUntil)) return false;  // 할당량 초과 쿨다운 중
+        Instant last = youtubeSearchAt.get(keyword.toLowerCase());
+        return last == null || Duration.between(last, Instant.now()).compareTo(YT_SEARCH_TTL) >= 0;
     }
 
     @Transactional
@@ -154,6 +243,13 @@ public class MusicService {
     @Transactional
     public Map<String, Integer> syncTrendingMusic() {
         return youTubeApiService.syncTrendingMusic();
+    }
+
+    // 💡 [관리자] DB의 모든 곡 재검증 → 비음악 영상 삭제 (저렴 - videos.list 배치)
+    //    (내부에서 삭제를 트랜잭션 밖으로 독립 실행하므로 여기서는 tx 를 열지 않는다)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public Map<String, Integer> pruneNonMusicCatalog() {
+        return youTubeApiService.pruneNonMusicCatalog();
     }
 
     @Transactional
