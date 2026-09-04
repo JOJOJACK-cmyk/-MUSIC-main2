@@ -2,9 +2,11 @@ package com.example.music.repository;
 
 import com.example.music.entity.ListenLog;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -41,4 +43,10 @@ public interface ListenLogRepository extends JpaRepository<ListenLog, Long> {
             ORDER BY COUNT(l) DESC
             """)
     List<Object[]> findMusicRanking();
+
+    // 카탈로그 정리 시 참조 무결성 위해 먼저 삭제
+    @Modifying
+    @Transactional
+    @Query("DELETE FROM ListenLog l WHERE l.music.id = :musicId")
+    void deleteByMusicId(@Param("musicId") Long musicId);
 }

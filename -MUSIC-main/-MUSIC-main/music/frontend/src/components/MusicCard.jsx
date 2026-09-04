@@ -46,7 +46,7 @@ export default function MusicCard({
 
   return (
     <div
-      className="music-card"
+      className={`music-card ${isCurrent && isPlaying ? 'is-playing' : ''}`}
       onClick={handlePlay}
     >
       <div className="card-img">
@@ -57,6 +57,13 @@ export default function MusicCard({
           />
         ) : (
           <i className="fa-solid fa-music"></i>
+        )}
+
+        {/* 재생 중 이퀄라이저 배지 */}
+        {isCurrent && isPlaying && (
+          <div className="card-eq" aria-hidden="true">
+            <span /><span /><span />
+          </div>
         )}
 
         {/* 카드 가운데 재생 버튼 */}

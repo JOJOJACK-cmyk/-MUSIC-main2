@@ -37,6 +37,10 @@ public class Broadcast {
     @Column(name = "banner_url", length = 500)
     private String bannerUrl;
 
+    // 콘텐츠 카테고리 (음악 / 함께듣기 / 토크 / 신곡소개 / 기타)
+    @Column(length = 30)
+    private String category;
+
     @Column(nullable = false, length = 20)
     private String status;
 

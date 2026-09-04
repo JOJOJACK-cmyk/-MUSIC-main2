@@ -36,11 +36,67 @@ public class YouTubeApiService {
 
     private final MusicRepository musicRepository;
     private final NotificationService notificationService;
+    private final com.example.music.repository.ListenLogRepository listenLogRepository;
+    private final com.example.music.repository.LikedMusicRepository likedMusicRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
-    @Value("${youtube.api.key}")
-    private String apiKey;
+    // 여러 개의 키를 콤마로 나열 (youtube.api.keys), 없으면 단일 youtube.api.key 사용
+    @Value("${youtube.api.keys:${youtube.api.key:}}")
+    private String rawApiKeys;
+
+    private volatile java.util.List<String> apiKeys = java.util.List.of();
+    private final java.util.concurrent.atomic.AtomicInteger keyIndex = new java.util.concurrent.atomic.AtomicInteger(0);
+    // 키별 소진 해제 시각 (403/429 발생 시 다음 태평양 자정까지 봉인)
+    private final java.util.Map<String, java.time.Instant> keyExhaustedUntil = new java.util.concurrent.ConcurrentHashMap<>();
+
+    @jakarta.annotation.PostConstruct
+    void initApiKeys() {
+        apiKeys = java.util.Arrays.stream(rawApiKeys.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .distinct()
+                .toList();
+        if (apiKeys.isEmpty()) {
+            log.warn("[YouTube] API 키가 설정되지 않았습니다. (youtube.api.key 또는 youtube.api.keys)");
+        } else {
+            log.info("[YouTube] API 키 {}개 로드", apiKeys.size());
+        }
+    }
+
+    /** 지금 사용 가능한(소진되지 않은) 키. 전부 소진 상태면 QuotaExceededException. */
+    private synchronized String currentApiKey() {
+        if (apiKeys.isEmpty()) throw new QuotaExceededException("YouTube API 키가 없습니다.");
+        java.time.Instant now = java.time.Instant.now();
+        for (int i = 0; i < apiKeys.size(); i++) {
+            int idx = (keyIndex.get() + i) % apiKeys.size();
+            String k = apiKeys.get(idx);
+            java.time.Instant until = keyExhaustedUntil.get(k);
+            if (until == null || now.isAfter(until)) {
+                keyIndex.set(idx);
+                return k;
+            }
+        }
+        throw new QuotaExceededException("모든 YouTube API 키의 할당량이 소진되었습니다.");
+    }
+
+    /** 방금 쓴 키를 소진 처리하고 다음 키로 넘어간다. */
+    private synchronized void markKeyExhausted(String key) {
+        keyExhaustedUntil.put(key, nextPacificMidnight());
+        keyIndex.updateAndGet(v -> (v + 1) % Math.max(1, apiKeys.size()));
+        String tail = key != null && key.length() > 6 ? key.substring(key.length() - 6) : "?";
+        int alive = (int) apiKeys.stream()
+                .filter(k -> { var u = keyExhaustedUntil.get(k); return u == null || java.time.Instant.now().isAfter(u); })
+                .count();
+        log.warn("[YouTube] 키 소진(…{}) → 다음 키로 전환. 남은 사용가능 키 {}개", tail, alive);
+    }
+
+    /** YouTube 일일 할당량 리셋 = 태평양 자정. 그때까지 봉인. */
+    private java.time.Instant nextPacificMidnight() {
+        java.time.ZoneId pt = java.time.ZoneId.of("America/Los_Angeles");
+        java.time.ZonedDateTime nowPt = java.time.ZonedDateTime.now(pt);
+        return nowPt.toLocalDate().plusDays(1).atStartOfDay(pt).toInstant();
+    }
 
     private static final Pattern HANGUL_PATTERN = Pattern.compile("[\\uAC00-\\uD7A3\\u3130-\\u318F]");
     private static final Pattern KANA_PATTERN = Pattern.compile("[\\u3040-\\u309F\\u30A0-\\u30FF]");
@@ -236,8 +292,119 @@ public class YouTubeApiService {
             "greatest hits", "greatest pop", "pop hits", "trending pop", "spotify hits",
             "chart hits", "billboard top", "billboard songs", "billboard hot", "billboard hits",
             "hits 20", "mega hits", "hits mix", "hit songs", "히트곡", "메가히트", "the icon sessions",
-            "grammy museum", "sing-along", "sing along"
+            "grammy museum", "sing-along", "sing along",
+            // 아티스트명 직접 검색 시 섞여 들어오는 비음악 콘텐츠
+            "podcast", "팟캐스트", "다큐멘터리", "documentary", "ep.", "episode",
+            "댄스 프랙티스", "dance practice", "안무 영상", "choreography", "무대영상", "무대 영상",
+            "겟레디", "get ready with", "grwm", "먹방", "mukbang",
+            "출근길", "퇴근길", "공항패션", "촬영 현장", "촬영현장",
+            "live clip", "라이브 클립", "라이브클립", "댄스 챌린지", "dance challenge",
+            "reaction video", "리액션 영상",
+            // 시상식/무대 라이브 (음원 아님)
+            "live @", " @ ", "mnet", "kcon", "mama 20", "mma 20", "gaon", "골든디스크", "golden disc",
+            "시상식", "awards 20", "music awards", "music bank", "뮤직뱅크", "music core", "inkigayo",
+            "인기가요", "쇼챔피언", "the show", "엠카운트다운", "mcountdown", "comeback stage",
+            "컴백무대", "커버 무대", "교차편집", "stage mix", "무대교차편집",
+            // ── 라이브/실황 영상 (음원 아님) ──
+            "live映像", "live 映像", "実況", "3d live", "【3d live", "official live", "live video",
+            "live music video", "live session", "라이브 세션", "live in studio", "studio live",
+            "live at ", "live in ", "live by ", "라이브 by", "unplugged", "언플러그드",
+            "play color live", "color live", "special stage",
+            // ── 비하인드/스포일러/예고/요약 ──
+            "behind the scene", "behind the scenes", "behind-the-scene", "b-side film",
+            "spoiler", "스포일러", "album spoiler", "recap", "리캡", "highlight medley", "하이라이트 메들리",
+            "mv preview", "album preview", "comeback preview", "프리뷰 영상", "sneak peek", "coming soon",
+            // ── 인터뷰/토크/Q&A/다큐 ──
+            "interview", "questions with", "50 questions", "20 questions",
+            "docuseries", "docu-series", "the making of",
+            // ── 안무/댄스/커버 실연 ──
+            "performance video", "dance performance", "안무 영상", "안무영상", "안무 시안",
+            "시안 비교", "비교영상", "비교 영상", "comparison", "랜덤 플레이 댄스", "random play dance",
+            "random dance", "랜덤플레이댄스", "play dance", "full performance", "performs ",
+            "perform \"", "covered by", "커버 by",
+            // ── 매쉬업/틱톡/편집/인스트 ──
+            "mashup", "mash-up", "매쉬업", "tiktok", "틱톡", "tik tok", "(inst", " inst.",
+            "인스트", "instrumental ver", "acapella", "아카펠라", "8d audio", "sped up", "slowed",
+            "nightcore", "reverb", "id clip", "최종화",
+            // ── 자막 리업로드(비공식) ──
+            "vietsub", "sub indo", "legendado", "eng sub", "sub esp", "sub español",
+            "türkçe çeviri", "terjemahan", "русский перевод", "가사 번역",
+            // ── 다이제스트/특전영상/영화(일본) ──
+            "ダイジェスト", "特別映像", "特典映像", "特別 映像", "映画「", "special video",
+            "official dance video", " - live ", "제작기", "메이킹 필름", "making film",
+            // ── 직캠/팬캠/음악방송 풀캠 (그 아티스트 원곡 아님) ──
+            "직캠", "fancam", "fan cam", "팬캠", "풀캠", "full cam", "세로캠", "세로직캠",
+            "포커스캠", "focus cam", "focus)", "1인샷", "음중", "음방", "음악중심", "쇼음악중심",
+            "the k-pop", "kpop on", "kbs kpop", "sbs inkigayo", "mbc kpop",
+            // ── 커버/다른 버전 (원곡 아님) ──
+            "트로트버전", "트로트 버전", "trot ver", "trot version", "발라드버전", "발라드 버전",
+            "댄스버전", "댄스 버전", "rock ver", "acoustic ver", "피아노버전", "piano ver",
+            "리메이크", "remake", "불러봤", "부르기", "노래방 ver", "커버 곡", "cover song",
+            "cover)", "따라불러",
+            "jazz ver", "band ver", "orchestra ver", "strings ver", "orchestral ver",
+            "shuffle version", "reggae version", "ska reggae", "sped-up", "(remix", "(리믹스",
+            " remix)", "리믹스)", "sm jazz", "sm station", "sm classics", "jazz trio", "big band",
+            // ── 리액션/현장/인사/축제/버라이어티 (원곡 아님) ──
+            "반응", "reaction", "리액션", "감상하는", "감상 하는", "우왁굳", "우왁굳님",
+            "오픈 인사", "오픈인사", "인사 영상", "인사영상", "지니램프", "지니 램프",
+            "축제", "대학축제", "대학 축제", "동국대", "축제 무대", "페스티벌 직캠",
+            "풀버전", "[풀버전]", "풀 버전", "(풀버전", "full ver.", "full version",
+            "| show", "쇼! 음악중심", "쇼 음악중심", "musiccore", "music core", "인기가요",
+            "엠카운트다운", "m countdown", "더 쇼 무대", "쇼챔피언", "쇼! 챔피언",
+            // ── 듀엣/합창/데뷔인사/세션 (원곡 아님) ──
+            "불법 듀엣", "불법듀엣", "듀엣", "duet", "합창", "같이 부른", "같이불러",
+            "데뷔 인사", "데뷔인사", "another session", "special version", "스페셜 버전",
+            "방송]", " 방송분", "불후의 명곡", "immortal songs", "올댓뮤직", "all that music",
+            "studio choom", "스튜디오 춤", "온더스팟", "the first take",
+            "박소현의 러브게임", "album sampler", "앨범 샘플러"
     };
+
+    // 방송사/공연 채널의 6자리 방송일자 표기 (예: "MBC260321방송", "MBC 201226 방송")
+    private static final Pattern BROADCAST_DATE = Pattern.compile("(?i)(MBC|KBS|SBS|Mnet|MBN|JTBC)\\s?\\d{6}");
+
+    // 비공식 리업로드/팬 채널 + 방송사 공연·직캠 채널 ("- Topic" 은 공식이므로 제외)
+    private static final String[] NON_MUSIC_CHANNEL_HINTS = {
+            "lyrics", "lyric video", " amv", "compilation", "vietsub", "sub español", "sub indo",
+            "legendado", "karaoke", "cover nation", "nightcore", "sped up", "slowed", "8d ",
+            "reaction", "리액션", "clips", "tributo", "fan cam", "팬캠", "노래모음", "playlist",
+            // ── 방송사 K-POP / 라디오 / 댄스퍼포먼스 채널 (원곡 아님) ──
+            "kbs kpop", "kbs k-pop", "kbs 레전드", "레전드 케이팝", "mbckpop", "mbc kpop",
+            "sbs kpop", "sbs k-pop", "sbs radio", "에라오", "studio choom", "스튜디오 춤",
+            "1thek originals", "원더케이 오리지널", "the first take", "it's live", "잇츠라이브",
+            "dingo music", "딩고 뮤직", "불후의 명곡", "kbs world tv"
+    };
+
+    public boolean isNonMusicChannel(String channelTitle) {
+        if (channelTitle == null) return false;
+        String c = channelTitle.toLowerCase();
+        if (c.endsWith("- topic")) return false; // 유튜브 자동 생성 = 공식 음원
+        for (String h : NON_MUSIC_CHANNEL_HINTS) if (c.contains(h)) return true;
+        return false;
+    }
+
+    // "아이네 X 릴파 - 괴수의 꽃노래" 처럼 [이름] X [이름] - [곡] 형태의 합작 커버
+    private static final Pattern COLLAB_COVER = Pattern.compile("^\\s*\\S.{0,24}?\\s[Xx×]\\s.{0,24}?\\s[-–—]\\s\\S");
+    private static final String[] OFFICIAL_MARKERS = {
+            "official", "officiel", "oficial", "officiell", "m/v", "mv)", "[mv]", "[m/v]",
+            "audio", "visualizer", "lyric", "공식", "官方", "官方", "オフィシャル"
+    };
+
+    /**
+     * 채널이 원작자가 아닌데 제목이 "A x B - 곡" 형태이고 공식 표기도 없으면 합작 커버로 본다.
+     * (공식 피처링 곡 "IU - Palette (Feat. G-DRAGON)" 등은 " - " 앞이 단일 아티스트라 걸리지 않음)
+     */
+    public boolean looksLikeCollabCover(String title, String channelTitle) {
+        if (title == null) return false;
+        String lower = title.toLowerCase();
+        for (String mk : OFFICIAL_MARKERS) if (lower.contains(mk)) return false;
+        if (!COLLAB_COVER.matcher(title).find()) return false;
+        // 채널명이 제목에 등장하면 그 아티스트 본인 채널일 가능성 → 유지
+        if (channelTitle != null && !channelTitle.isBlank()) {
+            String ch = channelTitle.toLowerCase().replace(" - topic", "").trim();
+            if (ch.length() >= 2 && lower.contains(ch)) return false;
+        }
+        return true;
+    }
 
     /** 제목/아티스트만으로 장르 판별 (언어 정보·지역 힌트 없음) */
     public String determineGenre(String title, String artist) {
@@ -303,6 +470,13 @@ public class YouTubeApiService {
     /**
      * 💡 제목만으로 "음악이 아닌 영상"을 판별한다. (쇼츠/토크/플레이리스트/커버 등)
      */
+    // 제목 맨 앞의 날짜 표기: "260902", "20230218", "[2023/2/18]", "23.02.18", "2024-01-05" 등
+    private static final Pattern DATE_PREFIX = Pattern.compile(
+            "^\\s*[\\[(]?\\s*("
+            + "(19|20)?\\d{2}[.\\-/]\\d{1,2}[.\\-/]\\d{1,2}"   // 구분자 있는 날짜 (2023/2/18)
+            + "|(19|20|2[1-9])\\d{4}"                            // 붙여쓴 날짜 (260902 / 20230218)
+            + ")\\b");
+
     public boolean isNonMusicTitle(String title) {
         if (title == null) return true;
         String lower = title.toLowerCase();
@@ -311,6 +485,10 @@ public class YouTubeApiService {
                 return true;
             }
         }
+        // 제목이 6자리 날짜(YYMMDD / YYYYMM)로 시작 → 직캠/현장 영상 관행
+        if (DATE_PREFIX.matcher(title).find()) return true;
+        // "MBC260321방송" 처럼 방송사 + 방송일자 → 음악방송/공연 영상
+        if (BROADCAST_DATE.matcher(title).find()) return true;
         // 해시태그 3개 이상 → 태그 스팸/쇼츠성 업로드로 간주
         if (title.chars().filter(c -> c == '#').count() >= 3) {
             return true;
@@ -342,6 +520,15 @@ public class YouTubeApiService {
 
     @Transactional
     public YouTubeVideoDto getVideoInfo(String videoId) {
+        return getVideoInfo(videoId, false);
+    }
+
+    /**
+     * @param strict true 면 "진짜 음원(곡)"만 통과시키는 강한 게이트 적용
+     *               (키워드 검색으로 들어온 결과처럼 비음악이 섞이기 쉬운 경로에서 사용)
+     */
+    @Transactional
+    public YouTubeVideoDto getVideoInfo(String videoId, boolean strict) {
         Optional<Music> cachedMusic = musicRepository.findByYoutubeVideoId(videoId);
         if (cachedMusic.isPresent()) {
             Music music = cachedMusic.get();
@@ -354,9 +541,9 @@ public class YouTubeApiService {
 
         try {
             String url = "https://www.googleapis.com/youtube/v3/videos"
-                    + "?part=snippet,contentDetails,status,statistics"
+                    + "?part=snippet,contentDetails,status,statistics,topicDetails"
                     + "&id=" + videoId
-                    + "&key=" + apiKey;
+                    + "&key=" + currentApiKey();
 
             HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url)).GET().build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
@@ -367,7 +554,7 @@ public class YouTubeApiService {
                 throw new IllegalArgumentException("YouTube 영상을 찾을 수 없습니다: " + videoId);
             }
 
-            Music savedMusic = upsertFromVideoItem(items.get(0), null)
+            Music savedMusic = upsertFromVideoItem(items.get(0), null, strict)
                     .orElseThrow(() -> new IllegalArgumentException("단곡 음악 조건을 만족하지 않는 영상입니다: " + videoId));
             return toDto(savedMusic);
 
@@ -377,6 +564,37 @@ public class YouTubeApiService {
             log.error("YouTube API 호출 중 오류 발생", e);
             throw new RuntimeException("YouTube API 연동 실패: " + e.getMessage());
         }
+    }
+
+    /** 이 영상이 "진짜 곡(음원/공식 MV)"으로 볼 만한 신호가 있는가 (strict 게이트용) */
+    private boolean looksLikeRealSong(JsonNode item, String title, String artist) {
+        String a = artist == null ? "" : artist.toLowerCase();
+        // 1) "<아티스트> - Topic" 채널 = 유튜브가 공식 유통 음원을 자동 업로드하는 채널 → 항상 곡
+        if (a.matches(".*\\s-\\s*topic\\s*$")) return true;
+
+        // 2) topicDetails 에 음악 주제(위키 URL) 가 있으면 음악 영상
+        //    music / *_music(장르) / *-pop(k-pop,j-pop..) / hip hop / song
+        JsonNode topics = item.path("topicDetails").path("topicCategories");
+        if (topics.isArray()) {
+            for (JsonNode t : topics) {
+                String u = t.asText("").toLowerCase();
+                if (u.contains("music") || u.contains("-pop") || u.contains("hip_hop")
+                        || u.contains("hip-hop") || u.endsWith("/wiki/song")) return true;
+            }
+        }
+
+        // 3) 제목에 명확한 음원/MV 마커
+        String lt = title == null ? "" : title.toLowerCase();
+        String[] markers = {"m/v", "official m/v", "mv)", "(mv", " mv ", "music video", "official video",
+                "official audio", "audio)", "(audio", "lyric video", "オリジナル", "오리지널", "원곡",
+                "official mv", "prod.", "feat.", "ft.", " x ", "vevo"};
+        for (String m : markers) if (lt.contains(m)) return true;
+        if (lt.endsWith(" mv") || lt.endsWith("(official)")) return true;
+
+        // 4) 채널이 VEVO 면 곡
+        if (a.contains("vevo")) return true;
+
+        return false;
     }
 
     private LocalDateTime parsePublishedAt(String iso) {
@@ -398,6 +616,10 @@ public class YouTubeApiService {
      * @param regionHint 지역 인기차트 출처 힌트("KR"/"JP"/"US"), 장르 판별 4순위. null 가능
      */
     private Optional<Music> upsertFromVideoItem(JsonNode item, String regionHint) {
+        return upsertFromVideoItem(item, regionHint, false);
+    }
+
+    private Optional<Music> upsertFromVideoItem(JsonNode item, String regionHint, boolean strict) {
         JsonNode snippet = item.get("snippet");
         JsonNode contentDetails = item.get("contentDetails");
         JsonNode status = item.get("status");
@@ -418,7 +640,9 @@ public class YouTubeApiService {
         String audioLang = snippet.path("defaultAudioLanguage").asText(
                 snippet.path("defaultLanguage").asText(""));
 
-        if (title.isEmpty() || BLOCKED_CATEGORY_IDS.contains(categoryId) || isNonMusicTitle(title)) {
+        if (title.isEmpty() || BLOCKED_CATEGORY_IDS.contains(categoryId)
+                || isNonMusicTitle(title) || isNonMusicChannel(artist)
+                || looksLikeCollabCover(title, artist)) {
             return Optional.empty();
         }
         if (contentDetails == null || !contentDetails.has("duration")) {
@@ -427,6 +651,11 @@ public class YouTubeApiService {
         long seconds = parseYouTubeDuration(contentDetails.get("duration").asText());
         if (!isValidSongDuration(seconds)) {
             return Optional.empty();
+        }
+
+        if (strict) {
+            // 키워드 검색 경로: 유튜브 "음악(10)" 카테고리만 저장 (인터뷰·엔터·블로그 등 컷)
+            if (!"10".equals(categoryId)) return Optional.empty();
         }
 
         LocalDateTime publishedAt = parsePublishedAt(snippet.path("publishedAt").asText(""));
@@ -498,7 +727,7 @@ public class YouTubeApiService {
                         + "&videoCategoryId=10"
                         + "&regionCode=" + region
                         + "&maxResults=50"
-                        + "&key=" + apiKey;
+                        + "&key=" + currentApiKey();
                 HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url)).GET().build();
                 HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
                 JsonNode root = objectMapper.readTree(response.body());
@@ -587,7 +816,7 @@ public class YouTubeApiService {
             String url = "https://www.googleapis.com/youtube/v3/channels"
                     + "?part=contentDetails"
                     + "&forHandle=" + URLEncoder.encode(h, StandardCharsets.UTF_8)
-                    + "&key=" + apiKey;
+                    + "&key=" + currentApiKey();
             HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).GET().build();
             HttpResponse<String> res = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
             JsonNode root = objectMapper.readTree(res.body());
@@ -627,7 +856,7 @@ public class YouTubeApiService {
                         + "?part=snippet"
                         + "&maxResults=50"
                         + "&playlistId=" + playlistId
-                        + "&key=" + apiKey;
+                        + "&key=" + currentApiKey();
 
                 if (nextPageToken != null && !nextPageToken.isEmpty()) {
                     url += "&pageToken=" + nextPageToken;
@@ -691,7 +920,7 @@ public class YouTubeApiService {
                 String url = "https://www.googleapis.com/youtube/v3/videos"
                         + "?part=contentDetails,snippet,statistics"
                         + "&id=" + ids
-                        + "&key=" + apiKey;
+                        + "&key=" + currentApiKey();
                 HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url)).GET().build();
                 HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
                 JsonNode root = objectMapper.readTree(response.body());
@@ -752,6 +981,138 @@ public class YouTubeApiService {
     }
 
     /**
+     * 카탈로그 정리용 판정 — 보수적. 명백한 비음악만 삭제하고, 유튜브 "음악" 카테고리는 신뢰한다.
+     * 삭제 대상: 비음악 제목 키워드 / 차단 카테고리(게임·뉴스·스포츠 등) / 길이 벗어남(정보 있을 때만)
+     *          / 음악 외 카테고리인데 곡 신호도 없음
+     */
+    private boolean keepsAsSong(JsonNode item) {
+        JsonNode snippet = item.path("snippet");
+        String title = snippet.path("title").asText("");
+        String artist = snippet.path("channelTitle").asText("");
+        String categoryId = snippet.path("categoryId").asText("");
+        if (title.isEmpty()) return false;
+        if (isNonMusicTitle(title)) return false;
+        if (isNonMusicChannel(artist)) return false;
+        if (looksLikeCollabCover(title, artist)) return false;
+        if (BLOCKED_CATEGORY_IDS.contains(categoryId)) return false;
+
+        long seconds = parseYouTubeDuration(item.path("contentDetails").path("duration").asText(""));
+        if (seconds > 0 && !isValidSongDuration(seconds)) return false; // 0 = 정보 없음 → 유지
+
+        if ("10".equals(categoryId)) return true;              // 유튜브 음악 카테고리 = 곡으로 신뢰
+        return looksLikeRealSong(item, title, artist);         // 그 외 카테고리는 곡 신호 필요
+    }
+
+    /**
+     * 💡 [관리자] DB의 모든 곡을 videos.list 로 재검증(part 에 topicDetails 포함, 배치 50건/1유닛)해서
+     *    "곡"으로 볼 수 없는 항목(인터뷰·라이브클립·쇼츠·삭제된 영상 등)을 삭제한다.
+     *    (트랜잭션 밖 — 각 삭제를 독립 실행해 참조 무결성 오류가 전체를 롤백하지 않도록)
+     */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    public Map<String, Integer> pruneNonMusicCatalog() {
+        List<Music> all = new ArrayList<>(musicRepository.findAll());
+        int checked = 0, removed = 0, failed = 0, apiError = 0;
+        List<String> sample = new ArrayList<>();
+
+        log.info("🧹 [정리] 시작 - 카탈로그 {}곡", all.size());
+
+        // ── 1단계: API 없이 제목·채널·재생시간만으로 명백한 비음악 제거 (할당량 무관) ──
+        int stage1 = 0;
+        java.util.Iterator<Music> it0 = all.iterator();
+        while (it0.hasNext()) {
+            Music m = it0.next();
+            String artist = m.getArtist() == null ? "" : m.getArtist();
+            boolean junk = isNonMusicTitle(m.getTitle())
+                    || isNonMusicChannel(artist)
+                    || looksLikeCollabCover(m.getTitle(), artist)
+                    || artist.toLowerCase().contains("cut")
+                    || (m.getDurationSeconds() != null && !isValidSongDuration(m.getDurationSeconds()));
+            if (junk) {
+                checked++;
+                if (deleteMusicSafely(m)) {
+                    removed++; stage1++;
+                    if (sample.size() < 20) sample.add(artist + " - " + m.getTitle());
+                } else failed++;
+                it0.remove();
+            }
+        }
+        log.info("🧹 [정리] 1단계(로컬) 삭제 {}곡, 남은 {}곡", stage1, all.size());
+
+        // ── 2단계: 남은 곡을 videos.list 로 카테고리/삭제여부 확인 ──
+        for (int i = 0; i < all.size(); i += 50) {
+            List<Music> batch = all.subList(i, Math.min(i + 50, all.size()));
+            String ids = batch.stream().map(Music::getYoutubeVideoId)
+                    .collect(java.util.stream.Collectors.joining(","));
+
+            Map<String, JsonNode> byId = new java.util.HashMap<>();
+            try {
+                String url = "https://www.googleapis.com/youtube/v3/videos"
+                        + "?part=snippet,contentDetails,status,statistics,topicDetails"
+                        + "&id=" + ids
+                        + "&key=" + currentApiKey();
+                HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url)).GET().build();
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                JsonNode root = objectMapper.readTree(response.body());
+                if (root.has("error")) {
+                    int st = response.statusCode();
+                    log.warn("[정리] videos.list {} - {}", st, root.path("error").path("message").asText(""));
+                    if (st == 403 || st == 429) { markKeyExhausted(currentApiKeyRaw()); apiError++; continue; }
+                    apiError++;
+                    continue;
+                }
+                for (JsonNode it : root.path("items")) byId.put(it.path("id").asText(), it);
+            } catch (QuotaExceededException qe) {
+                log.warn("[정리] 할당량 소진 - 중단");
+                break;
+            } catch (Exception e) {
+                log.error("[정리] 배치 조회 실패", e);
+                apiError++;
+                continue;
+            }
+
+            for (Music m : batch) {
+                JsonNode item = byId.get(m.getYoutubeVideoId());
+                if (item == null) continue;   // 이번 응답에 없음(일시적일 수 있음) → 삭제하지 않음
+                checked++;
+                if (keepsAsSong(item)) continue;
+                if (deleteMusicSafely(m)) {
+                    removed++;
+                    if (sample.size() < 20) sample.add(m.getArtist() + " - " + m.getTitle());
+                } else failed++;
+            }
+        }
+
+        log.info("🧹 카탈로그 정리: 검사 {} / 삭제 {} / 실패 {} / API오류 {}", checked, removed, failed, apiError);
+        if (!sample.isEmpty()) log.info("🧹 삭제 예시: {}", sample);
+
+        Map<String, Integer> r = new LinkedHashMap<>();
+        r.put("checked", checked);
+        r.put("removed", removed);
+        r.put("failed", failed);
+        r.put("apiError", apiError);
+        return r;
+    }
+
+    /** 현재 인덱스의 키를 markKeyExhausted 에 넘기기 위한 raw 접근 (throw 안 함) */
+    private String currentApiKeyRaw() {
+        return apiKeys.isEmpty() ? null : apiKeys.get(keyIndex.get() % apiKeys.size());
+    }
+
+    /** 참조(listen_log·liked_music) 정리 후 음원 삭제. 성공 true. */
+    private boolean deleteMusicSafely(Music m) {
+        try {
+            Long mid = m.getId();
+            listenLogRepository.deleteByMusicId(mid);
+            likedMusicRepository.deleteByMusicId(mid);
+            musicRepository.deleteById(mid);
+            return true;
+        } catch (Exception e) {
+            log.warn("[정리] 삭제 실패: {} - {} ({})", m.getId(), m.getTitle(), e.getMessage());
+            return false;
+        }
+    }
+
+    /**
      * 💡 카테고리별 키워드로 최신 음악을 검색해 DB에 동기화한다.
      *    - search API 는 videoCategoryId=10(음악) + order=date(최신순) 로 1차 필터
      *    - 각 결과는 getVideoInfo() 의 엄격한 단곡 음악 게이트를 통과해야만 저장됨
@@ -763,33 +1124,45 @@ public class YouTubeApiService {
 
         try {
             String encodedKeyword = URLEncoder.encode(keyword, StandardCharsets.UTF_8);
-            // order=relevance(기본): 키워드에 가장 잘 맞는(대개 인기 있는) 곡을 우선.
-            // videoDuration 미지정: getVideoInfo 의 90~480초 게이트로 최종 검증.
-            String url = "https://www.googleapis.com/youtube/v3/search"
-                    + "?part=snippet"
-                    + "&type=video"
-                    + "&videoEmbeddable=true"
-                    + "&maxResults=" + maxResults
-                    + "&q=" + encodedKeyword
-                    + "&key=" + apiKey;
 
-            HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url)).GET().build();
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            JsonNode root = null;
+            JsonNode items = null;
+            // 키가 여러 개면, 소진(403/429)된 키는 건너뛰고 다음 키로 재시도한다.
+            for (int attempt = 0; attempt < Math.max(1, apiKeys.size()); attempt++) {
+                String key = currentApiKey(); // 전부 소진 시 QuotaExceededException
+                String url = "https://www.googleapis.com/youtube/v3/search"
+                        + "?part=snippet"
+                        + "&type=video"
+                        + "&videoEmbeddable=true"
+                        + "&videoCategoryId=10"   // 유튜브 "음악" 카테고리만 (비음악 영상 대폭 감소)
+                        + "&maxResults=" + maxResults
+                        + "&q=" + encodedKeyword
+                        + "&key=" + key;
 
-            JsonNode root = objectMapper.readTree(response.body());
-            JsonNode items = root.get("items");
+                HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url)).GET().build();
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                root = objectMapper.readTree(response.body());
+                items = root.get("items");
 
-            if (root.has("error")) {
-                int status = response.statusCode();
-                String reason = root.path("error").path("errors").path(0).path("reason").asText("");
-                log.warn("YouTube 검색 API 오류 (keyword='{}', status={}, reason={})", keyword, status, reason);
-                // 할당량/레이트리밋 초과 시 남은 검색을 중단해 추가 소진을 막는다
-                if (status == 429 || status == 403) {
-                    throw new QuotaExceededException("YouTube 검색 할당량 초과: " + reason);
+                if (root.has("error")) {
+                    int status = response.statusCode();
+                    String reason = root.path("error").path("errors").path(0).path("reason").asText("");
+                    if (status == 429 || status == 403) {
+                        markKeyExhausted(key);
+                        root = null;
+                        continue; // 다음 키로
+                    }
+                    log.warn("YouTube 검색 API 오류 (keyword='{}', status={}, reason={})", keyword, status, reason);
+                    return syncedVideos;
                 }
-                return syncedVideos;
-            } else if (items == null || items.isEmpty()) {
-                log.warn("YouTube 검색 결과 0건 (keyword='{}', status={})", keyword, response.statusCode());
+                break; // 성공
+            }
+
+            if (root == null) {
+                throw new QuotaExceededException("YouTube 검색 할당량 초과 (모든 키 소진)");
+            }
+            if (items == null || items.isEmpty()) {
+                log.warn("YouTube 검색 결과 0건 (keyword='{}')", keyword);
             }
 
             if (items != null && items.isArray()) {
@@ -798,7 +1171,7 @@ public class YouTubeApiService {
                     if (idNode != null && idNode.has("videoId")) {
                         String videoId = idNode.get("videoId").asText();
                         try {
-                            YouTubeVideoDto videoDto = getVideoInfo(videoId);
+                            YouTubeVideoDto videoDto = getVideoInfo(videoId, true); // strict: 진짜 곡만
 
                             // 강제 장르 지정 (검색 키워드가 곧 카테고리이므로 신뢰)
                             if (forcedGenre != null && !forcedGenre.isBlank()) {
@@ -831,13 +1204,12 @@ public class YouTubeApiService {
     }
 
     // 카테고리별 검색 키워드 (곡 수를 늘리기 위한 다중 키워드)
+    // 검색당 100유닛이라 카테고리별 키워드는 3개로 제한 (격일 실행 기준 ~1,200유닛)
     private static final Map<String, List<String>> CATEGORY_KEYWORDS = Map.of(
-            "KPOP", List.of("kpop 신곡 mv", "아이돌 타이틀곡 mv", "kpop 인기곡", "kpop title track", "한국 발라드 신곡"),
-            "JPOP", List.of("j-pop 新曲 mv", "jpop hits", "アニメ 主題歌 mv", "邦楽 話題曲", "日本 人気曲 mv"),
-            "VTUBER", List.of("버추얼 아이돌 오리지널곡", "버튜버 신곡", "hololive original song", "홀로라이브 오리지널곡",
-                    "이세계아이돌", "니지산지 music", "스텔라이브 원곡", "kamitsubaki record"),
-            "POP", List.of("new pop song official mv", "latest pop hits mv", "trending pop music video",
-                    "billboard hot 100 new", "official music video 2026")
+            "KPOP", List.of("kpop 신곡 mv", "아이돌 타이틀곡 mv", "kpop 인기곡"),
+            "JPOP", List.of("j-pop 新曲 mv", "アニメ 主題歌 mv", "日本 人気曲 mv"),
+            "VTUBER", List.of("버추얼 아이돌 오리지널곡", "hololive original song", "니지산지 music"),
+            "POP", List.of("new pop song official mv", "latest pop hits mv", "billboard hot 100 new")
     );
 
     /**

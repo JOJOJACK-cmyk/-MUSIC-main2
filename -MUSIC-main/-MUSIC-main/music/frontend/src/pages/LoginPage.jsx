@@ -118,6 +118,11 @@ export default function LoginPage() {
             <i className="fa-solid fa-wave-square"></i>
             <span>MUSIC</span>
           </Link>
+          <p className="auth-subtitle">
+            {activeTab === 'login'
+              ? '다시 오신 걸 환영해요'
+              : '음악 스트리밍을 시작해보세요'}
+          </p>
         </div>
 
         <div className="auth-tabs">
@@ -164,16 +169,16 @@ export default function LoginPage() {
             </button>
 
             {/* 아이디 / 비밀번호 찾기 링크 */}
-            <div className="find-links" style={{ marginTop: '15px', textAlign: 'center', fontSize: '13px' }}>
+            <div className="find-links" style={{ marginTop: '15px', textAlign: 'center', fontSize: '13px', color: 'var(--text-sub)' }}>
               <span
-                style={{ cursor: 'pointer', color: '#aaa', marginRight: '15px' }}
+                style={{ cursor: 'pointer', color: 'var(--text-sub)', marginRight: '15px' }}
                 onClick={() => openModal('email')}
               >
                 아이디 찾기
               </span>
-              |
+              <span style={{ opacity: 0.4 }}>|</span>
               <span
-                style={{ cursor: 'pointer', color: '#aaa', marginLeft: '15px' }}
+                style={{ cursor: 'pointer', color: 'var(--text-sub)', marginLeft: '15px' }}
                 onClick={() => openModal('password')}
               >
                 비밀번호 찾기
@@ -181,28 +186,31 @@ export default function LoginPage() {
             </div>
 
             <div className="social-login-container">
-              <p className="social-title">또는 소셜 계정으로 로그인</p>
+              <p className="social-title">간편 로그인</p>
               <div className="social-buttons">
                 <button
                   type="button"
-                  className="btn-social btn-kakao"
+                  className="social-icon-btn kakao"
                   onClick={() => authApi.oauthLogin('kakao')}
+                  aria-label="카카오로 로그인"
                 >
-                  <i className="fa-solid fa-comment"></i> 카카오로 로그인
+                  <i className="fa-solid fa-comment"></i>
                 </button>
                 <button
                   type="button"
-                  className="btn-social btn-google"
+                  className="social-icon-btn google"
                   onClick={() => authApi.oauthLogin('google')}
+                  aria-label="구글로 로그인"
                 >
-                  <i className="fa-brands fa-google"></i> 구글로 로그인
+                  <i className="fa-brands fa-google"></i>
                 </button>
                 <button
                   type="button"
-                  className="btn-social btn-naver"
+                  className="social-icon-btn naver"
                   onClick={() => authApi.oauthLogin('naver')}
+                  aria-label="네이버로 로그인"
                 >
-                  <i className="fa-solid fa-N"></i> 네이버로 로그인
+                  <span>N</span>
                 </button>
               </div>
             </div>
@@ -248,74 +256,56 @@ export default function LoginPage() {
 
       {/* 💡 2단계 인증 모달 팝업 */}
       {isModalOpen && (
-        <div className="modal-backdrop" style={{
-          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-          backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
-        }}>
-          <div className="modal-content" style={{
-            background: '#1a1a1a', padding: '30px', borderRadius: '10px', width: '380px', color: '#fff', textAlign: 'center', border: '1px solid #333'
-          }}>
+        <div
+          className="auth-modal-backdrop"
+          onMouseDown={(e) => e.target === e.currentTarget && setIsModalOpen(false)}
+        >
+          <div className="auth-modal">
             <h3>{modalType === 'email' ? '아이디 찾기' : '비밀번호 찾기'}</h3>
 
             {/* 1단계: 정보 입력 및 인증 코드 전송 */}
             {step === 1 && (
-              <form onSubmit={handleSendCode} style={{ marginTop: '20px' }}>
-                <p style={{ fontSize: '13px', color: '#aaa', marginBottom: '10px' }}>
+              <form onSubmit={handleSendCode} style={{ marginTop: 16 }}>
+                <p className="auth-modal-hint">
                   {modalType === 'email' ? '가입하신 닉네임을 입력해주세요.' : '가입하신 이메일(아이디)을 입력해주세요.'}
                 </p>
                 <input
+                  className="auth-modal-input"
                   type={modalType === 'email' ? 'text' : 'email'}
                   placeholder={modalType === 'email' ? '닉네임 입력' : '이메일 입력'}
                   value={inputVal}
                   onChange={(e) => setInputVal(e.target.value)}
-                  style={{ width: '100%', padding: '10px', marginBottom: '15px', borderRadius: '5px', border: '1px solid #444', background: '#2a2a2a', color: '#fff', boxSizing: 'border-box' }}
                   required
                 />
-                <button type="submit" style={{ width: '100%', padding: '10px', backgroundColor: '#e91e63', color: '#fff', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>
-                  인증번호 전송
-                </button>
+                <button type="submit" className="auth-modal-btn">인증번호 전송</button>
               </form>
             )}
 
             {/* 2단계: 인증 코드 입력 및 확인 */}
             {step === 2 && !finalResult && (
-              <form onSubmit={handleVerifyAndGet} style={{ marginTop: '20px' }}>
-                <p style={{ fontSize: '13px', color: '#4cd137', marginBottom: '10px' }}>
+              <form onSubmit={handleVerifyAndGet} style={{ marginTop: 16 }}>
+                <p className="auth-modal-ok">
                   인증 코드가 이메일로 전송되었습니다. 메일함을 확인해주세요!
                 </p>
                 <input
+                  className="auth-modal-input"
                   type="text"
                   placeholder="6자리 인증 코드 입력"
                   value={codeVal}
                   onChange={(e) => setCodeVal(e.target.value)}
-                  style={{ width: '100%', padding: '10px', marginBottom: '15px', borderRadius: '5px', border: '1px solid #444', background: '#2a2a2a', color: '#fff', boxSizing: 'border-box' }}
                   required
                 />
-                <button type="submit" style={{ width: '100%', padding: '10px', backgroundColor: '#e91e63', color: '#fff', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>
-                  인증 확인
-                </button>
+                <button type="submit" className="auth-modal-btn">인증 확인</button>
               </form>
             )}
 
-            {/* 결과 메시지 또는 최종 결과 출력 */}
             {resultMessage && !finalResult && (
-              <p style={{ marginTop: '15px', color: '#ff6b6b', fontSize: '13px', wordBreak: 'break-all' }}>
-                {resultMessage}
-              </p>
+              <p className="auth-modal-err">{resultMessage}</p>
             )}
 
-            {finalResult && (
-              <div style={{ marginTop: '20px' }}>
-                <p style={{ color: '#4cd137', fontSize: '15px', fontWeight: 'bold', wordBreak: 'break-all' }}>
-                  {finalResult}
-                </p>
-              </div>
-            )}
+            {finalResult && <p className="auth-modal-result">{finalResult}</p>}
 
-            <button
-              onClick={() => setIsModalOpen(false)}
-              style={{ marginTop: '20px', background: 'none', border: 'none', color: '#aaa', cursor: 'pointer' }}
-            >
+            <button className="auth-modal-close" onClick={() => setIsModalOpen(false)}>
               닫기
             </button>
           </div>

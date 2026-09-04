@@ -83,7 +83,16 @@ public class SecurityConfig {
                         // ==========================================
                         // 관리자(ADMIN) 권한 전용 API 경로 설정
                         // ==========================================
-                        .requestMatchers("/api/musics/register", "/api/musics/admin/**").hasRole("ADMIN")
+                        // 회원 권한 부여/관리 - 최고 관리자(ROLE_ADMIN)만
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+
+                        // 음원 등록/수정/삭제 - 관리자 + 부 관리자만
+                        //  (단, POST /api/musics/{id}/like 는 일반 회원 동작이므로 제외)
+                        .requestMatchers("/api/musics/register", "/api/musics/admin/**").hasAnyRole("ADMIN", "SUB_ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/musics", "/api/musics/youtube", "/api/musics/youtube/**")
+                        .hasAnyRole("ADMIN", "SUB_ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/musics/**").hasAnyRole("ADMIN", "SUB_ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/musics/**").hasAnyRole("ADMIN", "SUB_ADMIN")
 
                         // 4. 기존 음악 조회 등 퍼블릭 경로 (차트/알림 조회 포함)
                         .requestMatchers(HttpMethod.GET, "/api/musics/**", "/api/broadcast/**", "/api/music-snapshot/**",
@@ -95,10 +104,6 @@ public class SecurityConfig {
 
                         // SRS 웹훅 콜백 - 로그인 사용자가 아니라 SRS 서버가 직접 호출하는 경로
                         .requestMatchers("/api/broadcast/srs/**").permitAll()
-
-                        .requestMatchers(
-                                "/api/musics/youtube"
-                        ).permitAll()
 
                         // 5. 그 외 모든 요청은 로그인(인증)된 사용자만 접근 가능
                         .anyRequest().authenticated()

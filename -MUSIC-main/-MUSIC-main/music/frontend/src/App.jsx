@@ -6,6 +6,7 @@ import PlayerBar from './components/PlayerBar';
 import YouTubePlayer from './components/YouTubePlayer';
 import HlsAudioPlayer from './components/HlsAudioPlayer';
 import MusicModal from './components/MusicModal';
+import PreviewLockModal from './components/PreviewLockModal';
 
 import MainPage from './pages/MainPage';
 import LoginPage from './pages/LoginPage';
@@ -13,6 +14,8 @@ import ChartPage from './pages/ChartPage';
 import LivePage from './pages/LivePage';
 import LibraryPage from './pages/LibraryPage';
 import PaymentPage from './pages/PaymentPage';
+import PaymentSuccessPage from './pages/PaymentSuccessPage';
+import PaymentFailPage from './pages/PaymentFailPage';
 
 import { PlayerProvider } from './context/PlayerContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -64,6 +67,25 @@ function AuthHandler() {
 }
 
 export default function App() {
+  return (
+    <AuthProvider>
+      <PlayerProvider>
+        <BrowserRouter>
+          <NotificationProvider>
+            <AuthHandler /> {/* 💡 로그인 직후 파라미터 캐치 핸들러 실행 */}
+            <AppShell />
+          </NotificationProvider>
+        </BrowserRouter>
+      </PlayerProvider>
+    </AuthProvider>
+  );
+}
+
+// 사이드바·플레이어 없이 전체 화면으로 띄우는 경로
+const CHROMELESS_ROUTES = ['/login'];
+
+function AppShell() {
+  const location = useLocation();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // 💡 로컬스토리지에서 관리자(ROLE_ADMIN) 여부 확인
@@ -72,9 +94,8 @@ export default function App() {
     const rawUser = localStorage.getItem('user');
     if (rawUser) {
       const userObj = JSON.parse(rawUser);
-      // ROLE_ADMIN 또는 ADMIN 모두 허용
       const role = userObj.role ? userObj.role.toUpperCase() : '';
-      isAdmin = role === 'ROLE_ADMIN' || role === 'ADMIN';
+      isAdmin = ['ROLE_ADMIN', 'ADMIN', 'ROLE_SUB_ADMIN', 'SUB_ADMIN'].includes(role);
     }
   } catch (e) {
     console.error(e);
@@ -98,12 +119,16 @@ export default function App() {
     }
   };
 
+  // 로그인/회원가입은 앱 크롬(사이드바·플레이어바) 없이 전체 화면
+  if (CHROMELESS_ROUTES.includes(location.pathname)) {
+    return (
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+      </Routes>
+    );
+  }
+
   return (
-    <AuthProvider>
-      <PlayerProvider>
-        <BrowserRouter>
-          <NotificationProvider>
-          <AuthHandler /> {/* 💡 로그인 직후 파라미터 캐치 핸들러 실행 */}
           <div className="app-container">
             {/* 💡 관리자일 때만 모달 오픈 함수 전달 */}
             <Sidebar
@@ -145,6 +170,22 @@ export default function App() {
                     </ProtectedRoute>
                   }
                 />
+                <Route
+                  path="/payment/success"
+                  element={
+                    <ProtectedRoute>
+                      <PaymentSuccessPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/payment/fail"
+                  element={
+                    <ProtectedRoute>
+                      <PaymentFailPage />
+                    </ProtectedRoute>
+                  }
+                />
                 <Route path="/live/:broadcastId" element={<LiveDetailPage />} />
               </Routes>
             </main>
@@ -161,10 +202,8 @@ export default function App() {
             <YouTubePlayer />
             <HlsAudioPlayer />
             <PlayerBar />
+            <PreviewLockModal />
+
           </div>
-          </NotificationProvider>
-        </BrowserRouter>
-      </PlayerProvider>
-    </AuthProvider>
   );
 }

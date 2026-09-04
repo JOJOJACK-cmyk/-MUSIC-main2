@@ -1,13 +1,12 @@
 package com.example.music.service;
 
-import com.example.music.dto.PaymentRequestDto;
+import com.example.music.dto.PaymentConfirmDto;
 import com.example.music.dto.PaymentResponseDto;
 import com.example.music.entity.Pass;
 import com.example.music.entity.Payment;
 import com.example.music.entity.User;
 import com.example.music.repository.PassRepository;
 import com.example.music.repository.PaymentRepository;
-import com.example.music.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,66 +21,70 @@ public class PaymentService {
 
     private final PaymentRepository paymentRepository;
     private final PassRepository passRepository;
-    private final UserRepository userRepository;
+    private final TossPaymentClient tossPaymentClient;
 
+    /**
+     * 토스 결제창 성공 후 승인 처리.
+     *  1) planId 로 서버측 금액/기간 확정
+     *  2) 프론트가 보낸 금액이 요금제 금액과 일치하는지 검증
+     *  3) 토스 서버에 실제 결제 승인 요청 (여기서 실패하면 이용권 미발급)
+     *  4) 결제 내역 저장 + 이용권(tb_pass) 발급
+     */
     @Transactional
-    public PaymentResponseDto processPayment(PaymentRequestDto requestDto) {
+    public PaymentResponseDto confirmPayment(User user, PaymentConfirmDto dto) {
 
-        // 1. 실제 사용자 조회 (DTO에 있는 userId 사용)
-        User user = userRepository.findById(requestDto.getUserId())
-                .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "존재하지 않는 사용자입니다. ID: " + requestDto.getUserId()
-                        )
-                );
+        PricingPlan plan = PricingPlan.fromPlanId(dto.getPlanId())
+                .orElseThrow(() -> new IllegalArgumentException("알 수 없는 요금제입니다: " + dto.getPlanId()));
 
-        // 2. 결제 정보 검증 및 승인 로직 수행 로그
-        log.info(
-                "[Payment] 결제 요청 승인 중 - User ID: {}, Amount: {}, PassType: {}",
-                user.getId(),
-                requestDto.getAmount(),
-                requestDto.getPassType()
-        );
+        if (dto.getAmount() != plan.getAmount()) {
+            throw new IllegalArgumentException("결제 금액이 요금제와 일치하지 않습니다.");
+        }
 
-        // 3. 결제 내역 저장
+        // 동일 주문번호 중복 승인 방지 (새로고침 등)
+        if (paymentRepository.findByOrderId(dto.getOrderId()).isPresent()) {
+            log.info("[Payment] 이미 처리된 주문입니다. orderId={}", dto.getOrderId());
+            return new PaymentResponseDto(dto.getOrderId(), "SUCCESS", "이미 처리된 결제입니다.");
+        }
+
+        // 토스 서버 승인 (실제 결제 검증). 실패 시 예외 → 트랜잭션 롤백, 이용권 미발급.
+        TossPaymentClient.TossConfirmResult result =
+                tossPaymentClient.confirm(dto.getPaymentKey(), dto.getOrderId(), plan.getAmount());
+
+        log.info("[Payment] 토스 승인 완료 - user={}, orderId={}, amount={}, method={}",
+                user.getId(), dto.getOrderId(), result.amount(), result.method());
+
+        savePaymentAndPass(user, dto.getOrderId(), dto.getPaymentKey(),
+                (int) result.amount(), plan, result.status());
+
+        return new PaymentResponseDto(dto.getOrderId(), "SUCCESS", "결제가 정상적으로 완료되었습니다.");
+    }
+
+    private void savePaymentAndPass(User user, String orderId, String paymentKey,
+                                    int amount, PricingPlan plan, String status) {
         Payment payment = Payment.builder()
                 .user(user)
-                .orderId(requestDto.getOrderId())
-                .paymentKey(requestDto.getPaymentKey())
-                .amount(requestDto.getAmount())
-                .passType(requestDto.getPassType())
-                .status("DONE")
+                .orderId(orderId)
+                .paymentKey(paymentKey)
+                .amount(amount)
+                .passType(plan.getPassName())
+                .status(status)
                 .paidAt(LocalDateTime.now())
                 .build();
-
         paymentRepository.save(payment);
 
-        // 4. 이용권 기간 설정 (1개월 기준)
         LocalDateTime startDate = LocalDateTime.now();
-        LocalDateTime expireDate = startDate.plusMonths(1);
+        LocalDateTime expireDate = startDate.plusMonths(plan.getMonths());
 
-        // 5. 이용권 발급 및 저장
         Pass pass = Pass.builder()
                 .user(user)
-                .passName(requestDto.getPassType())
+                .passName(plan.getPassName())
                 .startDate(startDate)
                 .expireDate(expireDate)
                 .isActive(true)
                 .build();
-
         passRepository.save(pass);
 
-        log.info(
-                "[Payment] 결제 완료 및 이용권 발급 성공 - User ID: {}, ExpireDate: {}",
-                user.getId(),
-                expireDate
-        );
-
-        // 6. 응답 DTO 반환
-        return new PaymentResponseDto(
-                payment.getOrderId(),
-                "SUCCESS",
-                "결제가 정상적으로 완료되었습니다."
-        );
+        log.info("[Payment] 이용권 발급 완료 - user={}, plan={}, expireDate={}",
+                user.getId(), plan.name(), expireDate);
     }
 }

@@ -3,6 +3,7 @@ import Header from '../components/Header';
 import HeroBanner from '../components/HeroBanner';
 import MusicCard from '../components/MusicCard';
 import MusicModal from '../components/MusicModal';
+import MainLiveView from '../components/MainLiveView';
 import { musicApi } from '../api/musicApi';
 import { usePlayer } from '../context/PlayerContext';
 import axios from 'axios';
@@ -16,7 +17,13 @@ export default function MainPage() {
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [view, setView] = useState('music'); // 'music' | 'live'
+  const [liveBroadcasts, setLiveBroadcasts] = useState([]);
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
   const { setPlaylist } = usePlayer();
+
+  const isSearching = (searchTerm || '').trim().length > 0;
 
   const scrollRef1 = useRef(null);
   const scrollRef2 = useRef(null);
@@ -41,7 +48,12 @@ export default function MainPage() {
       const rawUser = localStorage.getItem('user');
       if (rawUser) {
         const userObj = JSON.parse(rawUser);
-        setIsAdmin(userObj && (userObj.role === 'ROLE_ADMIN' || userObj.role === 'ADMIN'));
+        setIsAdmin(
+          !!userObj &&
+            ['ROLE_ADMIN', 'ADMIN', 'ROLE_SUB_ADMIN', 'SUB_ADMIN'].includes(
+              String(userObj.role || '').toUpperCase()
+            )
+        );
       }
     } catch (e) {
       setIsAdmin(false);
@@ -141,6 +153,61 @@ export default function MainPage() {
     fetchMusics();
   }, []);
 
+  // 🔎 검색: DB 전체(유튜브에 등록된 모든 곡)에서 제목·아티스트 검색
+  useEffect(() => {
+    const kw = (searchTerm || '').trim();
+    if (!kw) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const ctrl = new AbortController();
+    const t = setTimeout(async () => {
+      try {
+        const res = await axios.get('/api/musics/search', {
+          params: { keyword: kw },
+          signal: ctrl.signal,
+        });
+        const items = Array.isArray(res.data) ? res.data : [];
+
+        let likedIds = new Set();
+        try {
+          const likedRes = await axios.get('/api/musics/liked', { withCredentials: true });
+          likedIds = new Set((Array.isArray(likedRes.data) ? likedRes.data : []).map((m) => m.id));
+        } catch (e) {}
+
+        const mapped = items.map((m) => ({ ...m, isLiked: likedIds.has(m.id) }));
+        setSearchResults(mapped);
+        setPlaylist(mapped);
+      } catch (e) {
+        if (e.name !== 'CanceledError' && e.code !== 'ERR_CANCELED') setSearchResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 500);
+    return () => { clearTimeout(t); ctrl.abort(); };
+  }, [searchTerm, setPlaylist]);
+
+  // 현재 방송 중인 라이브 목록 (메인 라이브 뷰 + 토글 배지)
+  //  - 마운트 시 1회 (배지용)
+  //  - 라이브 뷰를 보고 있을 때만 20초 주기로 갱신 (불필요한 SRS 호출 방지)
+  useEffect(() => {
+    let alive = true;
+    const fetchLive = async () => {
+      try {
+        const res = await axios.get('/api/broadcast/live');
+        if (alive) setLiveBroadcasts(Array.isArray(res.data) ? res.data : []);
+      } catch (_) {
+        if (alive) setLiveBroadcasts([]);
+      }
+    };
+    fetchLive();
+    if (view !== 'live') return () => { alive = false; };
+    const t = setInterval(fetchLive, 20000);
+    return () => { alive = false; clearInterval(t); };
+  }, [view]);
+
   const handleToggleLike = async (musicId, nextLiked) => {
     try {
       await axios.post(`/api/musics/${musicId}/like`, {}, { withCredentials: true });
@@ -238,8 +305,64 @@ export default function MainPage() {
   return (
     <div className="home-page-container" style={{ width: '100%', paddingBottom: '40px' }}>
       <Header searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
-      <HeroBanner />
 
+      {isSearching ? (
+        /* 🔎 검색 결과: DB에 등록된 모든 곡에서 검색 */
+        <section className="content-section" style={{ marginTop: 8 }}>
+          <div className="section-header">
+            <h2>🔎 “{searchTerm.trim()}” 검색 결과</h2>
+            <span style={{ color: 'var(--text-sub)', fontSize: 14 }}>
+              {searching ? '검색 중…' : `${searchResults.length}곡`}
+            </span>
+          </div>
+          {!searching && searchResults.length === 0 ? (
+            <div className="lib-state">
+              <i className="fa-solid fa-magnifying-glass" />
+              “{searchTerm.trim()}”에 해당하는 곡이 없습니다.
+              <div className="lib-state-sub">아티스트명이나 곡 제목을 다시 확인해 보세요.</div>
+            </div>
+          ) : (
+            <div className="library-grid">
+              {searchResults.map((music) => (
+                <MusicCard
+                  key={music.id}
+                  music={music}
+                  isAdmin={isAdmin}
+                  onToggleLike={handleToggleLike}
+                  onEdit={(item) => { setEditingMusic(item); setIsModalOpen(true); }}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      ) : (
+       <>
+      <HeroBanner trending={trending} />
+
+      {/* 음악 / 라이브 화면 전환 */}
+      <div className="view-switch">
+        <button
+          className={view === 'music' ? 'active' : ''}
+          onClick={() => setView('music')}
+        >
+          <i className="fa-solid fa-music" /> 음악
+        </button>
+        <button
+          className={view === 'live' ? 'active' : ''}
+          onClick={() => setView('live')}
+        >
+          <i className="fa-solid fa-tower-broadcast" /> 라이브
+          {liveBroadcasts.length > 0 && (
+            <span className="view-switch-badge">{liveBroadcasts.length}</span>
+          )}
+        </button>
+      </div>
+
+      {view === 'live' && <MainLiveView broadcasts={liveBroadcasts} />}
+
+      {view === 'music' && (
+       <>
       {/* 실시간 인기 급상승 곡 */}
       <section className="content-section">
         <div className="section-header">
@@ -324,6 +447,10 @@ export default function MainPage() {
           <button className="scroll-btn right" onClick={() => scroll(scrollRef4, 'right')}><i className="fa-solid fa-chevron-right"></i></button>
         </div>
       </section>
+       </>
+      )}
+       </>
+      )}
 
       <MusicModal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingMusic(null); }} onSubmit={handleCreateOrUpdate} initialData={editingMusic} />
     </div>

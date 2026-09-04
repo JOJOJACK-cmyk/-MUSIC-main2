@@ -58,6 +58,7 @@ public class BroadcastController {
                     body.put("title", b.getTitle());
                     body.put("description", b.getDescription());
                     body.put("bannerUrl", b.getBannerUrl());
+                    body.put("category", b.getCategory());
                     body.put("streamKey", b.getStreamKey());
                     body.put("status", b.getStatus());
                     body.put("startedAt", b.getStartedAt());
@@ -73,7 +74,8 @@ public class BroadcastController {
             Authentication authentication
     ) {
         User user = authenticatedUserResolver.resolveRequiredUser(authentication);
-        broadcastService.updateChannel(user, req.get("title"), req.get("description"), req.get("bannerUrl"));
+        broadcastService.updateChannel(user, req.get("title"), req.get("description"),
+                req.get("bannerUrl"), req.get("category"));
         return ResponseEntity.ok().build();
     }
 
