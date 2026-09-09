@@ -1,0 +1,42 @@
+{$APP_HOST} {
+	encode gzip
+
+	handle /api/* {
+		reverse_proxy backend:8080
+	}
+	handle /oauth2/* {
+		reverse_proxy backend:8080
+	}
+	handle /login/* {
+		reverse_proxy backend:8080
+	}
+	handle /ws-chat* {
+		reverse_proxy backend:8080
+	}
+	handle /ws-stomp* {
+		reverse_proxy backend:8080
+	}
+	handle /ws/* {
+		reverse_proxy backend:8080
+	}
+	handle /swagger-ui/* {
+		reverse_proxy backend:8080
+	}
+	handle /swagger-ui.html {
+		reverse_proxy backend:8080
+	}
+	handle /v3/api-docs/* {
+		reverse_proxy backend:8080
+	}
+
+	handle /live/* {
+		header Cache-Control "no-cache"
+		reverse_proxy srs:8080
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}
