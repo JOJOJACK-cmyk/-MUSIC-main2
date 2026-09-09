@@ -68,6 +68,7 @@ public class MusicSyncScheduler {
         syncBasePlaylist();
         syncTrending();
         pruneMetadata();
+        dedupe();
     }
 
     // 💡 2. 격일 새벽 3시: 전체 갱신 + 카테고리 대량 검색 (search.list 다수 → 할당량 큰 작업)
@@ -85,6 +86,16 @@ public class MusicSyncScheduler {
             log.error("❌ [스케줄러] 카테고리 검색 동기화 중 오류: ", e);
         }
         ensureDepth();
+        dedupe();
+    }
+
+    private void dedupe() {
+        try {
+            int n = youTubeApiService.dedupeCatalog();
+            if (n > 0) log.info("🧹 [스케줄러] 유사 중복 곡 {}건 정리", n);
+        } catch (Exception e) {
+            log.error("❌ [스케줄러] 중복 정리 중 오류: ", e);
+        }
     }
 
     private void syncBasePlaylist() {

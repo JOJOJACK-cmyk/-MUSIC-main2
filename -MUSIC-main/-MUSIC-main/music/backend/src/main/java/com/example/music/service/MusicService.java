@@ -8,10 +8,10 @@ import com.example.music.entity.User;
 import com.example.music.repository.LikedMusicRepository;
 import com.example.music.repository.MusicRepository;
 import com.example.music.repository.UserRepository;
+import com.example.music.security.AuthenticatedUserResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +34,7 @@ public class MusicService {
     private final YouTubeApiService youTubeApiService;
     private final UserRepository userRepository;
     private final LikedMusicRepository likedMusicRepository;
+    private final AuthenticatedUserResolver authenticatedUserResolver;
 
     // 검색어별 마지막 유튜브 보강 시각 (재검색·할당량 낭비 방지, 재시작 시 초기화)
     private final Map<String, Instant> youtubeSearchAt = new ConcurrentHashMap<>();
@@ -166,7 +167,10 @@ public class MusicService {
     private List<Music> dedupeByTitle(List<Music> list) {
         java.util.LinkedHashMap<String, Music> best = new java.util.LinkedHashMap<>();
         for (Music m : list) {
-            String key = normalizeForDedupe(m.getTitle()) + "|" + normalizeForDedupe(m.getArtist());
+            String nt = YouTubeApiService.normalizeTitleForDedupe(m.getTitle());
+            String na = YouTubeApiService.normalizeArtistForDedupe(m.getArtist());
+            // 정규화 후 비면 병합하지 않고 그대로 노출 (videoId 로 고유 키 유지)
+            String key = (nt.isEmpty() || na.isEmpty()) ? ("__" + m.getYoutubeVideoId()) : (nt + "|" + na);
             Music cur = best.get(key);
             if (cur == null) {
                 best.put(key, m);
@@ -177,20 +181,6 @@ public class MusicService {
             }
         }
         return new java.util.ArrayList<>(best.values());
-    }
-
-    private String normalizeForDedupe(String s) {
-        if (s == null) return "";
-        String x = s.toLowerCase();
-        // 아티스트: "- topic" 접미사 제거
-        x = x.replaceAll("\\s*-\\s*topic\\s*$", "");
-        // 제목: 괄호/대괄호 안, feat, official/mv/audio/video 등 표기 제거
-        x = x.replaceAll("\\(.*?\\)|\\[.*?\\]|【.*?】", "");
-        x = x.replaceAll("feat\\.?.*|ft\\.?.*", "");
-        x = x.replaceAll("official|m/v|mv|music video|lyric video|visualizer|audio|performance video|color coded", "");
-        // 영문/숫자/한글/가나만 남김
-        x = x.replaceAll("[^a-z0-9\\uac00-\\ud7a3\\u3040-\\u30ff]", "");
-        return x.trim();
     }
 
     private boolean shouldEnrichFromYoutube(String keyword, int localCount) {
@@ -273,55 +263,22 @@ public class MusicService {
         return new MusicDto.Response(music);
     }
 
+    /**
+     * 로그인 사용자 해석. 일반 로그인(이메일 principal/토큰 필터)·OAuth2 세션(소셜 provider 숫자 id
+     * name + 중첩 email 속성) 을 모두 처리하는 {@link AuthenticatedUserResolver} 로 위임한다.
+     * 해석 실패 시 실제 원인을 로그로 남긴다. (org.springframework.security.access.AccessDeniedException 전파)
+     */
     private User getUserFromAuthentication(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated()
-                || "anonymousUser".equals(authentication.getPrincipal())) {
-            throw new IllegalArgumentException("로그인이 필요합니다.");
+        try {
+            return authenticatedUserResolver.resolveRequiredUser(authentication);
+        } catch (org.springframework.security.access.AccessDeniedException e) {
+            log.warn("[좋아요] 인증 사용자 해석 실패 - type={}, name={}, principal={}, reason={}",
+                    authentication == null ? "null" : authentication.getClass().getSimpleName(),
+                    authentication == null ? "null" : authentication.getName(),
+                    authentication == null ? "null" : String.valueOf(authentication.getPrincipal()),
+                    e.getMessage());
+            throw e;
         }
-
-        String identifier = authentication.getName();
-
-        Optional<User> userOpt = userRepository.findByEmail(identifier);
-        if (userOpt.isPresent()) return userOpt.get();
-
-        userOpt = userRepository.findByNickname(identifier);
-        if (userOpt.isPresent()) return userOpt.get();
-
-        Object principal = authentication.getPrincipal();
-        if (principal instanceof OAuth2User) {
-            OAuth2User oAuth2User = (OAuth2User) principal;
-            String extractedEmail = extractEmailFromOAuth2Attributes(oAuth2User.getAttributes());
-
-            if (extractedEmail != null && !extractedEmail.isEmpty()) {
-                final String targetEmail = extractedEmail;
-                return userRepository.findByEmail(targetEmail)
-                        .orElseThrow(() -> new IllegalArgumentException("소셜 이메일에 해당하는 유저를 찾을 수 없습니다: " + targetEmail));
-            }
-        }
-
-        throw new IllegalArgumentException("유저를 찾을 수 없습니다. (identifier: " + identifier + ")");
-    }
-
-    private String extractEmailFromOAuth2Attributes(Map<String, Object> attributes) {
-        if (attributes == null) return null;
-
-        if (attributes.containsKey("kakao_account")) {
-            Map<?, ?> kakaoAccount = (Map<?, ?>) attributes.get("kakao_account");
-            if (kakaoAccount != null && kakaoAccount.containsKey("email")) {
-                return (String) kakaoAccount.get("email");
-            }
-        }
-        if (attributes.containsKey("response")) {
-            Map<?, ?> naverResp = (Map<?, ?>) attributes.get("response");
-            if (naverResp != null && naverResp.containsKey("email")) {
-                return (String) naverResp.get("email");
-            }
-        }
-        if (attributes.containsKey("email")) {
-            return (String) attributes.get("email");
-        }
-
-        return null;
     }
 
     @Transactional
@@ -336,14 +293,19 @@ public class MusicService {
         if (existingLike.isPresent()) {
             likedMusicRepository.delete(existingLike.get());
             return false;
-        } else {
-            LikedMusic likedMusic = LikedMusic.builder()
-                    .user(user)
-                    .music(music)
-                    .build();
-            likedMusicRepository.save(likedMusic);
+        }
+
+        // 더블클릭/동시요청으로 유니크 제약(uk_user_music_like) 충돌이 나지 않도록 저장 직전 재확인
+        if (likedMusicRepository.existsByUserAndMusic(user, music)) {
             return true;
         }
+
+        LikedMusic likedMusic = LikedMusic.builder()
+                .user(user)
+                .music(music)
+                .build();
+        likedMusicRepository.save(likedMusic);
+        return true;
     }
 
     public List<MusicDto.Response> getLikedMusics(Authentication authentication) {

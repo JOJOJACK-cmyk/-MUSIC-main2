@@ -33,6 +33,7 @@ public class BroadcastController {
     private final BroadcastRepository broadcastRepository;
     private final com.example.music.service.FollowService followService;
     private final AuthenticatedUserResolver authenticatedUserResolver;
+    private final org.springframework.messaging.simp.SimpMessageSendingOperations messagingTemplate;
 
     // OBS 등 인코더가 송출할 RTMP 서버 주소 (SRS 기본값)
     @org.springframework.beans.factory.annotation.Value("${srs.rtmp-url:rtmp://localhost:1935/live}")
@@ -59,6 +60,7 @@ public class BroadcastController {
                     body.put("description", b.getDescription());
                     body.put("bannerUrl", b.getBannerUrl());
                     body.put("category", b.getCategory());
+                    body.put("songRequestEnabled", b.isSongRequestEnabled());
                     body.put("streamKey", b.getStreamKey());
                     body.put("status", b.getStatus());
                     body.put("startedAt", b.getStartedAt());
@@ -74,8 +76,11 @@ public class BroadcastController {
             Authentication authentication
     ) {
         User user = authenticatedUserResolver.resolveRequiredUser(authentication);
+        Boolean songReq = req.containsKey("songRequestEnabled")
+                ? Boolean.valueOf(String.valueOf(req.get("songRequestEnabled")))
+                : null;
         broadcastService.updateChannel(user, req.get("title"), req.get("description"),
-                req.get("bannerUrl"), req.get("category"));
+                req.get("bannerUrl"), req.get("category"), songReq);
         return ResponseEntity.ok().build();
     }
 
@@ -130,18 +135,58 @@ public class BroadcastController {
     }
 
     /**
-     * 🌟 [추가됨] 초기 화면 로딩용 실시간 투표 순위 조회 REST API
-     * GET /api/broadcast/ranking
+     * 현재 투표 상태(옵션 순서 그대로, 번호 고정) 조회 — 페이지 로딩 시.
      */
     @GetMapping("/{broadcastId}/ranking")
-    public ResponseEntity<List<SongVoteDto>> getRanking(
-            @PathVariable Long broadcastId
-    ) {
+    public ResponseEntity<List<SongVoteDto>> getRanking(@PathVariable Long broadcastId) {
+        return ResponseEntity.ok(songVoteService.getPoll(broadcastId));
+    }
 
-        List<SongVoteDto> rankings =
-                songVoteService.getTopSongRankings(broadcastId, 10);
+    private boolean isBroadcasterOf(Long broadcastId, String email) {
+        if (email == null || email.isBlank()) return false;
+        return broadcastRepository.findWithUserById(broadcastId)
+                .map(b -> email.equalsIgnoreCase(b.getUser().getEmail()))
+                .orElse(false);
+    }
 
-        return ResponseEntity.ok(rankings);
+    /** [스트리머] 투표 곡 목록 설정 (REST). body: {"options": ["곡A","곡B", ...]} */
+    @PutMapping("/{broadcastId}/poll")
+    public ResponseEntity<?> setPoll(
+            @PathVariable Long broadcastId,
+            @RequestBody Map<String, Object> body,
+            Authentication authentication) {
+        User user = authenticatedUserResolver.resolveRequiredUser(authentication);
+        if (!isBroadcasterOf(broadcastId, user.getEmail())) {
+            return ResponseEntity.status(403).body(Map.of("message", "방송자만 설정할 수 있습니다."));
+        }
+        Object opts = body.get("options");
+        List<String> options = new java.util.ArrayList<>();
+        if (opts instanceof List<?> l) for (Object o : l) if (o != null) options.add(String.valueOf(o));
+        try {
+            songVoteService.setOptions(broadcastId, options);
+            List<SongVoteDto> poll = songVoteService.getPoll(broadcastId);
+            messagingTemplate.convertAndSend("/topic/broadcast/" + broadcastId + "/ranking", poll);
+            return ResponseEntity.ok(poll);
+        } catch (Exception e) {
+            org.slf4j.LoggerFactory.getLogger(BroadcastController.class)
+                    .error("[poll] setOptions 실패 broadcastId={}", broadcastId, e);
+            return ResponseEntity.status(500).body(Map.of(
+                    "message", "투표 목록 저장 실패",
+                    "error", e.getClass().getSimpleName() + ": " + String.valueOf(e.getMessage())));
+        }
+    }
+
+    /** [스트리머] 표만 초기화 (곡 목록 유지). */
+    @PostMapping("/{broadcastId}/poll/reset")
+    public ResponseEntity<?> resetPoll(@PathVariable Long broadcastId, Authentication authentication) {
+        User user = authenticatedUserResolver.resolveRequiredUser(authentication);
+        if (!isBroadcasterOf(broadcastId, user.getEmail())) {
+            return ResponseEntity.status(403).body(Map.of("message", "방송자만 초기화할 수 있습니다."));
+        }
+        songVoteService.resetVotes(broadcastId);
+        List<SongVoteDto> poll = songVoteService.getPoll(broadcastId);
+        messagingTemplate.convertAndSend("/topic/broadcast/" + broadcastId + "/ranking", poll);
+        return ResponseEntity.ok(poll);
     }
 
     // ==========================================
@@ -211,63 +256,26 @@ public class BroadcastController {
 
         return "다음 곡: " + nextSong;
     }
+    /** 투표 버튼 payload: { voter: "닉네임", number: 1 } (1-base) */
+    public record VoteMsg(String voter, Integer number) {}
+
     /**
-     * 시청자가 특정 곡에 투표(좋아요)할 때 실행
-     * 클라이언트에서 /app/broadcast/vote 로 곡 제목을 보냄
-     * 투표 반영 후, 갱신된 최신 순위 리스트를 /topic/broadcast/ranking 을 구독 중인 모두에게 브로드캐스트
+     * 시청자 투표 (STOMP). payload {voter, number} — voter 는 채팅 sender 와 동일한 닉네임이라
+     * 채팅 "투표N" 과 버튼 투표가 한 사람 1표로 합산된다.
      */
     @MessageMapping("/broadcast/{broadcastId}/vote")
     @SendTo("/topic/broadcast/{broadcastId}/ranking")
     public List<SongVoteDto> voteSong(
             @DestinationVariable Long broadcastId,
-            String songTitle,
-            Authentication authentication
+            VoteMsg msg
     ) {
-
-        // 로그인 여부 확인
-        if (authentication == null ||
-                !authentication.isAuthenticated()) {
-
-            throw new AccessDeniedException(
-                    "로그인 후 투표할 수 있습니다."
-            );
+        if (msg != null && msg.voter() != null && msg.number() != null) {
+            int index = msg.number() - 1; // 1-base → 0-base
+            if (index >= 0) {
+                songVoteService.vote(broadcastId, msg.voter().trim(), index);
+            }
         }
-
-        // 현재 로그인 사용자 이메일
-        String loginEmail =
-                extractLoginEmail(authentication);
-
-        if (loginEmail == null ||
-                loginEmail.isBlank()) {
-
-            throw new AccessDeniedException(
-                    "로그인 사용자 정보를 확인할 수 없습니다."
-            );
-        }
-
-        // 투표 시도
-        boolean voted =
-                songVoteService.voteSong(
-                        broadcastId,
-                        loginEmail,
-                        songTitle
-                );
-
-        // 이미 투표한 곡이면 점수는 올라가지 않음
-        if (!voted) {
-            System.out.println(
-                    "중복 투표 차단: "
-                            + loginEmail
-                            + " / "
-                            + songTitle
-            );
-        }
-
-        // 최신 순위 반환
-        return songVoteService.getTopSongRankings(
-                broadcastId,
-                10
-        );
+        return songVoteService.getPoll(broadcastId);
     }
     /**
      * 현재 실제 송출 중인 방송 목록 조회

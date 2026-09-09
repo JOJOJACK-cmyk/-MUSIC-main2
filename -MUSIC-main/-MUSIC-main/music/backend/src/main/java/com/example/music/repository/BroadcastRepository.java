@@ -19,6 +19,8 @@ public interface BroadcastRepository
             Collection<String> streamKeys
     );
 
+    List<Broadcast> findByStatusIgnoreCase(String status);
+
     @EntityGraph(attributePaths = "user")
     Optional<Broadcast> findWithUserById(Long id);
 }

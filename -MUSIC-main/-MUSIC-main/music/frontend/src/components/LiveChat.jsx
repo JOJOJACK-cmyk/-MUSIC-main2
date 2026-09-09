@@ -1,376 +1,108 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Client } from '@stomp/stompjs';
-import SockJS from 'sockjs-client';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import useLiveChat from '../hooks/useLiveChat';
+
+const AV_COLORS = ['#E028B7', '#7C5CFF', '#2FB8FF', '#22C55E', '#F59E0B', '#FF5C7A', '#14B8A6'];
+const colorFor = (name = '') => {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return AV_COLORS[h % AV_COLORS.length];
+};
 
 const LiveChat = ({ broadcastId }) => {
-  const [messages, setMessages] = useState([]);
+  const { user } = useAuth();
+  const sender =
+    user?.nickname || user?.name || user?.email?.split('@')[0] || '게스트';
+
+  const { messages, connected, sendMessage } = useLiveChat(broadcastId, { sender });
+
   const [message, setMessage] = useState('');
-  const [connected, setConnected] = useState(false);
+  const endRef = useRef(null);
+  const listRef = useRef(null);
+  const stickRef = useRef(true);
 
-  const clientRef = useRef(null);
-  const messageEndRef = useRef(null);
-
-const { user } = useAuth();
-
-const sender =
-  user?.nickname ||
-  user?.name ||
-  user?.email?.split('@')[0] ||
-  '게스트';
-
-  // 새 메시지가 오면 맨 아래로 스크롤
+  // 스크롤이 거의 바닥일 때만 자동 스크롤
   useEffect(() => {
-    messageEndRef.current?.scrollIntoView({
-      behavior: 'smooth',
-    });
+    if (stickRef.current) endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // WebSocket 연결
-  useEffect(() => {
-    if (!broadcastId) {
-      return;
-    }
-
-    const client = new Client({
-      webSocketFactory: () =>
-        new SockJS('/ws-chat'),
-
-      reconnectDelay: 5000,
-
-      onConnect: () => {
-        console.log(
-          `방송 ${broadcastId} 채팅 WebSocket 연결 성공`
-        );
-
-        setConnected(true);
-
-        // 현재 방송 채팅방 구독
-        client.subscribe(
-          `/sub/chat/room/${broadcastId}`,
-          (frame) => {
-            try {
-              const chatMessage = JSON.parse(frame.body);
-
-              setMessages((prev) => [
-                ...prev,
-                chatMessage,
-              ]);
-            } catch (error) {
-              console.error(
-                '채팅 메시지 파싱 실패:',
-                error
-              );
-            }
-          }
-        );
-
-        // 입장 메시지 전송
-        client.publish({
-          destination: '/pub/chat/message',
-
-          body: JSON.stringify({
-            roomId: String(broadcastId),
-            sender: sender,
-            message: '',
-            type: 'ENTER',
-          }),
-        });
-      },
-
-      onDisconnect: () => {
-        setConnected(false);
-      },
-
-      onStompError: (frame) => {
-        console.error(
-          '채팅 STOMP 오류:',
-          frame.headers['message']
-        );
-      },
-
-      onWebSocketError: (error) => {
-        console.error(
-          '채팅 WebSocket 오류:',
-          error
-        );
-      },
-    });
-
-    clientRef.current = client;
-    client.activate();
-
-    return () => {
-      if (client.connected) {
-        // 퇴장 메시지
-        client.publish({
-          destination: '/pub/chat/message',
-
-          body: JSON.stringify({
-            roomId: String(broadcastId),
-            sender: sender,
-            message: '',
-            type: 'LEAVE',
-          }),
-        });
-      }
-
-      client.deactivate();
-      clientRef.current = null;
-      setConnected(false);
-    };
-  }, [broadcastId, sender]);
-
-  // 채팅 전송
-  const sendMessage = () => {
-    const text = message.trim();
-
-    if (!text) {
-      return;
-    }
-
-    const client = clientRef.current;
-
-    if (!client || !client.connected) {
-      console.warn(
-        '채팅 WebSocket이 연결되지 않았습니다.'
-      );
-      return;
-    }
-
-    client.publish({
-      destination: '/pub/chat/message',
-
-      body: JSON.stringify({
-        roomId: String(broadcastId),
-        sender: sender,
-        message: text,
-        type: 'TALK',
-      }),
-    });
-
-    setMessage('');
+  const onScroll = () => {
+    const el = listRef.current;
+    if (!el) return;
+    stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
   };
 
+  const handleSend = () => {
+    if (sendMessage(message)) {
+      setMessage('');
+      stickRef.current = true;
+    }
+  };
+
+  const canSend = message.trim() && connected;
+
   return (
-    <div
-      style={{
-        height: '100%',
-        minHeight: '390px',
-        display: 'flex',
-        flexDirection: 'column',
-        color: '#fff',
-      }}
-    >
-      {/* 상단 */}
-      <div
-        style={{
-          marginBottom: '14px',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <h3
-            style={{
-              margin: 0,
-              fontSize: '18px',
-            }}
-          >
-            실시간 채팅
-          </h3>
-
-          <span
-            style={{
-              fontSize: '11px',
-              padding: '5px 8px',
-              borderRadius: '999px',
-              background: connected
-                ? 'rgba(60, 200, 120, 0.12)'
-                : '#292929',
-              color: connected
-                ? '#55d98b'
-                : '#777',
-            }}
-          >
-            {connected ? '연결됨' : '연결 중'}
-          </span>
-        </div>
-
-        <div
-          style={{
-            fontSize: '12px',
-            color: '#777',
-            marginTop: '6px',
-          }}
-        >
-          {sender}
-        </div>
+    <div className="lc-wrap">
+      <div className="lc-head">
+        <span className="lc-title">
+          <i className="fa-solid fa-comment-dots" /> 실시간 채팅
+        </span>
+        <span className={`lc-status ${connected ? 'on' : ''}`}>
+          <span className="lc-status-dot" /> {connected ? '연결됨' : '연결 중'}
+        </span>
       </div>
 
-      {/* 메시지 목록 */}
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          maxHeight: '300px',
-          overflowY: 'auto',
-          background: '#111',
-          border: '1px solid #2d2d2d',
-          borderRadius: '10px',
-          padding: '12px',
-        }}
-      >
+      <div className="lc-list" ref={listRef} onScroll={onScroll}>
         {messages.length === 0 ? (
-          <div
-            style={{
-              height: '100%',
-              minHeight: '180px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#666',
-              fontSize: '13px',
-            }}
-          >
-            아직 채팅이 없습니다.
+          <div className="lc-empty">
+            <i className="fa-regular fa-comments" />
+            <span>첫 채팅을 남겨보세요</span>
           </div>
         ) : (
-          messages.map((chat, index) => {
-            const isNotice =
-              chat.type === 'ENTER' ||
-              chat.type === 'LEAVE';
-
+          messages.map((c, i) => {
+            if (c.type === 'ENTER' || c.type === 'LEAVE') {
+              return <div key={`${c.timestamp}-${i}`} className="lc-notice">{c.message}</div>;
+            }
+            if (c.type === 'VOTE') {
+              return (
+                <div key={`${c.timestamp}-${i}`} className="lc-vote">
+                  <i className="fa-solid fa-square-poll-vertical" /> {c.message}
+                </div>
+              );
+            }
+            const mine = c.sender === sender;
             return (
-              <div
-                key={`${chat.timestamp}-${index}`}
-                style={{
-                  marginBottom: '11px',
-                }}
-              >
-                {isNotice ? (
-                  <div
-                    style={{
-                      textAlign: 'center',
-                      color: '#666',
-                      fontSize: '11px',
-                    }}
-                  >
-                    {chat.message}
+              <div key={`${c.timestamp}-${i}`} className={`lc-msg ${mine ? 'mine' : ''}`}>
+                <span className="lc-av" style={{ background: colorFor(c.sender || '?') }}>
+                  {(c.sender || '?').trim().charAt(0).toUpperCase()}
+                </span>
+                <div className="lc-bubble">
+                  <div className="lc-meta">
+                    <span className="lc-sender">{c.sender}</span>
+                    <span className="lc-time">
+                      {c.timestamp ? c.timestamp.substring(11, 16) : ''}
+                    </span>
                   </div>
-                ) : (
-                  <>
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '7px',
-                        marginBottom: '3px',
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: '12px',
-                          fontWeight: '700',
-                          color: '#ff5b96',
-                        }}
-                      >
-                        {chat.sender}
-                      </span>
-
-                      <span
-                        style={{
-                          fontSize: '10px',
-                          color: '#555',
-                        }}
-                      >
-                        {chat.timestamp
-                          ? chat.timestamp.substring(11, 16)
-                          : ''}
-                      </span>
-                    </div>
-
-                    <div
-                      style={{
-                        fontSize: '13px',
-                        lineHeight: '1.5',
-                        color: '#ddd',
-                        wordBreak: 'break-word',
-                      }}
-                    >
-                      {chat.message}
-                    </div>
-                  </>
-                )}
+                  <div className="lc-text">{c.message}</div>
+                </div>
               </div>
             );
           })
         )}
-
-        <div ref={messageEndRef} />
+        <div ref={endRef} />
       </div>
 
-      {/* 입력창 */}
-      <div
-        style={{
-          display: 'flex',
-          gap: '8px',
-          marginTop: '12px',
-        }}
-      >
+      <div className="lc-input">
         <input
           type="text"
           value={message}
-          onChange={(e) =>
-            setMessage(e.target.value)
-          }
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              sendMessage();
-            }
-          }}
-          placeholder="메시지를 입력하세요"
+          onChange={(e) => setMessage(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+          placeholder="메시지 입력…"
           maxLength={300}
-          style={{
-            flex: 1,
-            minWidth: 0,
-            border: '1px solid #383838',
-            background: '#111',
-            color: '#fff',
-            padding: '11px 12px',
-            borderRadius: '8px',
-            outline: 'none',
-            fontSize: '13px',
-          }}
         />
-
-        <button
-          onClick={sendMessage}
-          disabled={!message.trim() || !connected}
-          style={{
-            border: 'none',
-            padding: '0 15px',
-            borderRadius: '8px',
-            background:
-              message.trim() && connected
-                ? '#ff2f7d'
-                : '#333',
-            color:
-              message.trim() && connected
-                ? '#fff'
-                : '#777',
-            cursor:
-              message.trim() && connected
-                ? 'pointer'
-                : 'not-allowed',
-            fontWeight: '700',
-          }}
-        >
-          전송
+        <button onClick={handleSend} disabled={!canSend} className={canSend ? 'on' : ''}>
+          <i className="fa-solid fa-paper-plane" />
         </button>
       </div>
     </div>

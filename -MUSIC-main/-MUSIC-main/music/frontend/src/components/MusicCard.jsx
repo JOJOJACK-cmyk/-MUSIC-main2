@@ -6,11 +6,11 @@ export default function MusicCard({
   onEdit,
   onDelete,
   onToggleLike,
-  isAdmin // 💡 MainPage에서 전달받은 관리자 여부 props
+  isAdmin, // 💡 MainPage에서 전달받은 관리자 여부 props
+  queue // 💡 이 카드가 속한 목록 — 재생 시 이 목록 안에서만 다음곡이 이어짐
 }) {
   const {
-    playTrack,
-    togglePlay,
+    selectTrack,
     currentTrack,
     isPlaying
   } = usePlayer();
@@ -26,21 +26,25 @@ export default function MusicCard({
   const isCurrent = currentTrack?.id === music.id;
 
   const handlePlay = () => {
-    if (isCurrent) {
-      togglePlay();
-      return;
-    }
-    playTrack(music);
+    selectTrack(music, Array.isArray(queue) ? queue : undefined);
   };
 
   // ❤️ 좋아요 버튼 클릭 핸들러
-  const handleLikeClick = (e) => {
+  const handleLikeClick = async (e) => {
     e.stopPropagation(); // 카드 전체 재생 이벤트 방지
+    const prevLiked = isLiked;
     const nextLiked = !isLiked;
     setIsLiked(nextLiked); // 낙관적 업데이트(UI 먼저 반영)
 
-    if (onToggleLike) {
-      onToggleLike(music.id, nextLiked);
+    if (!onToggleLike) return;
+    try {
+      const result = await onToggleLike(music.id, nextLiked);
+      // 서버가 실제 좋아요 상태를 돌려주면 그 값으로 확정
+      if (result && typeof result.liked === 'boolean') {
+        setIsLiked(result.liked);
+      }
+    } catch (_) {
+      setIsLiked(prevLiked); // 실패 시 롤백
     }
   };
 

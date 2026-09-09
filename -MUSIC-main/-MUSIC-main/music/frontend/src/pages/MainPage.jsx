@@ -5,7 +5,6 @@ import MusicCard from '../components/MusicCard';
 import MusicModal from '../components/MusicModal';
 import MainLiveView from '../components/MainLiveView';
 import { musicApi } from '../api/musicApi';
-import { usePlayer } from '../context/PlayerContext';
 import axios from 'axios';
 
 export default function MainPage() {
@@ -21,7 +20,6 @@ export default function MainPage() {
   const [liveBroadcasts, setLiveBroadcasts] = useState([]);
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
-  const { setPlaylist } = usePlayer();
 
   const isSearching = (searchTerm || '').trim().length > 0;
 
@@ -112,7 +110,6 @@ export default function MainPage() {
         });
 
       setMusics(musicsWithLike);
-      setPlaylist(musicsWithLike);
 
       // 💡 "실시간 인기 급상승 곡" = DB 청취기록 기반 랭킹 (부족한 자리는 조회수 상위곡으로 채움)
       try {
@@ -142,7 +139,6 @@ export default function MainPage() {
     } catch (err) {
       setMusics([]);
       setTrending([]);
-      setPlaylist([]);
       setApiError('Spring Boot 서버 또는 /api/musics 연결을 확인해 주세요.');
     } finally {
       setLoading(false);
@@ -179,7 +175,6 @@ export default function MainPage() {
 
         const mapped = items.map((m) => ({ ...m, isLiked: likedIds.has(m.id) }));
         setSearchResults(mapped);
-        setPlaylist(mapped);
       } catch (e) {
         if (e.name !== 'CanceledError' && e.code !== 'ERR_CANCELED') setSearchResults([]);
       } finally {
@@ -187,7 +182,7 @@ export default function MainPage() {
       }
     }, 500);
     return () => { clearTimeout(t); ctrl.abort(); };
-  }, [searchTerm, setPlaylist]);
+  }, [searchTerm]);
 
   // 현재 방송 중인 라이브 목록 (메인 라이브 뷰 + 토글 배지)
   //  - 마운트 시 1회 (배지용)
@@ -210,10 +205,14 @@ export default function MainPage() {
 
   const handleToggleLike = async (musicId, nextLiked) => {
     try {
-      await axios.post(`/api/musics/${musicId}/like`, {}, { withCredentials: true });
-      setMusics((prev) => prev.map((m) => (m.id === musicId ? { ...m, isLiked: nextLiked } : m)));
+      const res = await axios.post(`/api/musics/${musicId}/like`, {}, { withCredentials: true });
+      const liked = typeof res?.data?.liked === 'boolean' ? res.data.liked : nextLiked;
+      setMusics((prev) => prev.map((m) => (m.id === musicId ? { ...m, isLiked: liked } : m)));
+      setSearchResults((prev) => prev.map((m) => (m.id === musicId ? { ...m, isLiked: liked } : m)));
+      return res?.data;
     } catch (err) {
       alert('좋아요 처리에 실패했습니다.');
+      throw err;
     }
   };
 
@@ -327,6 +326,7 @@ export default function MainPage() {
                 <MusicCard
                   key={music.id}
                   music={music}
+                  queue={searchResults}
                   isAdmin={isAdmin}
                   onToggleLike={handleToggleLike}
                   onEdit={(item) => { setEditingMusic(item); setIsModalOpen(true); }}
@@ -373,7 +373,7 @@ export default function MainPage() {
           <button className="scroll-btn left" onClick={() => scroll(scrollRef1, 'left')}><i className="fa-solid fa-chevron-left"></i></button>
           <div className="card-grid-horizontal" ref={scrollRef1}>
             {top10Musics.map((music) => (
-              <MusicCard key={music.id} music={music} isAdmin={isAdmin} onToggleLike={handleToggleLike} onEdit={(item) => { setEditingMusic(item); setIsModalOpen(true); }} onDelete={handleDelete} />
+              <MusicCard key={music.id} music={music} queue={top10Musics} isAdmin={isAdmin} onToggleLike={handleToggleLike} onEdit={(item) => { setEditingMusic(item); setIsModalOpen(true); }} onDelete={handleDelete} />
             ))}
           </div>
           <button className="scroll-btn right" onClick={() => scroll(scrollRef1, 'right')}><i className="fa-solid fa-chevron-right"></i></button>
@@ -390,7 +390,7 @@ export default function MainPage() {
           <button className="scroll-btn left" onClick={() => scroll(scrollRef2, 'left')}><i className="fa-solid fa-chevron-left"></i></button>
           <div className="card-grid-horizontal" ref={scrollRef2}>
             {kpopMusics.map((music) => (
-              <MusicCard key={music.id} music={music} isAdmin={isAdmin} onToggleLike={handleToggleLike} onEdit={(item) => { setEditingMusic(item); setIsModalOpen(true); }} onDelete={handleDelete} />
+              <MusicCard key={music.id} music={music} queue={kpopMusics} isAdmin={isAdmin} onToggleLike={handleToggleLike} onEdit={(item) => { setEditingMusic(item); setIsModalOpen(true); }} onDelete={handleDelete} />
             ))}
           </div>
           <button className="scroll-btn right" onClick={() => scroll(scrollRef2, 'right')}><i className="fa-solid fa-chevron-right"></i></button>
@@ -407,7 +407,7 @@ export default function MainPage() {
           <button className="scroll-btn left" onClick={() => scroll(scrollRef3, 'left')}><i className="fa-solid fa-chevron-left"></i></button>
           <div className="card-grid-horizontal" ref={scrollRef3}>
             {jpopMusics.map((music) => (
-              <MusicCard key={music.id} music={music} isAdmin={isAdmin} onToggleLike={handleToggleLike} onEdit={(item) => { setEditingMusic(item); setIsModalOpen(true); }} onDelete={handleDelete} />
+              <MusicCard key={music.id} music={music} queue={jpopMusics} isAdmin={isAdmin} onToggleLike={handleToggleLike} onEdit={(item) => { setEditingMusic(item); setIsModalOpen(true); }} onDelete={handleDelete} />
             ))}
           </div>
           <button className="scroll-btn right" onClick={() => scroll(scrollRef3, 'right')}><i className="fa-solid fa-chevron-right"></i></button>
@@ -424,7 +424,7 @@ export default function MainPage() {
           <button className="scroll-btn left" onClick={() => scroll(scrollRef5, 'left')}><i className="fa-solid fa-chevron-left"></i></button>
           <div className="card-grid-horizontal" ref={scrollRef5}>
             {vtuberMusics.map((music) => (
-              <MusicCard key={music.id} music={music} isAdmin={isAdmin} onToggleLike={handleToggleLike} onEdit={(item) => { setEditingMusic(item); setIsModalOpen(true); }} onDelete={handleDelete} />
+              <MusicCard key={music.id} music={music} queue={vtuberMusics} isAdmin={isAdmin} onToggleLike={handleToggleLike} onEdit={(item) => { setEditingMusic(item); setIsModalOpen(true); }} onDelete={handleDelete} />
             ))}
           </div>
           <button className="scroll-btn right" onClick={() => scroll(scrollRef5, 'right')}><i className="fa-solid fa-chevron-right"></i></button>
@@ -441,7 +441,7 @@ export default function MainPage() {
           <button className="scroll-btn left" onClick={() => scroll(scrollRef4, 'left')}><i className="fa-solid fa-chevron-left"></i></button>
           <div className="card-grid-horizontal" ref={scrollRef4}>
             {popMusics.map((music) => (
-              <MusicCard key={music.id} music={music} isAdmin={isAdmin} onToggleLike={handleToggleLike} onEdit={(item) => { setEditingMusic(item); setIsModalOpen(true); }} onDelete={handleDelete} />
+              <MusicCard key={music.id} music={music} queue={popMusics} isAdmin={isAdmin} onToggleLike={handleToggleLike} onEdit={(item) => { setEditingMusic(item); setIsModalOpen(true); }} onDelete={handleDelete} />
             ))}
           </div>
           <button className="scroll-btn right" onClick={() => scroll(scrollRef4, 'right')}><i className="fa-solid fa-chevron-right"></i></button>

@@ -1826,8 +1826,336 @@ body {
 .live-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 22px;
+    gap: 22px 20px;
 }
+
+/* ---- 라이브 디렉터리 (방송 플랫폼 스타일) ---- */
+.live-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 4px 0 24px;
+}
+.live-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 13px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-sub);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.live-chip span {
+    font-size: 11px;
+    font-weight: 700;
+    opacity: 0.7;
+}
+.live-chip:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+.live-chip.is-active {
+    background: linear-gradient(135deg, var(--primary-color, #E028B7), #7C5CFF);
+    border-color: transparent;
+    color: #fff;
+}
+.live-chip.is-active span { opacity: 0.85; }
+
+.live-uptime {
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    background: rgba(0, 0, 0, 0.72);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 7px;
+    border-radius: 5px;
+    font-variant-numeric: tabular-nums;
+}
+
+.live-card--dir .live-thumb { border-radius: 12px; }
+.live-card-body--dir {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding-top: 11px;
+}
+.live-av {
+    flex-shrink: 0;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 800;
+    line-height: 1;
+    user-select: none;
+}
+.live-card--dir .live-card-title { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.live-cat-pill {
+    display: inline-block;
+    margin-top: 7px;
+    padding: 3px 9px;
+    border-radius: 6px;
+    background: rgba(224, 40, 183, 0.14);
+    color: var(--primary-hover, #ff5cd0);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+/* ---- 라이브 시청 페이지: 영상+컨트롤(좌) + 채팅(우, 같은 높이) ---- */
+.ld-stage {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 16px;
+    max-width: 1200px;
+    align-items: stretch;
+}
+.ld-video-col { display: flex; flex-direction: column; min-width: 0; }
+.ld-video {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 14px 14px 0 0;
+    overflow: hidden;
+    background: #000;
+}
+.ld-video-msg {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    color: #d9c7d4; font-size: 13px; background: rgba(0,0,0,0.5);
+    padding: 8px 14px; border-radius: 8px;
+}
+.ld-video:fullscreen { border-radius: 0; aspect-ratio: auto; height: 100%; }
+.ld-chat {
+    background: #15151a;
+    border: 1px solid #26262e;
+    border-radius: 14px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+    overflow: hidden;
+}
+.ld-chat-body { flex: 1; min-height: 0; display: flex; }
+@media (max-width: 1040px) {
+    .ld-stage { grid-template-columns: 1fr; }
+    .ld-chat { height: 520px; }
+}
+
+/* ---- 커스텀 라이브 컨트롤 바 (영상 아래, 하나만) ---- */
+.lvc {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 0 0 14px 14px;
+    background: #16161b;
+    border: 1px solid #26262e;
+    border-top: none;
+}
+.lvc-btn {
+    flex-shrink: 0;
+    width: 32px; height: 30px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: transparent; border: none; color: #d9d9e0;
+    font-size: 14px; cursor: pointer; border-radius: 7px;
+}
+.lvc-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+.lvc-vol {
+    width: 78px; flex-shrink: 0; accent-color: #E028B7; cursor: pointer;
+}
+.lvc-live {
+    flex-shrink: 0;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 10px; border-radius: 7px; cursor: pointer;
+    font-size: 11px; font-weight: 800; letter-spacing: 0.5px;
+    background: #2a2130; border: 1px solid #402c3c; color: #c99;
+}
+.lvc-live.on { background: #e0201f; border-color: transparent; color: #fff; }
+.lvc-live .live-dot { width: 6px; height: 6px; background: currentColor; animation: none; }
+.lvc-live.on .live-dot { background: #fff; }
+.lvc-time {
+    flex-shrink: 0; font-size: 12px; font-weight: 700; color: #e8dfe6;
+    font-variant-numeric: tabular-nums;
+}
+.lvc-track {
+    flex: 1; min-width: 20px; height: 4px; border-radius: 4px; overflow: hidden;
+    background: rgba(255,255,255,0.08); position: relative;
+}
+.lvc-glow {
+    position: absolute; top: 0; bottom: 0; width: 38%;
+    background: linear-gradient(90deg, transparent, #ff4d4d, #E028B7, transparent);
+    animation: ldGlow 2.4s linear infinite;
+}
+@keyframes ldGlow { from { left: -40%; } to { left: 100%; } }
+.lvc-viewers {
+    flex-shrink: 0; font-size: 12px; color: #cbb6c7;
+    display: inline-flex; align-items: center; gap: 5px;
+}
+@media (max-width: 560px) {
+    .lvc-vol, .lvc-track { display: none; }
+}
+
+/* ---- 채팅창 안 실시간 투표 위젯 ---- */
+.lp-wrap {
+    background: #101014;
+    border: 1px solid #29222e;
+    border-radius: 12px;
+    padding: 12px;
+    color: #eee;
+    flex-shrink: 0;
+    max-height: 46%;
+    overflow-y: auto;
+}
+.lp-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.lp-title { font-size: 13px; font-weight: 800; color: #f6eef4; display: inline-flex; align-items: center; gap: 6px; }
+.lp-title i { color: #ff2f7d; }
+.lp-total { font-size: 11px; font-weight: 700; color: #a98db9; }
+.lp-mini { background: none; border: 1px solid #3a2f3a; color: #a98db9; border-radius: 6px; font-size: 11px; padding: 3px 8px; cursor: pointer; }
+.lp-empty { font-size: 12px; color: #7c7382; text-align: center; padding: 10px 0; }
+.lp-alert {
+    font-size: 12px; font-weight: 600; color: #ff9ec4;
+    background: rgba(255,45,120,0.12); border: 1px solid rgba(255,45,120,0.3);
+    border-radius: 8px; padding: 8px 10px; margin-bottom: 8px;
+}
+.lp-list { display: flex; flex-direction: column; gap: 6px; }
+.lp-opt {
+    position: relative; display: flex; align-items: center; gap: 9px;
+    width: 100%; text-align: left; cursor: pointer;
+    background: #1a1a20; border: 1px solid #2c2c35; border-radius: 9px;
+    padding: 9px 11px; overflow: hidden; color: #e7e7ea; font-size: 13px;
+    transition: border-color 0.15s ease;
+}
+.lp-opt:hover:not(:disabled) { border-color: #ff2f7d88; }
+.lp-opt:disabled { cursor: default; }
+.lp-opt.is-leader { border-color: #ff2f7d; }
+.lp-opt.is-mine { border-color: #7C5CFF; box-shadow: inset 0 0 0 1px #7C5CFF55; }
+.lp-opt.is-mine .lp-num { background: #7C5CFF; }
+.lp-fill {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    background: linear-gradient(90deg, rgba(255,47,125,0.28), rgba(224,40,183,0.14));
+    transition: width 0.4s ease; z-index: 0;
+}
+.lp-num {
+    position: relative; z-index: 1; flex-shrink: 0;
+    width: 20px; height: 20px; border-radius: 6px; background: #2f2f38;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800; color: #fff;
+}
+.lp-opt.is-leader .lp-num { background: #ff2f7d; }
+.lp-song { position: relative; z-index: 1; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.lp-count { position: relative; z-index: 1; flex-shrink: 0; font-size: 12px; font-weight: 700; color: #d6c6d3; }
+.lp-hint { font-size: 10.5px; color: #7c7382; margin-top: 8px; text-align: center; }
+.lp-hint b { color: #b98fb0; }
+.lp-ctrl { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.lp-ctrl button {
+    flex: 1; min-width: 88px; background: #1e1e25; border: 1px solid #33333d; color: #cfcfd6;
+    border-radius: 8px; padding: 7px 8px; font-size: 11.5px; font-weight: 600; cursor: pointer;
+}
+.lp-ctrl .lp-primary { background: #ff2f7d; border-color: transparent; color: #fff; }
+.lp-edit-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.lp-edit-row { display: flex; align-items: center; gap: 6px; }
+.lp-edit-row input, .lp-add input {
+    flex: 1; min-width: 0; background: #1a1a20; border: 1px solid #33333d; color: #fff;
+    border-radius: 7px; padding: 7px 9px; font-size: 12px; outline: none;
+}
+.lp-edit-row button { background: none; border: none; color: #ff8bab; cursor: pointer; font-size: 13px; }
+.lp-add { display: flex; gap: 6px; margin-bottom: 8px; }
+.lp-add button { background: #2a2a33; border: 1px solid #3a3a44; color: #ddd; border-radius: 7px; padding: 0 12px; font-size: 12px; cursor: pointer; }
+.lp-save { width: 100%; background: #ff2f7d; border: none; color: #fff; border-radius: 8px; padding: 9px; font-size: 12.5px; font-weight: 800; cursor: pointer; }
+
+/* ---- 실시간 채팅 (리디자인) ---- */
+.lc-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; color: #fff; }
+.lc-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 2px 2px 10px; flex-shrink: 0;
+}
+.lc-title { font-size: 13px; font-weight: 800; color: #f4eef2; display: inline-flex; align-items: center; gap: 7px; }
+.lc-title i { color: #ff5b96; }
+.lc-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 10.5px; font-weight: 700; color: #7c7382;
+    background: #201b24; border-radius: 999px; padding: 3px 9px;
+}
+.lc-status.on { color: #55d98b; background: rgba(60,200,120,0.1); }
+.lc-status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.lc-list {
+    flex: 1; min-height: 0; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 9px;
+    padding: 10px; background: #0d0d10; border: 1px solid #23232b; border-radius: 11px;
+}
+.lc-list::-webkit-scrollbar { width: 6px; }
+.lc-list::-webkit-scrollbar-thumb { background: #33333d; border-radius: 3px; }
+.lc-empty {
+    margin: auto; display: flex; flex-direction: column; align-items: center; gap: 8px;
+    color: #5c5563; font-size: 12.5px;
+}
+.lc-empty i { font-size: 22px; opacity: 0.6; }
+.lc-notice { text-align: center; color: #5f5867; font-size: 10.5px; padding: 1px 0; }
+.lc-vote {
+    align-self: center; font-size: 11px; font-weight: 700; color: #ff9ec4;
+    background: rgba(255,45,120,0.12); border: 1px solid rgba(255,45,120,0.28);
+    border-radius: 999px; padding: 3px 11px;
+}
+.lc-msg { display: flex; gap: 8px; align-items: flex-start; }
+.lc-msg.mine { flex-direction: row-reverse; }
+.lc-av {
+    flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 800; color: #fff;
+}
+.lc-bubble {
+    max-width: 78%; background: #1c1c22; border-radius: 10px; padding: 6px 10px;
+}
+.lc-msg.mine .lc-bubble { background: #3a1030; }
+.lc-meta { display: flex; align-items: center; gap: 7px; margin-bottom: 2px; }
+.lc-msg.mine .lc-meta { flex-direction: row-reverse; }
+.lc-sender { font-size: 11px; font-weight: 700; color: #ff7ab6; }
+.lc-time { font-size: 9.5px; color: #55505c; }
+.lc-text { font-size: 13px; line-height: 1.45; color: #e3e0e6; word-break: break-word; }
+.lc-input { display: flex; gap: 7px; margin-top: 10px; flex-shrink: 0; }
+.lc-input input {
+    flex: 1; min-width: 0; border: 1px solid #34343e; background: #16161b; color: #fff;
+    padding: 10px 12px; border-radius: 9px; outline: none; font-size: 13px;
+}
+.lc-input input:focus { border-color: #ff2f7d88; }
+.lc-input button {
+    flex-shrink: 0; width: 42px; border: none; border-radius: 9px;
+    background: #2a2a33; color: #6b6b76; cursor: not-allowed; font-size: 14px;
+}
+.lc-input button.on { background: #ff2f7d; color: #fff; cursor: pointer; }
+
+/* ---- 플로팅 LIVE 버튼 ---- */
+.live-now-btn {
+    position: fixed;
+    left: 240px;
+    bottom: 104px;
+    z-index: 120;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 15px 9px 12px;
+    border-radius: 999px;
+    border: none;
+    cursor: pointer;
+    background: linear-gradient(135deg, #e0201f, #E028B7);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 800;
+    box-shadow: 0 10px 30px -6px rgba(224,32,31,0.6);
+    animation: liveBtnPulse 2s ease-out infinite;
+}
+.live-now-btn .live-dot { background: #fff; animation: none; }
+@keyframes liveBtnPulse {
+    0% { box-shadow: 0 10px 30px -6px rgba(224,32,31,0.6), 0 0 0 0 rgba(224,32,31,0.5); }
+    70% { box-shadow: 0 10px 30px -6px rgba(224,32,31,0.6), 0 0 0 14px rgba(224,32,31,0); }
+    100% { box-shadow: 0 10px 30px -6px rgba(224,32,31,0.6), 0 0 0 0 rgba(224,32,31,0); }
+}
+@media (max-width: 900px) { .live-now-btn { left: 16px; bottom: 96px; } }
 
 @media (prefers-reduced-motion: reduce) {
     .live-dot { animation: none !important; }

@@ -1,226 +1,160 @@
 package com.example.music.service;
 
 import com.example.music.dto.SongVoteDto;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * 라이브 투표.
+ *  - 곡 목록(옵션)은 스트리머가 등록한다.
+ *  - 시청자는 번호로만 투표한다 (채팅 "투표1" 또는 투표 패널 클릭). 1인 1표, 변경 가능.
+ *
+ * Redis 키 (broadcastId 기준)
+ *   broadcast:{id}:poll:options        LIST   옵션 텍스트(등록 순서)
+ *   broadcast:{id}:poll:votes          HASH   { indexStr -> count }
+ *   broadcast:{id}:poll:voter:{who}    STRING 이 시청자가 고른 index
+ */
+@Slf4j
 @Service
 public class SongVoteService {
 
-    private final StringRedisTemplate redisTemplate;
+    private final StringRedisTemplate redis;
+    private static final Duration TTL = Duration.ofHours(12);
 
-    public SongVoteService(
-            StringRedisTemplate redisTemplate
-    ) {
-        this.redisTemplate = redisTemplate;
+    public SongVoteService(StringRedisTemplate redis) {
+        this.redis = redis;
     }
 
-    // 방송별 곡 랭킹 Redis Key
-    private String getRankingKey(
-            Long broadcastId
-    ) {
-        return "broadcast:"
-                + broadcastId
-                + ":song:ranking";
+    private String optionsKey(Long b) { return "broadcast:" + b + ":poll:options"; }
+    private String votesKey(Long b)   { return "broadcast:" + b + ":poll:votes"; }
+    private String voterKey(Long b, String who) { return "broadcast:" + b + ":poll:voter:" + who; }
+
+    // ── 스트리머: 옵션 관리 ──────────────────────────────────────────
+
+    /** 곡 목록을 통째로 교체하고 표를 초기화한다. */
+    public void setOptions(Long broadcastId, List<String> options) {
+        clearVotesOnly(broadcastId);
+        redis.delete(optionsKey(broadcastId));
+        if (options == null) return;
+
+        List<String> clean = new ArrayList<>();
+        for (String s : options) {
+            if (s == null) continue;
+            String t = s.trim();
+            if (!t.isEmpty() && clean.size() < 10) clean.add(t);
+        }
+        if (clean.isEmpty()) return;
+
+        String key = optionsKey(broadcastId);
+        for (String opt : clean) {
+            redis.opsForList().rightPush(key, opt);
+        }
     }
 
-    // 방송별 + 사용자별 투표 기록 Redis Key
-    private String getUserVoteKey(
-            Long broadcastId,
-            String userEmail
-    ) {
-        return "broadcast:"
-                + broadcastId
-                + ":user:"
-                + userEmail
-                + ":votes";
+    /** 곡 하나 추가. */
+    public void addOption(Long broadcastId, String option) {
+        if (option == null || option.isBlank()) return;
+        Long size = redis.opsForList().size(optionsKey(broadcastId));
+        if (size != null && size >= 10) return;
+        redis.opsForList().rightPush(optionsKey(broadcastId), option.trim());
     }
+
+    /** index 곡 삭제 후 표 초기화(번호가 밀리므로). */
+    public void removeOption(Long broadcastId, int index) {
+        List<String> opts = getOptions(broadcastId);
+        if (index < 0 || index >= opts.size()) return;
+        opts.remove(index);
+        setOptions(broadcastId, opts);
+    }
+
+    // ── 시청자: 투표 ────────────────────────────────────────────────
 
     /**
-     * 곡 투표
-     *
-     * true  = 정상 투표
-     * false = 이미 투표한 곡
+     * 번호(0-base)로 투표. 한 사람(voterId)당 딱 한 번만 반영된다.
+     * (채팅 "투표N" 과 투표 버튼이 같은 voterId 를 쓰므로 합쳐서 1표)
+     * @return true = 이번에 표가 반영됨 / false = 이미 투표했거나 잘못된 번호
      */
-    public boolean voteSong(
-            Long broadcastId,
-            String userEmail,
-            String songTitle
-    ) {
+    public boolean vote(Long broadcastId, String voterId, int index) {
+        if (voterId == null || voterId.isBlank()) return false;
+        String vid = voterId.trim();
+        if (vid.isEmpty() || vid.equals("게스트")) return false; // 비로그인은 투표 불가
 
-        String rankingKey =
-                getRankingKey(broadcastId);
+        int total = getOptions(broadcastId).size();
+        if (total == 0 || index < 0 || index >= total) return false;
 
-        String userVoteKey =
-                getUserVoteKey(
-                        broadcastId,
-                        userEmail
-                );
+        String vk = voterKey(broadcastId, vid);
+        if (Boolean.TRUE.equals(redis.hasKey(vk))) return false; // 이미 투표함 — 1인 1표
 
-        /*
-         * Redis SET에 곡 제목 추가
-         *
-         * 처음 추가:
-         * add() 결과 = 1
-         *
-         * 이미 존재:
-         * add() 결과 = 0
-         */
-        Long added =
-                redisTemplate
-                        .opsForSet()
-                        .add(
-                                userVoteKey,
-                                songTitle
-                        );
-
-        // 이미 투표한 곡
-        if (added == null || added == 0) {
-            return false;
-        }
-
-        // 처음 투표한 경우에만 점수 +1
-        ZSetOperations<String, String> zSetOps =
-                redisTemplate.opsForZSet();
-
-        zSetOps.incrementScore(
-                rankingKey,
-                songTitle,
-                1
-        );
-
+        redis.opsForHash().increment(votesKey(broadcastId), String.valueOf(index), 1);
+        redis.opsForValue().set(vk, String.valueOf(index), TTL);
         return true;
     }
 
-    // 현재 실시간 상위 곡 제목 목록 조회
-    public Set<String> getTopSongs(
-            Long broadcastId,
-            int limit
-    ) {
-
-        String rankingKey =
-                getRankingKey(broadcastId);
-
-        ZSetOperations<String, String> zSetOps =
-                redisTemplate.opsForZSet();
-
-        return zSetOps.reverseRange(
-                rankingKey,
-                0,
-                limit - 1
-        );
+    /** 이 사람이 이 방송에서 이미 투표했는지 (프론트 표시용) */
+    public Integer votedIndex(Long broadcastId, String voterId) {
+        if (voterId == null || voterId.isBlank()) return null;
+        String v = redis.opsForValue().get(voterKey(broadcastId, voterId.trim()));
+        try { return v == null ? null : Integer.valueOf(v); } catch (Exception e) { return null; }
     }
 
-    // 1위 곡 가져오기
-    public String getTop1Song(
-            Long broadcastId
-    ) {
+    // ── 조회 ──────────────────────────────────────────────────────
 
-        Set<String> topSongs =
-                getTopSongs(
-                        broadcastId,
-                        1
-                );
+    public List<String> getOptions(Long broadcastId) {
+        List<String> l = redis.opsForList().range(optionsKey(broadcastId), 0, -1);
+        return l != null ? new ArrayList<>(l) : new ArrayList<>();
+    }
 
-        if (
-                topSongs != null
-                        && !topSongs.isEmpty()
-        ) {
-            return topSongs
-                    .iterator()
-                    .next();
+    /** 옵션 순서대로 (번호 고정) 득표수와 함께 반환. */
+    public List<SongVoteDto> getPoll(Long broadcastId) {
+        List<String> opts = getOptions(broadcastId);
+        List<SongVoteDto> out = new ArrayList<>();
+        for (int i = 0; i < opts.size(); i++) {
+            Object c = redis.opsForHash().get(votesKey(broadcastId), String.valueOf(i));
+            long count = 0;
+            try { count = c == null ? 0 : Long.parseLong(String.valueOf(c)); } catch (Exception ignore) {}
+            out.add(new SongVoteDto(i, opts.get(i), Math.max(0, count)));
         }
-
-        return "재생할 신청곡이 없습니다.";
+        return out;
     }
 
-    // 곡 제목 + 득표수 조회
-    public List<SongVoteDto>
-    getTopSongRankings(
-            Long broadcastId,
-            int limit
-    ) {
+    /** 하위호환: 예전 컨트롤러가 부르던 이름 — 득표순 정렬로 반환. */
+    public List<SongVoteDto> getTopSongRankings(Long broadcastId, int limit) {
+        List<SongVoteDto> poll = getPoll(broadcastId);
+        poll.sort((a, b) -> Long.compare(b.getVoteCount(), a.getVoteCount()));
+        return limit > 0 && poll.size() > limit ? poll.subList(0, limit) : poll;
+    }
 
-        String rankingKey =
-                getRankingKey(broadcastId);
-
-        ZSetOperations<String, String> zSetOps =
-                redisTemplate.opsForZSet();
-
-        Set<
-                ZSetOperations.TypedTuple<String>
-                > tuples =
-                zSetOps
-                        .reverseRangeWithScores(
-                                rankingKey,
-                                0,
-                                limit - 1
-                        );
-
-        List<SongVoteDto> rankingList =
-                new ArrayList<>();
-
-        if (tuples != null) {
-
-            for (
-                    ZSetOperations.TypedTuple<String> tuple
-                    : tuples
-            ) {
-
-                String songTitle =
-                        tuple.getValue();
-
-                long voteCount =
-                        tuple.getScore() != null
-                                ? tuple
-                                .getScore()
-                                .longValue()
-                                : 0L;
-
-                rankingList.add(
-                        new SongVoteDto(
-                                songTitle,
-                                voteCount
-                        )
-                );
-            }
+    /** 1위 곡 제목 (동점이면 낮은 번호). */
+    public String getTop1Song(Long broadcastId) {
+        String best = null;
+        long bestCount = -1;
+        for (SongVoteDto d : getPoll(broadcastId)) {
+            if (d.getVoteCount() > bestCount) { bestCount = d.getVoteCount(); best = d.getSongTitle(); }
         }
-
-        return rankingList;
+        return best != null ? best : "등록된 신청곡이 없습니다.";
     }
 
-    // 방송 종료 시 해당 방송의 신청곡 / 투표 기록 전체 삭제
+    private void clearVotesOnly(Long broadcastId) {
+        redis.delete(votesKey(broadcastId));
+        Set<String> voterKeys = redis.keys("broadcast:" + broadcastId + ":poll:voter:*");
+        if (voterKeys != null && !voterKeys.isEmpty()) redis.delete(voterKeys);
+    }
+
+    /** 표만 초기화 (곡 목록은 유지). */
+    public void resetVotes(Long broadcastId) {
+        clearVotesOnly(broadcastId);
+    }
+
+    /** 방송 종료 시 전체 정리. */
     public void clearBroadcastVotes(Long broadcastId) {
-
-        // 1. 곡 랭킹 삭제
-        String rankingKey =
-                getRankingKey(broadcastId);
-
-        redisTemplate.delete(rankingKey);
-
-        // 2. 사용자별 투표 기록 삭제
-        String userVotePattern =
-                "broadcast:"
-                        + broadcastId
-                        + ":user:*:votes";
-
-        Set<String> userVoteKeys =
-                redisTemplate.keys(userVotePattern);
-
-        if (userVoteKeys != null &&
-                !userVoteKeys.isEmpty()) {
-
-            redisTemplate.delete(userVoteKeys);
-        }
-
-        System.out.println(
-                "방송 투표 Redis 정리 완료: broadcastId="
-                        + broadcastId
-        );
+        clearVotesOnly(broadcastId);
+        redis.delete(optionsKey(broadcastId));
+        log.info("방송 투표 Redis 정리 완료: broadcastId={}", broadcastId);
     }
 }

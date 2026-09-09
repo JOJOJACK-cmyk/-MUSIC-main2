@@ -19,6 +19,6 @@ public class ChatMessageDto {
     private String timestamp; // 채팅 전송 시간 (예: "2026-08-24 10:15:30")
 
     public enum MessageType {
-        ENTER, TALK, LEAVE
+        ENTER, TALK, LEAVE, VOTE
     }
 }

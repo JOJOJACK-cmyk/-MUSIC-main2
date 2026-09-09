@@ -70,8 +70,13 @@ public class MusicController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("로그인이 필요한 서비스입니다.");
         }
 
-        List<MusicDto.Response> likedMusics = musicService.getLikedMusics(authentication);
-        return ResponseEntity.ok(likedMusics);
+        try {
+            List<MusicDto.Response> likedMusics = musicService.getLikedMusics(authentication);
+            return ResponseEntity.ok(likedMusics);
+        } catch (org.springframework.security.access.AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body("세션이 만료되었습니다. 다시 로그인해 주세요.");
+        }
     }
 
     // 💡 음원 좋아요(내 보관함 담기/취소) 토글 API
@@ -88,7 +93,13 @@ public class MusicController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("로그인이 필요한 서비스입니다.");
         }
 
-        boolean isLiked = musicService.toggleLikeMusic(authentication, id);
+        boolean isLiked;
+        try {
+            isLiked = musicService.toggleLikeMusic(authentication, id);
+        } catch (org.springframework.security.access.AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body("세션이 만료되었습니다. 다시 로그인해 주세요.");
+        }
 
         Map<String, Object> response = new HashMap<>();
         response.put("liked", isLiked);

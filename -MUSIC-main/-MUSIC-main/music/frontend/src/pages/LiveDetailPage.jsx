@@ -3,8 +3,9 @@ import { useNavigate, useParams } from 'react-router-dom';
 import Hls from 'hls.js';
 
 import Header from '../components/Header';
-import LiveVotingRoom from '../components/LiveVotingRoom';
+import LivePoll from '../components/LivePoll';
 import LiveChat from '../components/LiveChat';
+import LiveVideoControls from '../components/LiveVideoControls';
 import FollowButton from '../components/FollowButton';
 import { useAuth } from '../context/AuthContext';
 
@@ -12,6 +13,7 @@ export default function LiveDetailPage() {
   const { broadcastId } = useParams();
   const navigate = useNavigate();
   const videoRef = useRef(null);
+  const videoWrapRef = useRef(null);
 
   const { user } = useAuth();
 
@@ -76,95 +78,74 @@ export default function LiveDetailPage() {
     };
   }, [broadcastId]);
 
-  // 2. HLS 영상 연결
+  // 사용자가 컨트롤바에서 "직접" 일시정지했는지 (그 경우엔 자동 재개 안 함)
+  const manualPauseRef = useRef(false);
+
+  // 2. HLS 영상 연결 (화면 이동 후 돌아와도 실시간 지점에서 자동 재개)
   useEffect(() => {
     const video = videoRef.current;
-
-    if (!video || !broadcast?.hlsUrl) {
-      return;
-    }
+    if (!video || !broadcast?.hlsUrl) return;
 
     const hlsUrl = broadcast.hlsUrl;
+    setPlayerMessage('라이브 스트림 연결 중...');
 
-    setPlayerMessage(
-      '라이브 스트림 연결 중...'
-    );
+    // 실시간 끝 지점으로 붙이고 재생
+    const jumpToLiveAndPlay = () => {
+      setPlayerMessage('');
+      try {
+        const s = video.seekable;
+        if (s && s.length) {
+          const end = s.end(s.length - 1);
+          if (end - video.currentTime > 6) video.currentTime = Math.max(0, end - 1);
+        }
+      } catch (_) {}
+      if (!manualPauseRef.current) video.play().catch(() => {});
+    };
+
+    let hls = null;
+    let cleanupSafari = null;
 
     if (Hls.isSupported()) {
-      const hls = new Hls();
-
+      hls = new Hls({ liveSyncDurationCount: 3, lowLatencyMode: true });
       hls.loadSource(hlsUrl);
       hls.attachMedia(video);
-
-      hls.on(
-        Hls.Events.MANIFEST_PARSED,
-        () => {
-          setPlayerMessage('');
-
-          video.play().catch(() => {
-            console.log(
-              '자동재생이 차단되었습니다.'
-            );
-          });
+      hls.on(Hls.Events.MANIFEST_PARSED, jumpToLiveAndPlay);
+      hls.on(Hls.Events.ERROR, (evt, data) => {
+        if (!data.fatal) return;
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+          setPlayerMessage('스트림 재연결 중…');
+          hls.startLoad();
+        } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          hls.recoverMediaError();
+        } else {
+          setPlayerMessage('라이브 영상을 불러오는 중 문제가 발생했습니다.');
         }
-      );
-
-      hls.on(
-        Hls.Events.ERROR,
-        (event, data) => {
-          console.error('HLS 오류:', data);
-
-          if (data.fatal) {
-            setPlayerMessage(
-              '라이브 영상을 불러오는 중 문제가 발생했습니다.'
-            );
-          }
-        }
-      );
-
-      return () => {
-        hls.destroy();
-      };
-    }
-
-    // Safari
-    if (
-      video.canPlayType(
-        'application/vnd.apple.mpegurl'
-      )
-    ) {
-      const handleLoadedMetadata = () => {
-        setPlayerMessage('');
-
-        video.play().catch(() => {
-          console.log(
-            '자동재생이 차단되었습니다.'
-          );
-        });
-      };
-
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      const onMeta = () => jumpToLiveAndPlay();
       video.src = hlsUrl;
-
-      video.addEventListener(
-        'loadedmetadata',
-        handleLoadedMetadata
-      );
-
-      return () => {
-        video.removeEventListener(
-          'loadedmetadata',
-          handleLoadedMetadata
-        );
-
+      video.addEventListener('loadedmetadata', onMeta);
+      cleanupSafari = () => {
+        video.removeEventListener('loadedmetadata', onMeta);
         video.pause();
         video.removeAttribute('src');
         video.load();
       };
+    } else {
+      setPlayerMessage('이 브라우저에서는 HLS 재생을 지원하지 않습니다.');
     }
 
-    setPlayerMessage(
-      '이 브라우저에서는 HLS 재생을 지원하지 않습니다.'
-    );
+    // 탭 복귀 시 실시간 지점으로 재동기화 (직접 멈춘 게 아니면)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') jumpToLiveAndPlay();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      if (hls) hls.destroy();
+      if (cleanupSafari) cleanupSafari();
+    };
   }, [broadcast?.hlsUrl]);
 
   // 3. Redis 시청자 heartbeat
@@ -281,99 +262,46 @@ export default function LiveDetailPage() {
         {/* 방송 존재 */}
         {!loading && broadcast && (
           <>
-            {/* 실제 라이브 영상 */}
-            <div
-              style={{
-                position: 'relative',
-                backgroundColor: '#000',
-                borderRadius: '14px',
-                overflow: 'hidden',
-                maxWidth: '1100px',
-              }}
-            >
-              <video
-                ref={videoRef}
-                controls
-                autoPlay
-                muted
-                style={{
-                  width: '100%',
-                  aspectRatio: '16 / 9',
-                  display: 'block',
-                }}
-              />
-
-              {/* LIVE 표시 */}
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '14px',
-                  left: '14px',
-                  backgroundColor: '#e91916',
-                  color: '#fff',
-                  padding: '5px 9px',
-                  borderRadius: '5px',
-                  fontSize: '12px',
-                  fontWeight: 'bold',
-                }}
-              >
-                LIVE
+            {/* 상단: 영상+컨트롤바(좌) + 채팅(우) — 채팅 높이는 왼쪽 칼럼에 맞춤 */}
+            <div className="ld-stage">
+              <div className="ld-video-col">
+                <div className="ld-video" ref={videoWrapRef}>
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    muted
+                    playsInline
+                    style={{ width: '100%', height: '100%', display: 'block', objectFit: 'contain', background: '#000' }}
+                  />
+                  {playerMessage && <div className="ld-video-msg">{playerMessage}</div>}
+                </div>
+                <LiveVideoControls
+                  videoRef={videoRef}
+                  wrapRef={videoWrapRef}
+                  startedAt={broadcast.startedAt}
+                  viewerCount={broadcast.viewerCount}
+                  manualPauseRef={manualPauseRef}
+                />
               </div>
 
-              {/* 시청자 수 */}
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '14px',
-                  right: '14px',
-                  backgroundColor:
-                    'rgba(0,0,0,0.75)',
-                  color: '#fff',
-                  padding: '5px 9px',
-                  borderRadius: '5px',
-                  fontSize: '12px',
-                }}
-              >
-                👥 {broadcast.viewerCount ?? 0}명
-              </div>
+              {/* 오른쪽: (투표) + 채팅 */}
+              <aside className="ld-chat">
+                {broadcast.songRequestEnabled && (
+                  <LivePoll broadcastId={broadcastId} isBroadcaster={isBroadcaster} />
+                )}
+                <div className="ld-chat-body">
+                  <LiveChat broadcastId={broadcastId} />
+                </div>
+              </aside>
             </div>
 
-            {/* 플레이어 상태 */}
-            {playerMessage && (
+            {/* 방송 정보 (영상 아래, 전체 폭) */}
+            <div style={{ padding: '18px 4px', borderBottom: '1px solid #333' }}>
+              <h2 style={{ marginBottom: '10px' }}>{broadcast.title}</h2>
               <div
                 style={{
-                  marginTop: '10px',
-                  color: 'var(--text-sub)',
-                }}
-              >
-                {playerMessage}
-              </div>
-            )}
-
-            {/* 방송 정보 */}
-            <div
-              style={{
-                maxWidth: '1100px',
-                padding: '18px 4px',
-                borderBottom:
-                  '1px solid #333',
-              }}
-            >
-              <h2
-                style={{
-                  marginBottom: '10px',
-                }}
-              >
-                {broadcast.title}
-              </h2>
-
-              <div
-                style={{
-                  color: 'var(--text-sub)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  flexWrap: 'wrap',
+                  color: 'var(--text-sub)', display: 'flex', alignItems: 'center',
+                  gap: '12px', flexWrap: 'wrap',
                 }}
               >
                 <span>방송자: {broadcast.broadcaster}</span>
@@ -382,48 +310,16 @@ export default function LiveDetailPage() {
               </div>
             </div>
 
-            {/* 신청곡 / 채팅 */}
-            <div
-              style={{
-                maxWidth: '1100px',
-                marginTop: '24px',
-                display: 'grid',
-                gridTemplateColumns:
-                  '2fr 1fr',
-                gap: '20px',
-              }}
-            >
-              {/* 신청곡 / 투표 */}
+            {isBroadcaster && !broadcast.songRequestEnabled && (
               <div
                 style={{
-                  minHeight: '250px',
-                  backgroundColor: '#181818',
-                  borderRadius: '12px',
-                  padding: '20px',
+                  marginTop: '20px', padding: '14px 16px', borderRadius: '12px',
+                  background: '#1a1114', border: '1px solid #3a2530', color: '#c7a9b8', fontSize: 13,
                 }}
               >
-                <LiveVotingRoom
-                  broadcastId={broadcastId}
-                  isBroadcaster={
-                    isBroadcaster
-                  }
-                />
+                💡 실시간 투표는 꺼져 있습니다. <b>프로필 → 내 채널</b>에서 켜면 채팅창 위에 투표 패널이 생깁니다.
               </div>
-
-              {/* 실시간 채팅 */}
-              <div
-                style={{
-                  minHeight: '250px',
-                  backgroundColor: '#181818',
-                  borderRadius: '12px',
-                  padding: '20px',
-                }}
-              >
-                <LiveChat
-                  broadcastId={broadcastId}
-                />
-              </div>
-            </div>
+            )}
           </>
         )}
       </div>

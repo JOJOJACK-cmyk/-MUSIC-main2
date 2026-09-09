@@ -15,6 +15,7 @@ services:
 
     volumes:
       - ./srs.conf:/usr/local/srs/conf/music.conf:ro
+      - ./snapshot.sh:/usr/local/srs/conf/snapshot.sh:ro
 
     # host.docker.internal이 리눅스 Docker Engine에서도 호스트 PC를 가리키도록 명시
     # (Docker Desktop for Mac/Windows는 이미 기본 지원하지만, 명시해도 무해함)
