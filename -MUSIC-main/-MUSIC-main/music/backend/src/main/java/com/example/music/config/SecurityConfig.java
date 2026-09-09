@@ -24,6 +24,7 @@ import org.springframework.security.oauth2.client.web.DefaultOAuth2Authorization
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver;
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
 import org.springframework.security.oauth2.core.user.OAuth2User;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -31,6 +32,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,6 +54,14 @@ public class SecurityConfig {
     // Bearer 토큰 인증 필터 (SPA <-> API stateless 인증)
     private final TokenAuthFilter tokenAuthFilter;
     private final com.example.music.security.AuthTokenService authTokenService;
+
+    // 환경별로 다른 프론트 주소 (dev: localhost:3000, prod: 실제 도메인)
+    @Value("${app.frontend-url}")
+    private String frontendUrl;
+
+    // 콤마로 여러 개 지정 가능
+    @Value("${app.cors.allowed-origins}")
+    private String allowedOriginsRaw;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -195,14 +205,14 @@ public class SecurityConfig {
 
                             // 💡 리다이렉트 URL에 role, token 포함하여 전달
                             response.sendRedirect(String.format(
-                                    "http://localhost:3000/?nickname=%s&email=%s&profileImageUrl=%s&role=%s&token=%s",
-                                    encodedNickname, encodedEmail, encodedProfile, encodedRole, encodedToken
+                                    "%s/?nickname=%s&email=%s&profileImageUrl=%s&role=%s&token=%s",
+                                    frontendUrl, encodedNickname, encodedEmail, encodedProfile, encodedRole, encodedToken
                             ));
                         })
                         .failureHandler((request, response, exception) -> {
                             exception.printStackTrace();
                             String errorMessage = URLEncoder.encode(exception.getMessage(), StandardCharsets.UTF_8);
-                            response.sendRedirect("http://localhost:3000/login?error=" + errorMessage);
+                            response.sendRedirect(frontendUrl + "/login?error=" + errorMessage);
                         })
                         .userInfoEndpoint(userInfo -> userInfo
                                 .userService(customOAuth2UserService)
@@ -224,9 +234,12 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        configuration.setAllowedOriginPatterns(List.of(
-                "http://localhost:3000"
-        ));
+        configuration.setAllowedOriginPatterns(
+                Arrays.stream(allowedOriginsRaw.split(","))
+                        .map(String::trim)
+                        .filter(origin -> !origin.isEmpty())
+                        .toList()
+        );
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
