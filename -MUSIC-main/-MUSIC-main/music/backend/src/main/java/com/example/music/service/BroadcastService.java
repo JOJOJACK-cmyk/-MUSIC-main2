@@ -80,9 +80,10 @@ public class BroadcastService {
         );
     }
 
-    /** 채널 정보(제목/소개글/배너/카테고리) 일괄 수정. 방송 정보가 없으면 새로 생성. */
+    /** 채널 정보(제목/소개글/배너/카테고리/신청곡사용) 일괄 수정. 방송 정보가 없으면 새로 생성. */
     @Transactional
-    public void updateChannel(User user, String title, String description, String bannerUrl, String category) {
+    public void updateChannel(User user, String title, String description, String bannerUrl,
+                             String category, Boolean songRequestEnabled) {
         Broadcast b = broadcastRepository.findByUser_Id(user.getId())
                 .orElseGet(() -> {
                     Broadcast nb = new Broadcast();
@@ -97,6 +98,7 @@ public class BroadcastService {
         if (description != null) b.setDescription(description.isBlank() ? null : description.trim());
         if (bannerUrl != null) b.setBannerUrl(bannerUrl.isBlank() ? null : bannerUrl.trim());
         if (category != null) b.setCategory(category.isBlank() ? null : category.trim());
+        if (songRequestEnabled != null) b.setSongRequestEnabled(songRequestEnabled);
         broadcastRepository.save(b);
     }
 
@@ -197,9 +199,14 @@ public class BroadcastService {
                         notifyLiveStart(broadcast);
                     }
 
-                }, () -> log.warn(
-                        "[SRS] 알 수 없는 streamKey로 publish 이벤트 발생: {}", streamKey
-                ));
+                }, () -> {
+                    // OBS 에 넣은 스트림 키가 앱에서 발급한 현재 키와 다르면 여기로 온다.
+                    String known = broadcastRepository.findAll().stream()
+                            .map(b -> "id=" + b.getId() + " key=" + b.getStreamKey())
+                            .collect(java.util.stream.Collectors.joining(" | "));
+                    log.warn("[SRS] 알 수 없는 streamKey 로 publish - OBS 키가 앱의 현재 스트림 키와 다릅니다.\n"
+                            + "   받은 키 : {}\n   DB 의 키 : {}", streamKey, known);
+                });
     }
 
     /**
@@ -246,83 +253,55 @@ public class BroadcastService {
     }
 
     /**
-     * 현재 실제 송출 중인 방송 목록 조회
+     * 현재 방송 중인 목록 조회.
+     *  - 기준은 DB status="ON" (SRS on_publish/on_unpublish 웹훅이 관리하는 값).
+     *  - SRS API 는 (1) 실시간 시청자 수, (2) 송출이 끊긴 유령 방송 정리에만 보조로 사용한다.
+     *    (예전처럼 "SRS API 의 stream name 과 정확히 일치" 를 필수 조건으로 두면, 키 표기가
+     *     조금만 달라도/SRS API 가 잠깐 흔들려도 방송이 목록에서 통째로 사라진다.)
      */
     @Transactional(readOnly = true)
-    public List<LiveBroadcastResponse>
-    getLiveBroadcasts() {
+    public List<LiveBroadcastResponse> getLiveBroadcasts() {
 
-        // SRS에서 현재 실제 송출 중인 스트림 키 조회
-        // [수정] SRS가 응답하지 않아도(재시작 중/장애) 전체 API가 500으로 죽지 않도록 방어
-        List<String> activeStreamKeys;
+        List<Broadcast> onAir = broadcastRepository.findByStatusIgnoreCase("ON");
+        if (onAir.isEmpty()) return List.of();
+
+        // SRS 실제 송출 현황 {streamKey -> 시청자수}. 시청자 수 표시에만 쓴다.
+        //  ⚠️ SRS API 가 잠깐 흔들려서 목록이 비게 오면 정상 방송이 목록에서 사라지므로,
+        //     여기서 status 를 OFF 로 바꾸지 않는다. OFF 는 SRS on_unpublish 웹훅이 담당.
+        java.util.Map<String, Integer> srsActive = null;
         try {
-            activeStreamKeys = srsLiveStatusService.getActiveStreamKeys();
-        } catch (IllegalStateException e) {
-            // SRS 미기동은 로컬 개발에서 흔하므로 스택트레이스 없이 한 줄만
-            log.debug("SRS 미연결 - 라이브 목록 비움: {}", e.getMessage());
-            return List.of();
+            srsActive = srsLiveStatusService.getActiveStreamsWithViewerCount();
+        } catch (Exception e) {
+            log.debug("SRS 미연결 - status=ON 기준으로만 라이브 목록 구성: {}", e.getMessage());
         }
 
-        // 현재 송출 중인 방송이 없으면 빈 목록 반환
-        if (activeStreamKeys.isEmpty()) {
-            return List.of();
+        List<LiveBroadcastResponse> result = new java.util.ArrayList<>();
+        for (Broadcast b : onAir) {
+            boolean srsHasIt = srsActive != null && srsActive.containsKey(b.getStreamKey());
+
+            int viewers = srsHasIt
+                    ? srsActive.get(b.getStreamKey())
+                    : liveViewerService.getViewerCount(b.getId());
+
+            // SRS 가 방송 화면을 2분마다 캡처해 두는 자동 썸네일 (1분 단위 캐시버스터).
+            String snapshotUrl = hlsBaseUrl + "/live/" + b.getStreamKey() + ".jpg?v="
+                    + (System.currentTimeMillis() / 60000);
+
+            result.add(new LiveBroadcastResponse(
+                    b.getId(),
+                    b.getTitle(),
+                    b.getUser().getNickname(),
+                    b.getUser().getId(),
+                    "LIVE",
+                    viewers,
+                    b.getThumbnailUrl(),
+                    hlsBaseUrl + "/live/" + b.getStreamKey() + ".m3u8",
+                    b.getStartedAt(),
+                    b.getCategory(),
+                    snapshotUrl,
+                    b.isSongRequestEnabled()
+            ));
         }
-
-        // SRS에서 송출 중인 streamKey와
-        // DB의 방송 정보를 매칭
-        List<Broadcast> broadcasts =
-                broadcastRepository
-                        .findByStreamKeyIn(
-                                activeStreamKeys
-                        );
-
-        return broadcasts.stream()
-                .map(
-                        broadcast ->
-                                new LiveBroadcastResponse(
-
-                                        // 방송 ID
-                                        broadcast.getId(),
-
-                                        // 방송 제목
-                                        broadcast.getTitle(),
-
-                                        // 방송자 닉네임
-                                        broadcast
-                                                .getUser()
-                                                .getNickname(),
-
-                                        // 방송자 사용자 ID (팔로우용)
-                                        broadcast.getUser().getId(),
-
-                                        // 실제 SRS 송출 중이므로 LIVE
-                                        "LIVE",
-
-                                        // Redis 실제 시청자 수
-                                        liveViewerService
-                                                .getViewerCount(
-                                                        broadcast.getId()
-                                                ),
-
-                                        // 썸네일
-                                        broadcast
-                                                .getThumbnailUrl(),
-
-                                        // HLS 주소
-                                        hlsBaseUrl
-                                                + "/live/"
-                                                + broadcast
-                                                .getStreamKey()
-                                                + ".m3u8",
-
-                                        // 방송 시작 시간
-                                        broadcast
-                                                .getStartedAt(),
-
-                                        // 콘텐츠 카테고리
-                                        broadcast.getCategory()
-                                )
-                )
-                .toList();
+        return result;
     }
 }

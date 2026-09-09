@@ -20,7 +20,7 @@ export default function HeroBanner({ trending = [] }) {
 
     const pick = candidates[Math.floor(Math.random() * candidates.length)];
     lastIdRef.current = pick.id;
-    playTrack(pick);
+    playTrack(pick, pool);
   };
 
   return (

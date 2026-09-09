@@ -7,11 +7,13 @@ import YouTubePlayer from './components/YouTubePlayer';
 import HlsAudioPlayer from './components/HlsAudioPlayer';
 import MusicModal from './components/MusicModal';
 import PreviewLockModal from './components/PreviewLockModal';
+import LiveNowButton from './components/LiveNowButton';
 
 import MainPage from './pages/MainPage';
 import LoginPage from './pages/LoginPage';
 import ChartPage from './pages/ChartPage';
 import LivePage from './pages/LivePage';
+import ChatOverlay from './pages/ChatOverlay';
 import LibraryPage from './pages/LibraryPage';
 import PaymentPage from './pages/PaymentPage';
 import PaymentSuccessPage from './pages/PaymentSuccessPage';
@@ -36,32 +38,33 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
-// 💡 소셜 로그인 직후 URL 파라미터를 감지하여 localStorage에 저장하는 컴포넌트
+// 💡 소셜 로그인 직후 URL 파라미터를 감지하여 인증 상태를 동기화하는 컴포넌트
 function AuthHandler() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { checkAuthStatus } = useAuth();
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
+    const token = params.get('token') || params.get('accessToken');
     const email = params.get('email');
 
-    if (email) {
+    if (token || email) {
       const userData = {
         nickname: params.get('nickname') || '사용자',
-        email: email,
+        email: email || '',
         profileImageUrl: params.get('profileImageUrl') || '',
-        role: params.get('role') || 'ROLE_USER', // 💡 백엔드가 넘겨준 role을 여기서 받아서 저장합니다!
+        role: params.get('role') || 'ROLE_USER',
       };
 
+      if (token) localStorage.setItem('accessToken', token);
       localStorage.setItem('user', JSON.stringify(userData));
 
-      // URL을 깔끔하게 정리 (파라미터 제거)
+      // URL 파라미터 제거 후, 전체 새로고침 없이 컨텍스트만 서버 기준으로 갱신
       navigate(location.pathname, { replace: true });
-
-      // 상태 반영을 위해 새로고침
-      window.location.reload();
+      checkAuthStatus?.();
     }
-  }, [location, navigate]);
+  }, [location, navigate, checkAuthStatus]);
 
   return null;
 }
@@ -71,10 +74,7 @@ export default function App() {
     <AuthProvider>
       <PlayerProvider>
         <BrowserRouter>
-          <NotificationProvider>
-            <AuthHandler /> {/* 💡 로그인 직후 파라미터 캐치 핸들러 실행 */}
-            <AppShell />
-          </NotificationProvider>
+          <AppRoot />
         </BrowserRouter>
       </PlayerProvider>
     </AuthProvider>
@@ -83,9 +83,34 @@ export default function App() {
 
 // 사이드바·플레이어 없이 전체 화면으로 띄우는 경로
 const CHROMELESS_ROUTES = ['/login'];
+// OBS 브라우저 소스용 채팅 오버레이 (동적 경로) — 앱 크롬 없이 렌더
+const CHROMELESS_PATTERNS = [/^\/live\/[^/]+\/chat\/?$/];
+
+// OBS 오버레이는 알림/토스트/플레이어까지 전부 배제하고 순수 렌더한다.
+function AppRoot() {
+  const location = useLocation();
+  const isChromeless =
+    CHROMELESS_ROUTES.includes(location.pathname) ||
+    CHROMELESS_PATTERNS.some((re) => re.test(location.pathname));
+
+  if (isChromeless) {
+    return (
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/live/:broadcastId/chat" element={<ChatOverlay />} />
+      </Routes>
+    );
+  }
+
+  return (
+    <NotificationProvider>
+      <AuthHandler /> {/* 💡 로그인 직후 파라미터 캐치 핸들러 실행 */}
+      <AppShell />
+    </NotificationProvider>
+  );
+}
 
 function AppShell() {
-  const location = useLocation();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // 💡 로컬스토리지에서 관리자(ROLE_ADMIN) 여부 확인
@@ -119,14 +144,7 @@ function AppShell() {
     }
   };
 
-  // 로그인/회원가입은 앱 크롬(사이드바·플레이어바) 없이 전체 화면
-  if (CHROMELESS_ROUTES.includes(location.pathname)) {
-    return (
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-      </Routes>
-    );
-  }
+  // (크롬리스 경로 /login, /live/:id/chat 는 AppRoot 에서 이미 처리됨)
 
   return (
           <div className="app-container">
@@ -203,6 +221,7 @@ function AppShell() {
             <HlsAudioPlayer />
             <PlayerBar />
             <PreviewLockModal />
+            <LiveNowButton />
 
           </div>
   );

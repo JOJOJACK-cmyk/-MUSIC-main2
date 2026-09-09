@@ -62,12 +62,17 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneralException(Exception e) {
         // 서버 콘솔에는 원본 에러 스택을 남겨서 디버깅 가능하게 유지
-        e.printStackTrace();
+        org.slf4j.LoggerFactory.getLogger(GlobalExceptionHandler.class)
+                .error("[500] {} : {}", e.getClass().getName(), e.getMessage(), e);
+
+        Throwable root = e;
+        while (root.getCause() != null && root.getCause() != root) root = root.getCause();
 
         ErrorResponse response = new ErrorResponse(
                 "ERROR",
                 "INTERNAL_SERVER_ERROR",
-                "음원 처리 중 오류가 발생했습니다. 입력하신 정보나 유튜브 링크를 다시 확인해 주세요."
+                e.getClass().getSimpleName() + ": " + e.getMessage()
+                        + " | root=" + root.getClass().getSimpleName() + ": " + root.getMessage()
         );
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }

@@ -10,9 +10,25 @@ const attachToken = (config) => {
   return config;
 };
 
+// 401 이 떠도 자동 로그아웃 처리를 하면 안 되는 경로 (로그인/인증 확인 등)
+const AUTH_EXEMPT = ['/api/auth/login', '/api/auth/signup', '/api/auth/me', '/api/auth/logout'];
+
+// 세션/토큰이 만료돼 401 이 오면 앱 전체에 알림 → AuthContext 가 로컬 상태를 정리한다.
+const handleAuthError = (error) => {
+  const status = error?.response?.status;
+  const url = error?.config?.url || '';
+  if (status === 401 && !AUTH_EXEMPT.some((p) => url.includes(p))) {
+    try {
+      window.dispatchEvent(new Event('auth:expired'));
+    } catch (_) {}
+  }
+  return Promise.reject(error);
+};
+
 // 전역 axios (authApi, 일부 페이지가 직접 사용) 에도 동일 적용
 axios.defaults.withCredentials = true;
 axios.interceptors.request.use(attachToken);
+axios.interceptors.response.use((r) => r, handleAuthError);
 
 const api = axios.create({
   baseURL: '', // Vite proxy 가 :8080 으로 전달
@@ -33,7 +49,7 @@ api.interceptors.response.use(
         `[API ERROR ${error.response.status}] ${code || errorCode || ''}: ${message || ''}`
       );
     }
-    return Promise.reject(error);
+    return handleAuthError(error);
   }
 );
 

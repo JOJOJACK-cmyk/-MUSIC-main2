@@ -12,11 +12,22 @@ function shuffle(arr) {
 }
 
 function LiveCard({ b, onClick }) {
+  const thumb = b.snapshotUrl || b.thumbnailUrl;
   return (
     <div className="live-card" onClick={onClick}>
       <div className="live-thumb">
-        {b.thumbnailUrl ? (
-          <img src={b.thumbnailUrl} alt={b.title} />
+        {thumb ? (
+          <img
+            src={thumb}
+            alt={b.title}
+            onError={(e) => {
+              if (b.thumbnailUrl && e.currentTarget.src !== b.thumbnailUrl) {
+                e.currentTarget.src = b.thumbnailUrl;
+              } else {
+                e.currentTarget.style.display = 'none';
+              }
+            }}
+          />
         ) : (
           <div className="live-thumb-empty">썸네일 없음</div>
         )}

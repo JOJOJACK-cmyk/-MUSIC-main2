@@ -80,23 +80,11 @@ public class UserService {
             );
         }
 
-        // 💡 4. 활성화되어 있고 만료일이 지나지 않은 이용권(Pass)이 있는지 확인
-        boolean hasActivePass = passRepository.existsByUser_IdAndIsActiveTrueAndExpireDateAfter(
-                user.getId(),
-                LocalDateTime.now()
-        );
+        // 💡 4. role 은 DB 값(ROLE_USER / ROLE_SUB_ADMIN / ROLE_ADMIN)을 그대로 유지한다.
+        //    이용권(프리미엄) 여부는 role 을 덮어쓰지 않고 AuthController 가 별도 필드(premium)로 전달한다.
+        //    (role 에서 ROLE_ 접두사가 사라지면 hasAnyRole 인가·프론트 관리자 판정이 깨진다.)
 
-        // 5. 결제(이용권) 상태에 따라 동적으로 role 부여
-        if (hasActivePass) {
-            user.setRole("PREMIUM");
-        } else {
-            // 이용권이 없으면 기본 유저 권한 유지 (필요에 따라 "USER" 또는 기존 값 처리)
-            if (user.getRole() == null || user.getRole().equals("ROLE_USER")) {
-                user.setRole("USER");
-            }
-        }
-
-        // 6. 로그인 성공
+        // 5. 로그인 성공
         return user;
     }
 }

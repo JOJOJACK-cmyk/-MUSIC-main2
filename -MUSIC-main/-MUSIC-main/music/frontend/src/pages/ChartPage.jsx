@@ -12,7 +12,7 @@ export default function ChartPage() {
   const [loading, setLoading] = useState(true);
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
-  const { playTrack, setPlaylist } = usePlayer();
+  const { selectTrack } = usePlayer();
 
   const isSearching = searchTerm.trim().length > 0;
 
@@ -49,7 +49,6 @@ export default function ChartPage() {
         });
         const items = Array.isArray(res.data) ? res.data : [];
         setSearchResults(items);
-        setPlaylist(items);
       } catch (e) {
         if (e.name !== 'CanceledError' && e.code !== 'ERR_CANCELED') setSearchResults([]);
       } finally {
@@ -57,9 +56,10 @@ export default function ChartPage() {
       }
     }, 500);
     return () => { clearTimeout(t); ctrl.abort(); };
-  }, [searchTerm, setPlaylist]);
+  }, [searchTerm]);
 
-  const handleSelectMusic = (music) => playTrack(music);
+  const handleSelectMusic = (music) =>
+    selectTrack(music, isSearching ? searchResults : chartList);
 
   return (
     <>
@@ -82,7 +82,7 @@ export default function ChartPage() {
             ) : (
               <div className="library-grid">
                 {searchResults.map((music) => (
-                  <MusicCard key={music.id} music={music} onToggleLike={() => {}} />
+                  <MusicCard key={music.id} music={music} queue={searchResults} onToggleLike={() => {}} />
                 ))}
               </div>
             )}

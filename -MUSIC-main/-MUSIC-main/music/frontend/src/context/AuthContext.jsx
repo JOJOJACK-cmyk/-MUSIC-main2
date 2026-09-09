@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 
 const AuthContext = createContext(null);
 
@@ -10,6 +10,18 @@ export const AuthProvider = ({ children }) => {
 
   // 💡 이용권(구독) 상태 - 플레이어 미리듣기 제한 해제 판정의 단일 소스
   const [subscription, setSubscription] = useState(null); // { active, passName, startDate, expireDate }
+
+  // 마지막으로 서버 인증 상태를 확인한 시각 (탭 복귀 시 과도한 재검증 방지)
+  const lastCheckRef = useRef(0);
+
+  // 화면상 로그인인데 서버 세션/토큰이 만료된 경우 로컬 상태를 깨끗이 정리
+  const clearAuthState = useCallback(() => {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setUser(null);
+    setSubscription(null);
+  }, []);
 
   const authHeaders = () => {
     const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
@@ -35,6 +47,28 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     checkAuthStatus();
+  }, []);
+
+  // 세션 만료(전역 401) 이벤트 → 로컬 인증 상태 정리
+  useEffect(() => {
+    const onExpired = () => clearAuthState();
+    window.addEventListener('auth:expired', onExpired);
+    return () => window.removeEventListener('auth:expired', onExpired);
+  }, [clearAuthState]);
+
+  // 탭 복귀 시 마지막 확인 후 60초 지났으면 서버 인증 상태 재검증
+  useEffect(() => {
+    const revalidate = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (Date.now() - lastCheckRef.current < 60_000) return;
+      checkAuthStatus();
+    };
+    document.addEventListener('visibilitychange', revalidate);
+    window.addEventListener('focus', revalidate);
+    return () => {
+      document.removeEventListener('visibilitychange', revalidate);
+      window.removeEventListener('focus', revalidate);
+    };
   }, []);
 
   // user 가 채워지면 이용권 상태도 동기화
@@ -116,13 +150,18 @@ export const AuthProvider = ({ children }) => {
           credentials: 'include',
         });
 
+        lastCheckRef.current = Date.now();
+
         if (response.ok) {
           const data = await response.json();
           setUser(data);
           localStorage.setItem('user', JSON.stringify(data));
+        } else if (response.status === 401 || response.status === 403) {
+          // 서버 세션/토큰이 만료됨 → 화면상 로그인 상태를 정리 (스테일 user 유지 금지)
+          clearAuthState();
         }
       } catch (e) {
-        // /me 실패 시 savedUser 유지
+        // 네트워크 오류(응답 없음)면 서버 판단 불가 → savedUser 유지
       }
     } catch (err) {
       console.warn('인증 초기화 에러:', err);

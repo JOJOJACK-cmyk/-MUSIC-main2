@@ -1085,12 +1085,90 @@ public class YouTubeApiService {
         log.info("🧹 카탈로그 정리: 검사 {} / 삭제 {} / 실패 {} / API오류 {}", checked, removed, failed, apiError);
         if (!sample.isEmpty()) log.info("🧹 삭제 예시: {}", sample);
 
+        // ── 3단계: 유사 중복(다른 videoId·비슷한 제목) 정리 ──
+        int deduped = dedupeCatalog();
+
         Map<String, Integer> r = new LinkedHashMap<>();
         r.put("checked", checked);
         r.put("removed", removed);
         r.put("failed", failed);
         r.put("apiError", apiError);
+        r.put("deduped", deduped);
         return r;
+    }
+
+    // =========================================================================
+    // 유사 중복 곡 정리 (제목이 조금만 달라도 같은 곡으로 묶어 대표 1곡만 유지)
+    // =========================================================================
+
+    /** 중복 판별용 제목 정규화 — 괄호/피처링/버전·리마스터 표기 제거 후 영숫자·한글·가나만 남긴다. */
+    public static String normalizeTitleForDedupe(String s) {
+        if (s == null) return "";
+        String x = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFKC).toLowerCase();
+        x = x.replaceAll("\\s*-\\s*topic\\s*$", "");
+        x = x.replaceAll("\\(.*?\\)|\\[.*?\\]|【.*?】|「.*?」", " ");
+        x = x.replaceAll("feat\\.?.*|ft\\.?.*|with\\s.*", " ");
+        x = x.replaceAll("official|m/v|mv|music video|lyric video|lyrics|visualizer|audio|performance video|color coded", " ");
+        // 리마스터/기념반/디럭스 등 같은 곡의 다른 버전 표기 제거
+        x = x.replaceAll("\\d{4}\\s*remaster(ed)?|remaster(ed)?|\\d+(th)?\\s*anniversary|\\d+주년"
+                + "|deluxe|special edition|bonus track|album version|single version|radio edit", " ");
+        x = x.replaceAll("^the\\s+", "");
+        x = x.replaceAll("[^a-z0-9\\uac00-\\ud7a3\\u3040-\\u30ff]", "");
+        return x.trim();
+    }
+
+    /** 중복 판별용 아티스트 정규화 — "- topic"·"VEVO" 접미사 제거. */
+    public static String normalizeArtistForDedupe(String s) {
+        if (s == null) return "";
+        String x = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFKC).toLowerCase();
+        x = x.replaceAll("\\s*-\\s*topic\\s*$", "");
+        x = x.replaceAll("(vevo|official)\\s*$", "");
+        x = x.replaceAll("[^a-z0-9\\uac00-\\ud7a3\\u3040-\\u30ff]", "");
+        return x.trim();
+    }
+
+    /**
+     * DB 전체를 (정규화 제목|정규화 아티스트) 로 묶어 그룹마다 대표 1곡만 남기고 나머지를 삭제한다.
+     * 대표 선정: viewCount 큰 것 → durationSeconds 있는 것 → publishedAt 오래된 것 → id 작은 것.
+     */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    public int dedupeCatalog() {
+        List<Music> all = musicRepository.findAll();
+        Map<String, List<Music>> groups = new java.util.LinkedHashMap<>();
+        for (Music m : all) {
+            String t = normalizeTitleForDedupe(m.getTitle());
+            String a = normalizeArtistForDedupe(m.getArtist());
+            if (t.isEmpty() || a.isEmpty()) continue; // 정규화 후 비면 병합 위험 → 건드리지 않음
+            groups.computeIfAbsent(t + "|" + a, k -> new ArrayList<>()).add(m);
+        }
+
+        int removed = 0;
+        List<String> sample = new ArrayList<>();
+        for (List<Music> g : groups.values()) {
+            if (g.size() < 2) continue;
+            g.sort((x, y) -> {
+                long vx = x.getViewCount() == null ? -1 : x.getViewCount();
+                long vy = y.getViewCount() == null ? -1 : y.getViewCount();
+                if (vx != vy) return Long.compare(vy, vx);
+                boolean dx = x.getDurationSeconds() != null, dy = y.getDurationSeconds() != null;
+                if (dx != dy) return dx ? -1 : 1;
+                if (x.getPublishedAt() != null && y.getPublishedAt() != null
+                        && !x.getPublishedAt().equals(y.getPublishedAt())) {
+                    return x.getPublishedAt().compareTo(y.getPublishedAt());
+                }
+                return Long.compare(x.getId(), y.getId());
+            });
+            for (int i = 1; i < g.size(); i++) {
+                Music dup = g.get(i);
+                if (deleteMusicSafely(dup)) {
+                    removed++;
+                    if (sample.size() < 20) sample.add(dup.getArtist() + " - " + dup.getTitle());
+                }
+            }
+        }
+        log.info("🧹 [중복정리] 유사 중복 {}곡 삭제 (그룹 {}개)", removed, groups.size());
+        if (!sample.isEmpty()) log.info("🧹 [중복정리] 삭제 예시: {}", sample);
+        return removed;
     }
 
     /** 현재 인덱스의 키를 markKeyExhausted 에 넘기기 위한 raw 접근 (throw 안 함) */

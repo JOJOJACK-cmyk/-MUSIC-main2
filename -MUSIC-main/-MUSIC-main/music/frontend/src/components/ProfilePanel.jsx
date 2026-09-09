@@ -257,6 +257,36 @@ function StudioTab() {
           OBS → 설정 → 방송 → 서비스 <span style={{ color: ACCENT }}>사용자 지정</span> → 서버에 스트림 URL, 스트림 키 붙여넣기 → 송출 시작
         </div>
       </div>
+
+      {/* OBS 채팅 오버레이 */}
+      <div style={{ ...card, marginTop: 14 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#d9c7d4', marginBottom: 4 }}>
+          <i className="fa-solid fa-comments" style={{ marginRight: 6, color: ACCENT }} />
+          OBS 채팅 오버레이
+        </div>
+        <div style={{ fontSize: 12, color: '#a98db9', marginBottom: 12 }}>
+          아래 URL을 OBS → 소스 추가 → <b style={{ color: '#d9c7d4' }}>브라우저</b> 에 넣으면
+          방송 화면에 실시간 채팅이 표시됩니다. (배경 투명)
+        </div>
+        {b?.id ? (
+          <>
+            <Row
+              label="채팅 오버레이 URL (투명 배경)"
+              value={`${window.location.origin}/live/${b.id}/chat`}
+              tag="chat"
+            />
+            <Row
+              label="채팅 오버레이 URL (검정 배경)"
+              value={`${window.location.origin}/live/${b.id}/chat?theme=dark`}
+              tag="chatd"
+            />
+          </>
+        ) : (
+          <div style={{ fontSize: 12, color: '#8a6f83' }}>
+            먼저 스트림 키를 발급하면 채팅 오버레이 URL이 생성됩니다.
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -267,7 +297,9 @@ function ChannelTab({ user }) {
   const [followers, setFollowers] = useState(0);
   const [followerList, setFollowerList] = useState(null);
   const [showFollowers, setShowFollowers] = useState(false);
-  const [form, setForm] = useState({ title: '', description: '', bannerUrl: '', category: '' });
+  const [form, setForm] = useState({
+    title: '', description: '', bannerUrl: '', category: '', songRequestEnabled: false,
+  });
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -283,6 +315,7 @@ function ChannelTab({ user }) {
           description: d.description || '',
           bannerUrl: d.bannerUrl || '',
           category: d.category || '',
+          songRequestEnabled: Boolean(d.songRequestEnabled),
         });
       }
     } catch (_) {}
@@ -383,6 +416,30 @@ function ChannelTab({ user }) {
           <label style={fieldLabel}>배너 이미지 URL</label>
           <input style={field} value={form.bannerUrl} onChange={(e) => setForm({ ...form, bannerUrl: e.target.value })} placeholder="https://..." />
         </div>
+
+        {/* 신청곡 & 실시간 투표 on/off */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#efe6ec' }}>신청곡 &amp; 실시간 투표</div>
+            <div style={{ fontSize: 11, color: '#8a6f83', marginTop: 4 }}>
+              켜면 시청 화면 아래에 곡 신청·투표 패널이 표시됩니다.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setForm({ ...form, songRequestEnabled: !form.songRequestEnabled })}
+            style={{
+              flexShrink: 0, width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer',
+              background: form.songRequestEnabled ? ACCENT : '#412a3c', position: 'relative',
+            }}
+          >
+            <span style={{
+              position: 'absolute', top: 2, left: form.songRequestEnabled ? 22 : 2,
+              width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'left 0.15s',
+            }} />
+          </button>
+        </div>
+
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 12, color: live ? '#ff6b6b' : '#a98db9' }}>상태: {live ? '🔴 방송 중' : '⚫ 오프라인'}</span>
           <button style={{ ...primaryBtn, marginLeft: 'auto' }} disabled={busy} onClick={save}>채널 정보 저장</button>

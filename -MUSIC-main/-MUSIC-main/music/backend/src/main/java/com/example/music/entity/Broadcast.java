@@ -41,6 +41,10 @@ public class Broadcast {
     @Column(length = 30)
     private String category;
 
+    // 신청곡 & 실시간 투표 사용 여부 (방송자가 채널 설정에서 켜야 시청 페이지에 노출)
+    @Column(name = "song_request_enabled", nullable = false)
+    private boolean songRequestEnabled = false;
+
     @Column(nullable = false, length = 20)
     private String status;
 

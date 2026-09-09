@@ -5,7 +5,7 @@ export default function Top100Chart({ chartList = [], onSelectMusic }) {
   // 상위 100곡만
   const limitedChartList = Array.isArray(chartList) ? chartList.slice(0, 100) : [];
 
-  const { currentTrack, isPlaying, togglePlay } = usePlayer();
+  const { currentTrack, isPlaying } = usePlayer();
 
   return (
     <div className="chart-wrap">
@@ -59,7 +59,7 @@ export default function Top100Chart({ chartList = [], onSelectMusic }) {
                   className="chart-play"
                   onClick={(e) => {
                     e.stopPropagation();
-                    isCurrent ? togglePlay() : onSelectMusic(music);
+                    onSelectMusic(music);
                   }}
                   aria-label={playingNow ? '일시정지' : '재생'}
                 >
