@@ -211,7 +211,8 @@ public class SecurityConfig {
                         })
                         .failureHandler((request, response, exception) -> {
                             exception.printStackTrace();
-                            String errorMessage = URLEncoder.encode(exception.getMessage(), StandardCharsets.UTF_8);
+                            String rawMessage = exception.getMessage() != null ? exception.getMessage() : "소셜 로그인에 실패했습니다.";
+                            String errorMessage = URLEncoder.encode(rawMessage, StandardCharsets.UTF_8);
                             response.sendRedirect(frontendUrl + "/login?error=" + errorMessage);
                         })
                         .userInfoEndpoint(userInfo -> userInfo
@@ -221,6 +222,10 @@ public class SecurityConfig {
 
                 .logout(logout -> logout
                         .logoutUrl("/api/auth/logout")
+                        // LogoutFilter 가 이 경로를 먼저 처리하므로 Bearer 토큰 폐기도 여기서 한다.
+                        // (안 하면 로그아웃 후에도 토큰이 7일간 유효)
+                        .addLogoutHandler((request, response, authentication) ->
+                                authTokenService.revoke(TokenAuthFilter.extractToken(request)))
                         .logoutSuccessHandler((request, response, authentication) ->
                                 response.setStatus(200))
                         .invalidateHttpSession(true)

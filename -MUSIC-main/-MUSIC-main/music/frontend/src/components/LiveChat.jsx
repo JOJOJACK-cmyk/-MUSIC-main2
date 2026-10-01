@@ -40,6 +40,7 @@ const LiveChat = ({ broadcastId }) => {
   };
 
   const canSend = message.trim() && connected;
+  const visibleMessages = messages.filter((c) => c.type !== 'ENTER' && c.type !== 'LEAVE');
 
   return (
     <div className="lc-wrap">
@@ -53,16 +54,13 @@ const LiveChat = ({ broadcastId }) => {
       </div>
 
       <div className="lc-list" ref={listRef} onScroll={onScroll}>
-        {messages.length === 0 ? (
+        {visibleMessages.length === 0 ? (
           <div className="lc-empty">
             <i className="fa-regular fa-comments" />
             <span>첫 채팅을 남겨보세요</span>
           </div>
         ) : (
-          messages.map((c, i) => {
-            if (c.type === 'ENTER' || c.type === 'LEAVE') {
-              return <div key={`${c.timestamp}-${i}`} className="lc-notice">{c.message}</div>;
-            }
+          visibleMessages.map((c, i) => {
             if (c.type === 'VOTE') {
               return (
                 <div key={`${c.timestamp}-${i}`} className="lc-vote">

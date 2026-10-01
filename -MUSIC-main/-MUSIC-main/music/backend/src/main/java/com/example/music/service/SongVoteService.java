@@ -89,10 +89,11 @@ public class SongVoteService {
         if (total == 0 || index < 0 || index >= total) return false;
 
         String vk = voterKey(broadcastId, vid);
-        if (Boolean.TRUE.equals(redis.hasKey(vk))) return false; // 이미 투표함 — 1인 1표
+        // SETNX 로 "투표 기록"을 원자적으로 선점 — 동시에 두 번 눌러도 1표만 반영된다
+        Boolean first = redis.opsForValue().setIfAbsent(vk, String.valueOf(index), TTL);
+        if (!Boolean.TRUE.equals(first)) return false; // 이미 투표함 — 1인 1표
 
         redis.opsForHash().increment(votesKey(broadcastId), String.valueOf(index), 1);
-        redis.opsForValue().set(vk, String.valueOf(index), TTL);
         return true;
     }
 

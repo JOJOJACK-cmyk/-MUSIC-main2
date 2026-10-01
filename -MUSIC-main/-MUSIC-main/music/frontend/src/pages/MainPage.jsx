@@ -5,6 +5,7 @@ import MusicCard from '../components/MusicCard';
 import MusicModal from '../components/MusicModal';
 import MainLiveView from '../components/MainLiveView';
 import { musicApi } from '../api/musicApi';
+import { useLiveView } from '../context/LiveViewContext';
 import axios from 'axios';
 
 export default function MainPage() {
@@ -17,6 +18,13 @@ export default function MainPage() {
   const [apiError, setApiError] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [view, setView] = useState('music'); // 'music' | 'live'
+  const { setBrowsingLive } = useLiveView() || {};
+
+  // 라이브 탭을 보고 있는 동안은 플로팅 LIVE 버튼과 중복되므로 숨긴다.
+  useEffect(() => {
+    setBrowsingLive?.(view === 'live');
+    return () => setBrowsingLive?.(false);
+  }, [view, setBrowsingLive]);
   const [liveBroadcasts, setLiveBroadcasts] = useState([]);
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -86,6 +94,8 @@ export default function MainPage() {
         'hit songs', '히트곡', 'sing-along', 'sing along', 'grammy museum', 'the icon sessions'];
       // 쇼츠/장편/비음악 영상만 제외 (순서·개수는 서버 응답 그대로 유지 → "실시간 인기 급상승 곡" 원상)
       const isRealSong = (item) => {
+        // 관리자가 직접 등록한 곡은 필터 예외 (길이/키워드 무관하게 노출)
+        if (item.manualAdd === true) return true;
         const title = item.title || '';
         const lower = title.toLowerCase();
         if (NON_MUSIC.some((kw) => lower.includes(kw))) return false;
@@ -229,7 +239,13 @@ export default function MainPage() {
       setEditingMusic(null);
       await fetchMusics();
     } catch (err) {
-      alert('음원 등록에 실패했습니다.');
+      const status = err?.response?.status;
+      const serverMsg = err?.response?.data?.message;
+      let msg = serverMsg || '음원 등록에 실패했습니다.';
+      if (status === 401) msg = '세션이 만료되었습니다. 다시 로그인해 주세요.';
+      else if (status === 403) msg = '음원 등록 권한이 없습니다. (관리자 계정으로 로그인해 주세요)';
+      console.error('음원 등록/수정 실패:', status, err?.response?.data || err);
+      alert(msg);
     }
   };
 
@@ -237,6 +253,9 @@ export default function MainPage() {
     if (!window.confirm('정말 삭제하시겠습니까?')) return;
     try {
       await musicApi.deleteMusic(id);
+      // 검색 결과 창을 보고 있어도(재검색 전에) 바로 목록에서 사라지도록 로컬 상태도 함께 정리
+      setMusics((prev) => prev.filter((m) => m.id !== id));
+      setSearchResults((prev) => prev.filter((m) => m.id !== id));
       await fetchMusics();
       alert('삭제되었습니다.');
     } catch (err) {

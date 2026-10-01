@@ -1244,6 +1244,73 @@ body {
     text-overflow: ellipsis;
 }
 
+/* 라이브 방송 미니 플레이어 — 유튜브 플로팅 박스(우측)와 겹치지 않게 좌측에 배치 */
+.live-mini-player {
+    position: fixed;
+    left: 24px;
+    bottom: 110px;
+    width: 320px;
+    background-color: var(--bg-sidebar);
+    border: 1px solid rgba(224, 40, 183, 0.35);
+    border-radius: 14px;
+    padding: 10px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+    z-index: 90;
+    overflow: hidden;
+}
+
+.live-mini-player-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 13px;
+}
+
+.live-mini-player-title strong {
+    flex: 1;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.live-mini-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ff3b5c;
+    flex-shrink: 0;
+    box-shadow: 0 0 6px #ff3b5c;
+}
+
+.live-mini-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-sub);
+    font-size: 13px;
+    cursor: pointer;
+    padding: 2px 4px;
+    flex-shrink: 0;
+}
+.live-mini-btn:hover { color: var(--text-main); }
+
+.live-mini-player-video {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #000;
+    cursor: pointer;
+}
+
+.live-mini-player-video video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
 /* ==========================================
    💳 프리미엄 이용권 결제 페이지 스타일
    ========================================== */

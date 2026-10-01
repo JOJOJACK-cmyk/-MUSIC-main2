@@ -80,6 +80,19 @@ public class YouTubeApiService {
         throw new QuotaExceededException("모든 YouTube API 키의 할당량이 소진되었습니다.");
     }
 
+    /**
+     * 키를 "소진" 처리해야 하는 오류인가. 429 는 항상, 403 은 할당량 계열 reason 일 때만.
+     * (키 오류·API 미활성화·영상 접근 금지 같은 403 까지 소진 처리하면 멀쩡한 키가 하루 동안 봉인된다)
+     */
+    private static boolean isQuotaError(int status, String reason) {
+        if (status == 429) return true;
+        if (status != 403) return false;
+        return switch (reason == null ? "" : reason) {
+            case "quotaExceeded", "dailyLimitExceeded", "rateLimitExceeded", "userRateLimitExceeded" -> true;
+            default -> false;
+        };
+    }
+
     /** 방금 쓴 키를 소진 처리하고 다음 키로 넘어간다. */
     private synchronized void markKeyExhausted(String key) {
         keyExhaustedUntil.put(key, nextPacificMidnight());
@@ -566,6 +579,130 @@ public class YouTubeApiService {
         }
     }
 
+    /**
+     * 💡 [관리자 수동 등록 전용] 단곡 자동필터(재생시간 90~480초·비음악 키워드·임베드 가능·카테고리)를
+     *    전부 건너뛰고 유튜브 메타데이터만 가져와 저장한다. 관리자가 직접 고른 영상이므로 신뢰한다.
+     *    - 영상이 실제로 존재하지 않으면 IllegalArgumentException (→ 400)
+     *    - 모든 API 키 할당량 소진 시 QuotaExceededException (→ 429 로 매핑)
+     */
+    @Transactional
+    public YouTubeVideoDto getVideoInfoLenient(String videoId) {
+        if (videoId == null || videoId.isBlank()) {
+            throw new IllegalArgumentException("YouTube 동영상 ID가 비어 있습니다.");
+        }
+
+        Optional<Music> cachedMusic = musicRepository.findByYoutubeVideoId(videoId);
+        if (cachedMusic.isPresent()) {
+            Music music = cachedMusic.get();
+            music.markManualAdd(); // 관리자가 명시적으로 등록 → 자동 정리(삭제) 대상에서 제외
+            String properGenre = determineGenre(music.getTitle(), music.getArtist());
+            if (!properGenre.equals(music.getGenre())) {
+                music.update(music.getTitle(), music.getArtist(), music.getThumbnailUrl(), properGenre);
+            }
+            return toDto(music);
+        }
+
+        JsonNode item = null;
+        for (int attempt = 0; attempt < Math.max(1, apiKeys.size()); attempt++) {
+            String key = currentApiKey(); // 전부 소진 시 QuotaExceededException
+            try {
+                String url = "https://www.googleapis.com/youtube/v3/videos"
+                        + "?part=snippet,contentDetails,status,statistics"
+                        + "&id=" + URLEncoder.encode(videoId, StandardCharsets.UTF_8)
+                        + "&key=" + key;
+                HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url)).GET().build();
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                JsonNode root = objectMapper.readTree(response.body());
+
+                if (root.has("error")) {
+                    int status = response.statusCode();
+                    String reason = root.path("error").path("errors").path(0).path("reason").asText("");
+                    if (isQuotaError(status, reason)) {
+                        markKeyExhausted(key);
+                        continue; // 다음 키로 재시도
+                    }
+                    throw new IllegalArgumentException(
+                            "YouTube API 오류: " + root.path("error").path("message").asText(reason));
+                }
+
+                JsonNode items = root.get("items");
+                if (items == null || items.isEmpty()) {
+                    throw new IllegalArgumentException("YouTube 영상을 찾을 수 없습니다 (비공개/삭제/잘못된 ID): " + videoId);
+                }
+                item = items.get(0);
+                break;
+            } catch (IllegalArgumentException e) {
+                throw e;
+            } catch (Exception e) {
+                log.error("YouTube API 호출 중 오류 발생 (lenient, videoId={})", videoId, e);
+                throw new RuntimeException("YouTube API 연동 실패: " + e.getMessage());
+            }
+        }
+
+        if (item == null) {
+            throw new QuotaExceededException("모든 YouTube API 키의 할당량이 소진되었습니다. 잠시 후 다시 시도해 주세요.");
+        }
+
+        JsonNode snippet = item.get("snippet");
+        if (snippet == null || snippet.path("title").asText("").isEmpty()) {
+            throw new IllegalArgumentException("YouTube 영상 정보를 읽을 수 없습니다: " + videoId);
+        }
+        JsonNode contentDetails = item.get("contentDetails");
+
+        String title = snippet.path("title").asText("");
+        String artist = snippet.path("channelTitle").asText("");
+        String audioLang = snippet.path("defaultAudioLanguage").asText(
+                snippet.path("defaultLanguage").asText(""));
+        long seconds = (contentDetails != null && contentDetails.has("duration"))
+                ? parseYouTubeDuration(contentDetails.get("duration").asText())
+                : 0L;
+        LocalDateTime publishedAt = parsePublishedAt(snippet.path("publishedAt").asText(""));
+
+        Long viewCount = null;
+        JsonNode stats = item.get("statistics");
+        if (stats != null && stats.has("viewCount")) {
+            try { viewCount = Long.parseLong(stats.get("viewCount").asText("0")); } catch (Exception ignore) {}
+        }
+
+        JsonNode thumbnails = snippet.get("thumbnails");
+        String thumbnailUrl = "";
+        if (thumbnails != null) {
+            if (thumbnails.has("high")) thumbnailUrl = thumbnails.get("high").path("url").asText("");
+            else if (thumbnails.has("medium")) thumbnailUrl = thumbnails.get("medium").path("url").asText("");
+            else if (thumbnails.has("default")) thumbnailUrl = thumbnails.get("default").path("url").asText("");
+        }
+
+        final String fTitle = title;
+        final String fArtist = artist;
+        final String fThumb = thumbnailUrl;
+        final String fGenre = resolveGenre(title, artist, audioLang, null);
+        final Long fSeconds = seconds > 0 ? seconds : null;
+        final LocalDateTime fPublished = publishedAt;
+        final Long fViews = viewCount;
+
+        Music music = musicRepository.findByYoutubeVideoId(videoId)
+                .map(m -> {
+                    m.update(fTitle, fArtist, fThumb, fGenre);
+                    m.markManualAdd();
+                    if (fSeconds != null) m.updateDuration(fSeconds);
+                    if (fPublished != null) m.updatePublishedAt(fPublished);
+                    if (fViews != null) m.updateViewCount(fViews);
+                    return m;
+                })
+                .orElseGet(() -> musicRepository.save(Music.builder()
+                        .youtubeVideoId(videoId)
+                        .title(fTitle)
+                        .artist(fArtist)
+                        .thumbnailUrl(fThumb)
+                        .genre(fGenre)
+                        .durationSeconds(fSeconds)
+                        .publishedAt(fPublished)
+                        .viewCount(fViews)
+                        .manualAdd(true)
+                        .build()));
+        return toDto(music);
+    }
+
     /** 이 영상이 "진짜 곡(음원/공식 MV)"으로 볼 만한 신호가 있는가 (strict 게이트용) */
     private boolean looksLikeRealSong(JsonNode item, String title, String artist) {
         String a = artist == null ? "" : artist.toLowerCase();
@@ -689,6 +826,15 @@ public class YouTubeApiService {
                     if (fViews != null) m.updateViewCount(fViews);
                     return m;
                 })
+                // 다른 videoId 로 올라온 "같은 곡"(레이블/업로더만 다름)이 이미 있으면, 새로
+                // 중복 행을 만들지 않고 그 기존 곡의 조회수만 최신화한다. (관리자가 지워도
+                // 다음 동기화 때 다시 들어오던 문제의 근본 원인 — 정리는 사후 조치일 뿐이었음)
+                .or(() -> findExistingSameRecording(title, fSeconds).map(m -> {
+                    if (fViews != null && (m.getViewCount() == null || fViews > m.getViewCount())) {
+                        m.updateViewCount(fViews);
+                    }
+                    return m;
+                }))
                 .orElseGet(() -> musicRepository.save(Music.builder()
                         .youtubeVideoId(videoId)
                         .title(title)
@@ -700,6 +846,19 @@ public class YouTubeApiService {
                         .viewCount(fViews)
                         .build()));
         return Optional.of(music);
+    }
+
+    /** 제목(정규화) + 재생시간(오차 허용)으로 이미 카탈로그에 있는 "같은 녹음"을 찾는다. */
+    private Optional<Music> findExistingSameRecording(String title, long seconds) {
+        if (seconds <= 0) return Optional.empty();
+        String normTitle = normalizeTitleForDedupe(title);
+        if (normTitle.isEmpty()) return Optional.empty();
+        List<Music> candidates = musicRepository.findByDurationSecondsBetween(
+                seconds - SAME_RECORDING_DURATION_TOLERANCE_SEC,
+                seconds + SAME_RECORDING_DURATION_TOLERANCE_SEC);
+        return candidates.stream()
+                .filter(m -> normTitle.equals(normalizeTitleForDedupe(m.getTitle())))
+                .findFirst();
     }
 
     /**
@@ -953,11 +1112,12 @@ public class YouTubeApiService {
                         if (!v.isEmpty()) views = Long.parseLong(v);
                     } catch (Exception ignore) {}
 
-                    if (seconds == 0L || isNonMusicTitle(m.getTitle()) || !isValidSongDuration(seconds)) {
+                    boolean failsSongGate = seconds == 0L || isNonMusicTitle(m.getTitle()) || !isValidSongDuration(seconds);
+                    if (failsSongGate && !Boolean.TRUE.equals(m.getManualAdd())) {
                         musicRepository.delete(m);
                         deleted++;
                     } else {
-                        m.updateDuration(seconds);
+                        if (seconds > 0L) m.updateDuration(seconds);
                         if (publishedAt != null) m.updatePublishedAt(publishedAt);
                         if (views != null) m.updateViewCount(views);
                         String g = resolveGenre(m.getTitle(), m.getArtist(), audioLang, null);
@@ -1021,6 +1181,7 @@ public class YouTubeApiService {
         java.util.Iterator<Music> it0 = all.iterator();
         while (it0.hasNext()) {
             Music m = it0.next();
+            if (Boolean.TRUE.equals(m.getManualAdd())) { it0.remove(); continue; } // 관리자 직접 등록 → 정리 제외
             String artist = m.getArtist() == null ? "" : m.getArtist();
             boolean junk = isNonMusicTitle(m.getTitle())
                     || isNonMusicChannel(artist)
@@ -1056,7 +1217,8 @@ public class YouTubeApiService {
                 if (root.has("error")) {
                     int st = response.statusCode();
                     log.warn("[정리] videos.list {} - {}", st, root.path("error").path("message").asText(""));
-                    if (st == 403 || st == 429) { markKeyExhausted(currentApiKeyRaw()); apiError++; continue; }
+                    String reason = root.path("error").path("errors").path(0).path("reason").asText("");
+                    if (isQuotaError(st, reason)) { markKeyExhausted(currentApiKeyRaw()); apiError++; continue; }
                     apiError++;
                     continue;
                 }
@@ -1127,9 +1289,41 @@ public class YouTubeApiService {
         return x.trim();
     }
 
+    // 같은 녹음으로 볼 재생시간 오차 허용치(초). 서로 다른 업로더가 인코딩한 동일 곡은
+    // 보통 이 안쪽에서 길이가 거의 일치한다.
+    private static final long SAME_RECORDING_DURATION_TOLERANCE_SEC = 5;
+
     /**
-     * DB 전체를 (정규화 제목|정규화 아티스트) 로 묶어 그룹마다 대표 1곡만 남기고 나머지를 삭제한다.
-     * 대표 선정: viewCount 큰 것 → durationSeconds 있는 것 → publishedAt 오래된 것 → id 작은 것.
+     * 두 곡이 "같은 녹음"인지 판단한다. 제목은 이미 같은 그룹(정규화 제목 일치)이라고 가정하고,
+     * 서로 다른 채널(레이블/업로더)이 올린 동일 곡까지 잡아내기 위해 재생시간을 1차 기준으로 쓴다.
+     * 재생시간 정보가 둘 다 없으면 아티스트(채널) 정규화 일치로 폴백한다.
+     */
+    public static boolean isSameRecording(Music a, Music b) {
+        Long da = a.getDurationSeconds();
+        Long db = b.getDurationSeconds();
+        if (da != null && db != null && da > 0 && db > 0) {
+            return Math.abs(da - db) <= SAME_RECORDING_DURATION_TOLERANCE_SEC;
+        }
+        String na = normalizeArtistForDedupe(a.getArtist());
+        String nb = normalizeArtistForDedupe(b.getArtist());
+        return !na.isEmpty() && na.equals(nb);
+    }
+
+    /** candidate 가 current 보다 대표곡으로 더 적합하면 true (관리자 수동등록 > 조회수 높음). */
+    public static boolean isBetterRepresentative(Music candidate, Music current) {
+        boolean cManual = Boolean.TRUE.equals(candidate.getManualAdd());
+        boolean curManual = Boolean.TRUE.equals(current.getManualAdd());
+        if (cManual != curManual) return cManual;
+        long a = candidate.getViewCount() == null ? 0 : candidate.getViewCount();
+        long b = current.getViewCount() == null ? 0 : current.getViewCount();
+        return a > b;
+    }
+
+    /**
+     * DB 전체를 정규화 제목으로 묶고, 같은 제목 그룹 안에서 재생시간(또는 아티스트)이 같은 것끼리만
+     * "같은 녹음"으로 보아 대표 1곡만 남기고 나머지를 삭제한다.
+     * (예전엔 아티스트까지 정확히 같아야 병합했는데, 서로 다른 레이블/업로더 채널이 올린 동일 곡은
+     *  아티스트 문자열이 크게 달라 걸러지지 않는 문제가 있었다.)
      */
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public int dedupeCatalog() {
@@ -1137,32 +1331,32 @@ public class YouTubeApiService {
         Map<String, List<Music>> groups = new java.util.LinkedHashMap<>();
         for (Music m : all) {
             String t = normalizeTitleForDedupe(m.getTitle());
-            String a = normalizeArtistForDedupe(m.getArtist());
-            if (t.isEmpty() || a.isEmpty()) continue; // 정규화 후 비면 병합 위험 → 건드리지 않음
-            groups.computeIfAbsent(t + "|" + a, k -> new ArrayList<>()).add(m);
+            if (t.isEmpty()) continue; // 정규화 후 비면 병합 위험 → 건드리지 않음
+            groups.computeIfAbsent(t, k -> new ArrayList<>()).add(m);
         }
 
         int removed = 0;
         List<String> sample = new ArrayList<>();
         for (List<Music> g : groups.values()) {
             if (g.size() < 2) continue;
-            g.sort((x, y) -> {
-                long vx = x.getViewCount() == null ? -1 : x.getViewCount();
-                long vy = y.getViewCount() == null ? -1 : y.getViewCount();
-                if (vx != vy) return Long.compare(vy, vx);
-                boolean dx = x.getDurationSeconds() != null, dy = y.getDurationSeconds() != null;
-                if (dx != dy) return dx ? -1 : 1;
-                if (x.getPublishedAt() != null && y.getPublishedAt() != null
-                        && !x.getPublishedAt().equals(y.getPublishedAt())) {
-                    return x.getPublishedAt().compareTo(y.getPublishedAt());
+            List<Music> kept = new ArrayList<>();
+            for (Music m : g) {
+                Music match = null;
+                for (Music k : kept) {
+                    if (isSameRecording(k, m)) { match = k; break; }
                 }
-                return Long.compare(x.getId(), y.getId());
-            });
-            for (int i = 1; i < g.size(); i++) {
-                Music dup = g.get(i);
-                if (deleteMusicSafely(dup)) {
+                if (match == null) {
+                    kept.add(m);
+                    continue;
+                }
+                Music toDelete = m;
+                if (isBetterRepresentative(m, match)) {
+                    kept.set(kept.indexOf(match), m);
+                    toDelete = match;
+                }
+                if (deleteMusicSafely(toDelete)) {
                     removed++;
-                    if (sample.size() < 20) sample.add(dup.getArtist() + " - " + dup.getTitle());
+                    if (sample.size() < 20) sample.add(toDelete.getArtist() + " - " + toDelete.getTitle());
                 }
             }
         }
@@ -1225,7 +1419,7 @@ public class YouTubeApiService {
                 if (root.has("error")) {
                     int status = response.statusCode();
                     String reason = root.path("error").path("errors").path(0).path("reason").asText("");
-                    if (status == 429 || status == 403) {
+                    if (isQuotaError(status, reason)) {
                         markKeyExhausted(key);
                         root = null;
                         continue; // 다음 키로

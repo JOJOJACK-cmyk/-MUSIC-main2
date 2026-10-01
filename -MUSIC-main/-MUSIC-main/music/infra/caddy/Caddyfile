@@ -1,6 +1,11 @@
 {$APP_HOST} {
 	encode gzip
 
+	# SRS 웹훅은 도커 내부(srs → backend:8080)에서만 호출된다. 외부에서 호출하면
+	# 남의 방송을 강제 종료/시작 처리할 수 있으므로 차단한다. (/api/* 보다 구체적이라 먼저 매칭됨)
+	handle /api/broadcast/srs/* {
+		respond 403
+	}
 	handle /api/* {
 		reverse_proxy backend:8080
 	}
@@ -29,7 +34,17 @@
 		reverse_proxy backend:8080
 	}
 
-	handle /live/* {
+	# SRS HLS/썸네일 파일만 SRS로 보내고, 나머지 /live/* (목록·상세·채팅 오버레이 SPA 라우트)는
+	# 아래 catch-all에서 프론트로 서빙한다.
+	handle /live/*.m3u8 {
+		header Cache-Control "no-cache"
+		reverse_proxy srs:8080
+	}
+	handle /live/*.ts {
+		header Cache-Control "no-cache"
+		reverse_proxy srs:8080
+	}
+	handle /live/*.jpg {
 		header Cache-Control "no-cache"
 		reverse_proxy srs:8080
 	}

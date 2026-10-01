@@ -8,14 +8,36 @@ import LiveChat from '../components/LiveChat';
 import LiveVideoControls from '../components/LiveVideoControls';
 import FollowButton from '../components/FollowButton';
 import { useAuth } from '../context/AuthContext';
+import { useLiveView } from '../context/LiveViewContext';
+
+// 시청자 수 집계용 탭 단위 랜덤 ID (세션 쿠키 대신 사용 — 비로그인 시청자도 1명으로 정확히 집계)
+let fallbackViewerId = null;
+const getViewerId = () => {
+  try {
+    let id = sessionStorage.getItem('liveViewerId');
+    if (!id) {
+      id = (window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`)
+        .replace(/[^A-Za-z0-9-]/g, '');
+      sessionStorage.setItem('liveViewerId', id);
+    }
+    return id;
+  } catch {
+    // sessionStorage 차단 환경: 페이지 수명 동안 같은 ID 유지
+    if (!fallbackViewerId) fallbackViewerId = 'anon-' + Math.random().toString(36).slice(2, 12);
+    return fallbackViewerId;
+  }
+};
 
 export default function LiveDetailPage() {
   const { broadcastId } = useParams();
   const navigate = useNavigate();
   const videoRef = useRef(null);
   const videoWrapRef = useRef(null);
+  const videoColRef = useRef(null);
+  const [chatHeight, setChatHeight] = useState(null);
 
   const { user } = useAuth();
+  const { setActiveBroadcast } = useLiveView() || {};
 
   const [broadcast, setBroadcast] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -57,6 +79,19 @@ export default function LiveDetailPage() {
         );
 
         setBroadcast(found || null);
+
+        // 다른 페이지로 이동해도 화면 한켠에 작게 이어 보여주는 미니 플레이어용 상태.
+        // 방송이 끝나(목록에서 사라지) 있으면 미니 플레이어도 자동으로 닫는다.
+        if (found?.hlsUrl) {
+          setActiveBroadcast?.({
+            id: found.id,
+            hlsUrl: found.hlsUrl,
+            title: found.title,
+            broadcasterNickname: found.broadcaster,
+          });
+        } else {
+          setActiveBroadcast?.((prev) => (prev?.id === Number(broadcastId) || String(prev?.id) === String(broadcastId) ? null : prev));
+        }
       } catch (error) {
         console.error('방송 조회 실패:', error);
         setBroadcast(null);
@@ -157,7 +192,7 @@ export default function LiveDetailPage() {
     const sendHeartbeat = async () => {
       try {
         await fetch(
-          `/api/broadcast/${broadcast.id}/viewers/heartbeat`,
+          `/api/broadcast/${broadcast.id}/viewers/heartbeat?viewerId=${getViewerId()}`,
           {
             method: 'POST',
             credentials: 'include',
@@ -182,6 +217,31 @@ export default function LiveDetailPage() {
       clearInterval(interval);
     };
   }, [broadcast?.id]);
+
+  // 4. 채팅 패널 높이를 영상 칼럼 높이에 맞춤 (CSS Grid의 auto-row는 내용이
+  // 늘어나면 같이 늘어나므로, 채팅이 쌓여도 페이지가 밀리지 않게 실측해서 고정한다)
+  useEffect(() => {
+    if (loading || !broadcast) return;
+    const el = videoColRef.current;
+    if (!el) return;
+
+    const mq = window.matchMedia('(max-width: 1040px)');
+
+    const update = () => {
+      setChatHeight(mq.matches ? null : el.getBoundingClientRect().height);
+    };
+
+    update();
+
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    mq.addEventListener('change', update);
+
+    return () => {
+      ro.disconnect();
+      mq.removeEventListener('change', update);
+    };
+  }, [loading, broadcast?.id]);
 
   return (
     <>
@@ -264,7 +324,7 @@ export default function LiveDetailPage() {
           <>
             {/* 상단: 영상+컨트롤바(좌) + 채팅(우) — 채팅 높이는 왼쪽 칼럼에 맞춤 */}
             <div className="ld-stage">
-              <div className="ld-video-col">
+              <div className="ld-video-col" ref={videoColRef}>
                 <div className="ld-video" ref={videoWrapRef}>
                   <video
                     ref={videoRef}
@@ -285,7 +345,10 @@ export default function LiveDetailPage() {
               </div>
 
               {/* 오른쪽: (투표) + 채팅 */}
-              <aside className="ld-chat">
+              <aside
+                className="ld-chat"
+                style={chatHeight ? { height: `${chatHeight}px` } : undefined}
+              >
                 {broadcast.songRequestEnabled && (
                   <LivePoll broadcastId={broadcastId} isBroadcaster={isBroadcaster} />
                 )}
@@ -309,17 +372,6 @@ export default function LiveDetailPage() {
                 <span>· 👥 {broadcast.viewerCount ?? 0}명 시청 중</span>
               </div>
             </div>
-
-            {isBroadcaster && !broadcast.songRequestEnabled && (
-              <div
-                style={{
-                  marginTop: '20px', padding: '14px 16px', borderRadius: '12px',
-                  background: '#1a1114', border: '1px solid #3a2530', color: '#c7a9b8', fontSize: 13,
-                }}
-              >
-                💡 실시간 투표는 꺼져 있습니다. <b>프로필 → 내 채널</b>에서 켜면 채팅창 위에 투표 패널이 생깁니다.
-              </div>
-            )}
           </>
         )}
       </div>

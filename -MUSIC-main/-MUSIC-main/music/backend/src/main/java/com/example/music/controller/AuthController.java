@@ -26,11 +26,13 @@ import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -52,8 +54,63 @@ public class AuthController {
                 userId, java.time.LocalDateTime.now());
     }
 
-    // 이메일 인증 코드를 임시 저장할 맵
-    private final Map<String, String> verificationCodes = new ConcurrentHashMap<>();
+    // 이메일 인증 코드 임시 저장소 (목적별 키: "find-email:<email>", "reset:<email>")
+    //  - 5분 후 만료, 5회 틀리면 폐기, 재발송은 60초 간격 → 6자리 코드 무차별 대입 방지
+    private static final long CODE_TTL_MILLIS = 5 * 60 * 1000L;
+    private static final long RESEND_COOLDOWN_MILLIS = 60 * 1000L;
+    private static final int MAX_CODE_ATTEMPTS = 5;
+    private static final SecureRandom CODE_RANDOM = new SecureRandom();
+
+    private static final class PendingCode {
+        final String code;
+        final long issuedAt;
+        final long expiresAt;
+        int failedAttempts;
+
+        PendingCode(String code, long now) {
+            this.code = code;
+            this.issuedAt = now;
+            this.expiresAt = now + CODE_TTL_MILLIS;
+        }
+    }
+
+    private final Map<String, PendingCode> verificationCodes = new ConcurrentHashMap<>();
+
+    /** 재발송 쿨다운 중이면 true */
+    private boolean inResendCooldown(String key) {
+        PendingCode prev = verificationCodes.get(key);
+        return prev != null && System.currentTimeMillis() - prev.issuedAt < RESEND_COOLDOWN_MILLIS;
+    }
+
+    private String issueCode(String key) {
+        long now = System.currentTimeMillis();
+        verificationCodes.values().removeIf(c -> now > c.expiresAt); // 만료된 코드 청소
+        String code = String.format("%06d", CODE_RANDOM.nextInt(1_000_000));
+        verificationCodes.put(key, new PendingCode(code, now));
+        return code;
+    }
+
+    /** 코드 검증. 성공하면 코드를 소모(삭제)한다. 만료/시도 초과 시에도 삭제. */
+    private boolean consumeCode(String key, String input) {
+        PendingCode pending = verificationCodes.get(key);
+        if (pending == null || input == null) return false;
+        if (System.currentTimeMillis() > pending.expiresAt) {
+            verificationCodes.remove(key);
+            return false;
+        }
+        boolean match = MessageDigest.isEqual(
+                pending.code.getBytes(StandardCharsets.UTF_8),
+                input.trim().getBytes(StandardCharsets.UTF_8));
+        if (match) {
+            verificationCodes.remove(key);
+            return true;
+        }
+        synchronized (pending) {
+            pending.failedAttempts++;
+            if (pending.failedAttempts >= MAX_CODE_ATTEMPTS) verificationCodes.remove(key);
+        }
+        return false;
+    }
 
     // 💡 실제 메일 발송을 처리하는 헬퍼 메서드
     private void sendEmail(String toEmail, String subject, String text) {
@@ -146,8 +203,12 @@ public class AuthController {
             return ResponseEntity.badRequest().body(Map.of("message", "소셜 로그인 계정입니다. 해당 소셜 로그인을 이용해주세요."));
         }
 
-        String code = String.format("%06d", new Random().nextInt(1000000));
-        verificationCodes.put(user.getEmail(), code);
+        String codeKey = "find-email:" + user.getEmail();
+        if (inResendCooldown(codeKey)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(Map.of("message", "잠시 후 다시 시도해주세요. (1분에 한 번 발송할 수 있습니다)"));
+        }
+        String code = issueCode(codeKey);
 
         // 💡 실제 사용자의 이메일함으로 인증 번호 전송
         try {
@@ -181,13 +242,9 @@ public class AuthController {
         }
 
         User user = optionalUser.get();
-        String savedCode = verificationCodes.get(user.getEmail());
-
-        if (savedCode == null || !savedCode.equals(code.trim())) {
-            return ResponseEntity.badRequest().body(Map.of("message", "인증 코드가 일치하지 않습니다."));
+        if (!consumeCode("find-email:" + user.getEmail(), code)) {
+            return ResponseEntity.badRequest().body(Map.of("message", "인증 코드가 일치하지 않거나 만료되었습니다."));
         }
-
-        verificationCodes.remove(user.getEmail());
 
         return ResponseEntity.ok(Map.of(
                 "email", user.getEmail(),
@@ -217,8 +274,12 @@ public class AuthController {
             return ResponseEntity.badRequest().body(Map.of("message", "소셜 로그인 계정은 비밀번호를 찾을 수 없습니다."));
         }
 
-        String code = String.format("%06d", new Random().nextInt(1000000));
-        verificationCodes.put(email.trim(), code);
+        String codeKey = "reset:" + email.trim();
+        if (inResendCooldown(codeKey)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(Map.of("message", "잠시 후 다시 시도해주세요. (1분에 한 번 발송할 수 있습니다)"));
+        }
+        String code = issueCode(codeKey);
 
         // 💡 실제 사용자의 이메일함으로 인증 번호 전송
         try {
@@ -243,12 +304,9 @@ public class AuthController {
             return ResponseEntity.badRequest().body(Map.of("message", "이메일과 인증 코드를 모두 입력해주세요."));
         }
 
-        String savedCode = verificationCodes.get(email.trim());
-        if (savedCode == null || !savedCode.equals(code.trim())) {
-            return ResponseEntity.badRequest().body(Map.of("message", "인증 코드가 일치하지 않습니다."));
+        if (!consumeCode("reset:" + email.trim(), code)) {
+            return ResponseEntity.badRequest().body(Map.of("message", "인증 코드가 일치하지 않거나 만료되었습니다."));
         }
-
-        verificationCodes.remove(email.trim());
 
         Optional<User> optionalUser = userRepository.findByEmail(email.trim());
         if (optionalUser.isEmpty()) {
@@ -320,7 +378,7 @@ public class AuthController {
             response.put("email", email != null ? email : "");
             response.put("nickname", nickname != null ? nickname : "소셜사용자");
             response.put("profileImageUrl", profileImageUrl != null ? profileImageUrl : "");
-            response.put("role", "USER");
+            response.put("role", "ROLE_USER");
             return ResponseEntity.ok(response);
         }
 
@@ -384,14 +442,51 @@ public class AuthController {
         return ResponseEntity.ok(body);
     }
 
-    // 로그아웃 API
-    @PostMapping("/logout")
-    public ResponseEntity<String> logout(HttpServletRequest request) {
-        HttpSession session = request.getSession(false);
-        if (session != null) {
-            session.invalidate();
+    // 비밀번호 변경 API (로그인 상태 - 프로필 화면에서 현재 비밀번호 확인 후 변경)
+    @PatchMapping("/password")
+    public ResponseEntity<?> changePassword(
+            @RequestBody Map<String, String> request,
+            Authentication authentication) {
+
+        if (authentication == null || !authentication.isAuthenticated()
+                || "anonymousUser".equals(authentication.getPrincipal())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
         }
-        SecurityContextHolder.clearContext();
-        return ResponseEntity.ok("로그아웃 성공");
+
+        String email = authentication.getName();
+        Optional<User> optionalUser = userRepository.findByEmail(email);
+        if (optionalUser.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "유저를 찾을 수 없습니다."));
+        }
+        User user = optionalUser.get();
+
+        if (user.getProvider() != null && !user.getProvider().equals("local")) {
+            return ResponseEntity.badRequest().body(Map.of("message", "소셜 로그인 계정은 비밀번호를 변경할 수 없습니다."));
+        }
+
+        String currentPassword = request.get("currentPassword");
+        String newPassword = request.get("newPassword");
+
+        if (currentPassword == null || currentPassword.isBlank()
+                || newPassword == null || newPassword.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "현재 비밀번호와 새 비밀번호를 모두 입력해주세요."));
+        }
+        if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
+            return ResponseEntity.badRequest().body(Map.of("message", "현재 비밀번호가 일치하지 않습니다."));
+        }
+        if (newPassword.length() < 6) {
+            return ResponseEntity.badRequest().body(Map.of("message", "새 비밀번호는 6자 이상이어야 합니다."));
+        }
+        if (passwordEncoder.matches(newPassword, user.getPassword())) {
+            return ResponseEntity.badRequest().body(Map.of("message", "현재 비밀번호와 다른 비밀번호를 입력해주세요."));
+        }
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+
+        return ResponseEntity.ok(Map.of("message", "비밀번호가 변경되었습니다."));
     }
+
+    // 로그아웃(POST /api/auth/logout)은 SecurityConfig 의 LogoutFilter 가 처리한다
+    // (세션 무효화 + JSESSIONID 삭제 + Bearer 토큰 폐기). 컨트롤러까지 요청이 오지 않는다.
 }

@@ -3,15 +3,7 @@ import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import { usePlayer } from '../context/PlayerContext';
-
-const toTrack = (m) => ({
-  id: m.id ?? m.musicId,
-  youtubeVideoId: m.youtubeVideoId,
-  title: m.title,
-  artist: m.artist,
-  thumbnailUrl: m.thumbnailUrl,
-});
+import { wsUrl } from '../utils/wsAuth';
 
 /**
  * 채팅창 상단에 붙는 실시간 투표 위젯.
@@ -20,7 +12,6 @@ const toTrack = (m) => ({
  */
 export default function LivePoll({ broadcastId, isBroadcaster }) {
   const { user } = useAuth();
-  const { queueTrackThenList } = usePlayer();
 
   // 채팅 sender 와 동일한 식별자 (합산 투표를 위해 반드시 일치시킴)
   const voter = user?.nickname || user?.name || user?.email?.split('@')[0] || '';
@@ -51,15 +42,20 @@ export default function LivePoll({ broadcastId, isBroadcaster }) {
     if (!broadcastId) return;
     load();
     const client = new Client({
-      webSocketFactory: () => new SockJS('/ws-stomp'),
+      webSocketFactory: () => new SockJS(wsUrl('/ws-stomp')),
       reconnectDelay: 5000,
       onConnect: () => {
         client.subscribe(`/topic/broadcast/${broadcastId}/ranking`, (msg) => {
           try { setOptions(JSON.parse(msg.body) || []); } catch (_) {}
         });
         client.subscribe(`/topic/broadcast/${broadcastId}/next-song`, (msg) => {
-          setAlert(msg.body);
+          let payload = null;
+          try { payload = JSON.parse(msg.body); } catch (_) {}
+          const text = payload?.message || msg.body;
+          setAlert(text);
           setTimeout(() => setAlert(''), 7000);
+          // 실제 재생 예약은 전역 BroadcasterNextSongListener 가 한 번만 처리한다.
+          // (여기서도 처리하면 방송자가 라이브 페이지에 있을 때 같은 곡이 두 번 예약됨)
         });
       },
     });
@@ -81,35 +77,20 @@ export default function LivePoll({ broadcastId, isBroadcaster }) {
     if (!c || !c.connected) return;
     c.publish({
       destination: `/app/broadcast/${broadcastId}/vote`,
-      body: JSON.stringify({ voter, number: idx0Base + 1 }),
+      body: JSON.stringify({ number: idx0Base + 1 }), // 투표자는 서버가 로그인 정보로 판정
     });
     setMyVote(idx0Base);
     try { localStorage.setItem(`poll:vote:${broadcastId}`, String(idx0Base)); } catch {}
   };
 
-  const selectNext = async () => {
+  // 방송자가 버튼을 누르면 서버로 트리거만 보낸다 — 실제 재생은 STOMP 브로드캐스트를 받은
+  // 사이트 탭의 전역 리스너(BroadcasterNextSongListener)가 처리한다. 그래야 OBS 채팅 독처럼 플레이어가 없는 창에서 눌러도,
+  // 실제로 유튜브 플레이어가 떠 있는 사이트 탭이 똑같이 브로드캐스트를 받아 재생할 수 있다.
+  const selectNext = () => {
     const c = clientRef.current;
-    if (c?.connected) {
-      c.publish({ destination: `/app/broadcast/${broadcastId}/next-song`, body: JSON.stringify({}) });
-    }
+    if (!c?.connected) { alertOnce('연결이 끊겨 있어요. 잠시 후 다시 시도해 주세요'); return; }
     if (!leader?.songTitle) return;
-    try {
-      // 1위 곡 검색 + 실시간 인기곡 목록을 함께 가져와서
-      //   "지금 곡 끝나면 → 1위 곡 → 이후 실시간 인기곡" 순서로 예약
-      const [songRes, chartRes] = await Promise.all([
-        axios.get('/api/musics/search', { params: { keyword: leader.songTitle } }),
-        axios.get('/api/chart/realtime').catch(() => ({ data: [] })),
-      ]);
-      const hit = (Array.isArray(songRes.data) ? songRes.data : []).find((m) => m.youtubeVideoId);
-      if (!hit) { alertOnce(`"${leader.songTitle}" 검색 결과가 없어요`); return; }
-      const chart = (Array.isArray(chartRes.data) ? chartRes.data : [])
-        .map(toTrack)
-        .filter((t) => t.youtubeVideoId);
-      queueTrackThenList(hit, chart);
-      alertOnce(`다음 곡: ${hit.title || leader.songTitle}`);
-    } catch (_) {
-      alertOnce('곡을 재생하지 못했어요');
-    }
+    c.publish({ destination: `/app/broadcast/${broadcastId}/next-song`, body: JSON.stringify({}) });
   };
 
   const startEdit = () => { setEdit(options.map((o) => o.songTitle)); setEditing(true); };

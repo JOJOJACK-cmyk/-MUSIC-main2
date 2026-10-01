@@ -8,12 +8,15 @@ import HlsAudioPlayer from './components/HlsAudioPlayer';
 import MusicModal from './components/MusicModal';
 import PreviewLockModal from './components/PreviewLockModal';
 import LiveNowButton from './components/LiveNowButton';
+import BroadcasterNextSongListener from './components/BroadcasterNextSongListener';
+import LiveMiniPlayer from './components/LiveMiniPlayer';
 
 import MainPage from './pages/MainPage';
 import LoginPage from './pages/LoginPage';
 import ChartPage from './pages/ChartPage';
 import LivePage from './pages/LivePage';
 import ChatOverlay from './pages/ChatOverlay';
+import ChatDock from './pages/ChatDock';
 import LibraryPage from './pages/LibraryPage';
 import PaymentPage from './pages/PaymentPage';
 import PaymentSuccessPage from './pages/PaymentSuccessPage';
@@ -22,6 +25,7 @@ import PaymentFailPage from './pages/PaymentFailPage';
 import { PlayerProvider } from './context/PlayerContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
+import { LiveViewProvider } from './context/LiveViewContext';
 import { musicApi } from './api/musicApi';
 import './styles/style.css';
 
@@ -54,7 +58,7 @@ function AuthHandler() {
         nickname: params.get('nickname') || '사용자',
         email: email || '',
         profileImageUrl: params.get('profileImageUrl') || '',
-        role: params.get('role') || 'ROLE_USER',
+        role: 'ROLE_USER', // URL 의 role 은 신뢰하지 않음 — checkAuthStatus 의 /me 응답으로 갱신
       };
 
       if (token) localStorage.setItem('accessToken', token);
@@ -73,9 +77,11 @@ export default function App() {
   return (
     <AuthProvider>
       <PlayerProvider>
-        <BrowserRouter>
-          <AppRoot />
-        </BrowserRouter>
+        <LiveViewProvider>
+          <BrowserRouter>
+            <AppRoot />
+          </BrowserRouter>
+        </LiveViewProvider>
       </PlayerProvider>
     </AuthProvider>
   );
@@ -84,7 +90,7 @@ export default function App() {
 // 사이드바·플레이어 없이 전체 화면으로 띄우는 경로
 const CHROMELESS_ROUTES = ['/login'];
 // OBS 브라우저 소스용 채팅 오버레이 (동적 경로) — 앱 크롬 없이 렌더
-const CHROMELESS_PATTERNS = [/^\/live\/[^/]+\/chat\/?$/];
+const CHROMELESS_PATTERNS = [/^\/live\/[^/]+\/chat\/?$/, /^\/live\/[^/]+\/dock\/?$/];
 
 // OBS 오버레이는 알림/토스트/플레이어까지 전부 배제하고 순수 렌더한다.
 function AppRoot() {
@@ -98,6 +104,7 @@ function AppRoot() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/live/:broadcastId/chat" element={<ChatOverlay />} />
+        <Route path="/live/:broadcastId/dock" element={<ChatDock />} />
       </Routes>
     );
   }
@@ -139,8 +146,13 @@ function AppShell() {
       setIsModalOpen(false);
       window.location.reload();
     } catch (error) {
-      console.error('음원 등록 실패:', error);
-      alert('음원 등록에 실패했습니다. (백엔드 컨트롤러 또는 API Key를 확인해 주세요)');
+      const status = error?.response?.status;
+      const serverMsg = error?.response?.data?.message;
+      let msg = serverMsg || '음원 등록에 실패했습니다.';
+      if (status === 401) msg = '세션이 만료되었습니다. 다시 로그인해 주세요.';
+      else if (status === 403) msg = '음원 등록 권한이 없습니다. (관리자 계정으로 로그인해 주세요)';
+      console.error('음원 등록 실패:', status, error?.response?.data || error);
+      alert(msg);
     }
   };
 
@@ -222,6 +234,8 @@ function AppShell() {
             <PlayerBar />
             <PreviewLockModal />
             <LiveNowButton />
+            <BroadcasterNextSongListener />
+            <LiveMiniPlayer />
 
           </div>
   );

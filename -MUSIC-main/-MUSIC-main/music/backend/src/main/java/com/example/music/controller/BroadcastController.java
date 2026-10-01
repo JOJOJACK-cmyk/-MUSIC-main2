@@ -6,7 +6,6 @@ import com.example.music.entity.User;
 import com.example.music.service.BroadcastService;
 import com.example.music.service.LiveViewerService;
 import com.example.music.service.SongVoteService;
-import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -61,7 +60,7 @@ public class BroadcastController {
                     body.put("bannerUrl", b.getBannerUrl());
                     body.put("category", b.getCategory());
                     body.put("songRequestEnabled", b.isSongRequestEnabled());
-                    body.put("streamKey", b.getStreamKey());
+                    body.put("streamKey", b.obsStreamKey()); // OBS 에 그대로 붙여넣는 값
                     body.put("status", b.getStatus());
                     body.put("startedAt", b.getStartedAt());
                     return ResponseEntity.ok(body);
@@ -99,7 +98,7 @@ public class BroadcastController {
         Map<String, Object> body = new java.util.HashMap<>();
         body.put("id", b.getId());
         body.put("title", b.getTitle());
-        body.put("streamKey", b.getStreamKey());
+        body.put("streamKey", b.obsStreamKey()); // OBS 에 그대로 붙여넣는 값
         body.put("status", b.getStatus());
         return ResponseEntity.ok(body);
     }
@@ -198,9 +197,15 @@ public class BroadcastController {
      * 클라이언트에서 /app/broadcast/next-song 으로 메시지를 보내면
      * /topic/broadcast/next-song 을 구독 중인 모든 시청자에게 전송됨
      */
+    /**
+     * 다음 곡 알림 payload. songTitle 을 채워서 보내면, 방송자 본인의 다른 창(예: OBS 채팅
+     * 독)에서 눌러도 실제로 음악이 재생 중인 창(사이트 탭)이 이를 받아 재생하도록 프론트에서 사용한다.
+     */
+    public record NextSongMsg(String message, String songTitle) {}
+
     @MessageMapping("/broadcast/{broadcastId}/next-song")
     @SendTo("/topic/broadcast/{broadcastId}/next-song")
-    public String selectNextSong(
+    public NextSongMsg selectNextSong(
             @DestinationVariable Long broadcastId,
             Authentication authentication
     ) {
@@ -254,25 +259,27 @@ public class BroadcastController {
                         broadcastId
                 );
 
-        return "다음 곡: " + nextSong;
+        return new NextSongMsg("다음 곡: " + nextSong, nextSong);
     }
-    /** 투표 버튼 payload: { voter: "닉네임", number: 1 } (1-base) */
+    /** 투표 버튼 payload: { number: 1 } (1-base). voter 는 무시하고 웹소켓 인증 사용자로 판정한다. */
     public record VoteMsg(String voter, Integer number) {}
 
     /**
-     * 시청자 투표 (STOMP). payload {voter, number} — voter 는 채팅 sender 와 동일한 닉네임이라
-     * 채팅 "투표N" 과 버튼 투표가 한 사람 1표로 합산된다.
+     * 시청자 투표 (STOMP). 투표자는 Principal(로그인 사용자)로 정한다 — 채팅 "투표N" 과 같은
+     * 식별자(사용자 PK)를 써서 한 사람 1표로 합산된다. 비로그인이면 반영하지 않는다.
      */
     @MessageMapping("/broadcast/{broadcastId}/vote")
     @SendTo("/topic/broadcast/{broadcastId}/ranking")
     public List<SongVoteDto> voteSong(
             @DestinationVariable Long broadcastId,
-            VoteMsg msg
+            VoteMsg msg,
+            java.security.Principal principal
     ) {
-        if (msg != null && msg.voter() != null && msg.number() != null) {
+        if (msg != null && msg.number() != null) {
             int index = msg.number() - 1; // 1-base → 0-base
             if (index >= 0) {
-                songVoteService.vote(broadcastId, msg.voter().trim(), index);
+                authenticatedUserResolver.resolveOptionalUser(principal).ifPresent(user ->
+                        songVoteService.vote(broadcastId, ChatController.voterId(user), index));
             }
         }
         return songVoteService.getPoll(broadcastId);
@@ -295,16 +302,29 @@ public class BroadcastController {
     @PostMapping("/{broadcastId}/viewers/heartbeat")
     public ResponseEntity<Void> viewerHeartbeat(
             @PathVariable Long broadcastId,
-            HttpSession session
+            @RequestParam(required = false) String viewerId,
+            jakarta.servlet.http.HttpServletRequest request
     ) {
+        // 프론트가 탭마다 만든 랜덤 viewerId 로 시청자를 구분한다.
+        // (예전엔 세션 ID 를 썼는데, 비로그인 시청자마다 7일짜리 세션이 생기고
+        //  쿠키가 안 붙는 클라이언트는 요청마다 새 세션 = 시청자 수가 부풀려졌다)
+        String id;
+        if (viewerId != null && VIEWER_ID_PATTERN.matcher(viewerId).matches()) {
+            id = "v:" + viewerId;
+        } else {
+            jakarta.servlet.http.HttpSession session = request.getSession(false);
+            if (session == null) return ResponseEntity.badRequest().build();
+            id = "s:" + session.getId();
+        }
 
-        liveViewerService.heartbeat(
-                broadcastId,
-                session.getId()
-        );
+        liveViewerService.heartbeat(broadcastId, id);
 
         return ResponseEntity.ok().build();
     }
+
+    private static final java.util.regex.Pattern VIEWER_ID_PATTERN =
+            java.util.regex.Pattern.compile("^[A-Za-z0-9-]{8,64}$");
+
     private String extractLoginEmail(
             Authentication authentication
     ) {
