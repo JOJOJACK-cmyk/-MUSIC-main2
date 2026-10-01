@@ -11,7 +11,8 @@ const colorFor = (name = '') => {
 };
 
 // isBroadcaster: 방송자 본인이면 메시지마다 삭제 / 채팅 금지 메뉴를 보여준다 (권한은 서버가 다시 검증)
-const LiveChat = ({ broadcastId, isBroadcaster = false }) => {
+// onSendNotes: 있으면 입력창 옆에 ♪(음표 보내기) 버튼을 보여준다
+const LiveChat = ({ broadcastId, isBroadcaster = false, onSendNotes }) => {
   const { user } = useAuth();
   const sender =
     user?.nickname || user?.name || user?.email?.split('@')[0] || '게스트';
@@ -95,6 +96,22 @@ const LiveChat = ({ broadcastId, isBroadcaster = false }) => {
                 </div>
               );
             }
+            if (c.type === 'DONATION') {
+              return (
+                <div key={c.messageId || `${c.timestamp}-${i}`} className="lc-note">
+                  <div className="lc-note-notes" aria-hidden="true">
+                    <span>♪</span><span>♫</span><span>♪</span>
+                  </div>
+                  <div className="lc-note-head">
+                    <span className="lc-note-icon">♪</span>
+                    <span>
+                      <b>{c.sender}</b> 님이 음표 <b className="lc-note-amount">{Number(c.amount || 0).toLocaleString('ko-KR')}</b>개를 보냈어요
+                    </span>
+                  </div>
+                  {c.message && <div className="lc-note-msg">{c.message}</div>}
+                </div>
+              );
+            }
             if (c.type === 'NOTICE') {
               return (
                 <div key={c.messageId || `${c.timestamp}-${i}`} className="lc-vote lc-system">
@@ -151,6 +168,9 @@ const LiveChat = ({ broadcastId, isBroadcaster = false }) => {
 
       {modError && <div className="lc-mod-error">{modError}</div>}
       <div className="lc-input">
+        {onSendNotes && (
+          <button className="lc-note-btn" onClick={onSendNotes} title="음표 보내기">♪</button>
+        )}
         <input
           type="text"
           value={message}

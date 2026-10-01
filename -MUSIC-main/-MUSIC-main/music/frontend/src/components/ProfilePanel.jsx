@@ -305,6 +305,54 @@ function StudioTab() {
           </div>
         )}
       </div>
+
+      <ReceivedNotes />
+    </div>
+  );
+}
+
+/* ---------- 받은 음표 (스튜디오) ---------- */
+function ReceivedNotes() {
+  const [data, setData] = useState(null); // { total, items }
+  useEffect(() => {
+    let alive = true;
+    req('/api/notes/received')
+      .then((r) => (r.ok ? r.json() : { total: 0, items: [] }))
+      .then((d) => alive && setData(d))
+      .catch(() => alive && setData({ total: 0, items: [] }));
+    return () => { alive = false; };
+  }, []);
+
+  return (
+    <div style={{ ...card, marginTop: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#d9c7d4' }}>
+          <span style={{ color: ACCENT, marginRight: 6, fontSize: 15 }}>♪</span>받은 음표
+        </div>
+        {data && (
+          <span style={{ fontSize: 12, fontWeight: 800, color: '#fff', background: ACCENT, borderRadius: 999, padding: '3px 10px' }}>
+            누적 ♪ {Number(data.total || 0).toLocaleString('ko-KR')}
+          </span>
+        )}
+      </div>
+      {data === null ? (
+        <div style={{ fontSize: 12, color: '#a98db9' }}>불러오는 중…</div>
+      ) : data.items?.length ? (
+        data.items.map((n, i) => (
+          <div key={i} style={{ padding: '9px 0', borderTop: i === 0 ? 'none' : '1px solid #33202e' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13 }}>
+              <span style={{ color: '#efe6ec', fontWeight: 700 }}>{n.donor}</span>
+              <span style={{ color: ACCENT, fontWeight: 800 }}>♪ {Number(n.amount).toLocaleString('ko-KR')}</span>
+            </div>
+            {n.message && <div style={{ fontSize: 12, color: '#cdb6c6', marginTop: 3 }}>{n.message}</div>}
+            <div style={{ fontSize: 11, color: '#8d7896', marginTop: 2 }}>
+              {n.paidAt ? new Date(n.paidAt).toLocaleString('ko-KR') : ''}
+            </div>
+          </div>
+        ))
+      ) : (
+        <div style={{ fontSize: 12, color: '#a98db9' }}>아직 받은 음표가 없어요. 방송 중에 시청자가 음표를 보낼 수 있어요.</div>
+      )}
     </div>
   );
 }

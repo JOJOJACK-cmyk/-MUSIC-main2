@@ -18,11 +18,13 @@ public class ChatMessageDto {
     private String sender;
     private String message;
     private MessageType type;
+    private Integer amount;   // DONATION(음표) 일 때 보낸 음표 수 (1음표 = 1원)
     private String timestamp; // 채팅 전송 시간 (예: "2026-08-24 10:15:30")
 
     public enum MessageType {
         ENTER, TALK, LEAVE, VOTE,
         NOTICE, // 시스템 안내 (채팅 금지 등)
-        DELETE  // messageId 의 메시지를 지우라는 신호
+        DELETE, // messageId 의 메시지를 지우라는 신호
+        DONATION // 음표(후원) 알림 — 결제 승인 후 서버만 보낸다
     }
 }

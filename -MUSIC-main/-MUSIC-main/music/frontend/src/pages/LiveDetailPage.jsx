@@ -7,6 +7,7 @@ import LivePoll from '../components/LivePoll';
 import LiveChat from '../components/LiveChat';
 import LiveVideoControls from '../components/LiveVideoControls';
 import FollowButton from '../components/FollowButton';
+import NoteDonationModal from '../components/NoteDonationModal';
 import { useAuth } from '../context/AuthContext';
 import { useLiveView } from '../context/LiveViewContext';
 
@@ -29,6 +30,7 @@ const getViewerId = () => {
 };
 
 export default function LiveDetailPage() {
+  const [showNotes, setShowNotes] = useState(false); // 음표 보내기 모달
   const { broadcastId } = useParams();
   const navigate = useNavigate();
   const videoRef = useRef(null);
@@ -58,6 +60,8 @@ export default function LiveDetailPage() {
     !!broadcast &&
     !!currentUserName &&
     broadcast.broadcaster === currentUserName;
+  // 음표는 로그인한 시청자만 (방송자 본인 제외 — 서버도 다시 검사)
+  const canSendNotes = !!user && !!broadcast && !isBroadcaster;
 
   // 1. 현재 방송 정보 조회
   useEffect(() => {
@@ -353,7 +357,11 @@ export default function LiveDetailPage() {
                   <LivePoll broadcastId={broadcastId} isBroadcaster={isBroadcaster} />
                 )}
                 <div className="ld-chat-body">
-                  <LiveChat broadcastId={broadcastId} isBroadcaster={isBroadcaster} />
+                  <LiveChat
+                    broadcastId={broadcastId}
+                    isBroadcaster={isBroadcaster}
+                    onSendNotes={canSendNotes ? () => setShowNotes(true) : undefined}
+                  />
                 </div>
               </aside>
             </div>
@@ -369,12 +377,25 @@ export default function LiveDetailPage() {
               >
                 <span>방송자: {broadcast.broadcaster}</span>
                 <FollowButton channelUserId={broadcast.broadcasterId} size="sm" />
+                {canSendNotes && (
+                  <button className="note-open-btn" onClick={() => setShowNotes(true)}>
+                    <span className="note-open-icon">♪</span> 음표 보내기
+                  </button>
+                )}
                 <span>· 👥 {broadcast.viewerCount ?? 0}명 시청 중</span>
               </div>
             </div>
           </>
         )}
       </div>
+
+      {showNotes && broadcast && (
+        <NoteDonationModal
+          broadcastId={broadcast.id}
+          broadcasterName={broadcast.broadcaster}
+          onClose={() => setShowNotes(false)}
+        />
+      )}
     </>
   );
 }
