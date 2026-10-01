@@ -72,8 +72,13 @@ public class PaymentService {
                 .build();
         paymentRepository.save(payment);
 
+        // 아직 유효한 이용권이 있으면 남은 기간을 버리지 않고 그 만료일 뒤로 이어 붙인다.
         LocalDateTime startDate = LocalDateTime.now();
-        LocalDateTime expireDate = startDate.plusMonths(plan.getMonths());
+        LocalDateTime base = passRepository
+                .findFirstByUser_IdAndIsActiveTrueAndExpireDateAfterOrderByExpireDateDesc(user.getId(), startDate)
+                .map(Pass::getExpireDate)
+                .orElse(startDate);
+        LocalDateTime expireDate = base.plusMonths(plan.getMonths());
 
         Pass pass = Pass.builder()
                 .user(user)

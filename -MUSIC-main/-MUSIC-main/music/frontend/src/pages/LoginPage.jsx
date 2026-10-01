@@ -40,6 +40,10 @@ export default function LoginPage() {
       navigate('/');
     } catch (err) {
       console.error('로그인 에러:', err);
+      if (err.response?.status === 429) {
+        alert(err.response.data?.message || '로그인 시도가 너무 많습니다. 잠시 후 다시 시도해주세요.');
+        return;
+      }
       alert('로그인 실패: 이메일 또는 비밀번호를 확인해주세요.');
     }
   };
@@ -51,6 +55,10 @@ export default function LoginPage() {
       alert('회원가입이 완료되었습니다! 로그인해 주세요.');
       setActiveTab('login');
     } catch (err) {
+      if (err.response?.status === 429) {
+        alert(err.response.data?.message || '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.');
+        return;
+      }
       alert('회원가입 실패: 이미 존재하는 이메일이거나 오류가 발생했습니다.');
     }
   };
