@@ -1,2 +1,7 @@
 # 프로젝트 제외 경로
 /-MUSIC-main/music/backend/target/
+
+# 환경변수 (실제 자격증명 포함, 절대 커밋 금지)
+**/.env
+# 로컬 개발용 비밀 설정 (application.properties 가 optional import)
+**/application-secret.properties

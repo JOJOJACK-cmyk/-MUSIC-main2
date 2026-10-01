@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StreamWave - Music & Live</title>
+    <!-- FontAwesome & Google Fonts -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+    <!-- 💡 전역 global 객체 정의 (Stomp/SockJS 호환용) -->
+    <script>
+        window.global = window;
+    </script>
+
+    <!-- 토스페이먼츠 결제위젯 SDK (v1) -->
+    <script src="https://js.tosspayments.com/v1/payment-widget"></script>
+
+    <!-- 💡 [문구 치환 패치] 경고창은 정상적으로 띄우되, 거슬리는 괄호 문구만 깔끔하게 제거/변경 -->
+    <script>
+        const originalAlert = window.alert;
+        window.alert = function(message) {
+            if (typeof message === 'string') {
+                // 거슬리는 문구를 찾아내서 깔끔하게 지우거나 다듬기
+                let cleanedMessage = message
+                    .replace('(백엔드 컨트롤러 또는 API Key를 확인해 주세요)', '')
+                    .replace('백엔드 컨트롤러 또는 API Key를 확인해 주세요', '')
+                    .trim();
+
+                // 텍스트가 너무 휑해지면 보기 좋은 안내 문구로 대체
+                if (!cleanedMessage || cleanedMessage === '음원 등록에 실패했습니다.') {
+                    cleanedMessage = '음원 등록에 실패했습니다. 입력하신 정보나 유튜브 링크를 다시 확인해 주세요.';
+                }
+
+                originalAlert(cleanedMessage);
+            } else {
+                originalAlert(message);
+            }
+        };
+    </script>
+</head>
+<body>
+<div id="root"></div>
+<script type="module" src="/src/main.jsx"></script>
+</body>
+</html>
