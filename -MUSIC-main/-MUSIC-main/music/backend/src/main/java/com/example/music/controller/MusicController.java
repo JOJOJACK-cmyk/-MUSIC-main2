@@ -23,6 +23,8 @@ import java.util.Map;
 public class MusicController {
 
     private final MusicService musicService;
+    private final com.example.music.service.RecentPlayService recentPlayService;
+    private final com.example.music.security.AuthenticatedUserResolver authenticatedUserResolver;
 
     // ==========================================
     // 1. 일반 사용자용 API (목록, 차트 조회 및 좋아요)
@@ -77,6 +79,15 @@ public class MusicController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body("세션이 만료되었습니다. 다시 로그인해 주세요.");
         }
+    }
+
+    @Tag(name = "Music API", description = "일반 청취자용 음원 및 차트 조회 API")
+    @Operation(summary = "최근 들은 곡", description = "30초 이상 들은 곡을 최신순으로 최대 50곡 조회합니다.")
+    @GetMapping("/recent")
+    public ResponseEntity<?> getRecentMusics(Authentication authentication) {
+        return authenticatedUserResolver.resolveOptionalUser(authentication)
+                .<ResponseEntity<?>>map(u -> ResponseEntity.ok(recentPlayService.getRecent(u.getId())))
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("로그인이 필요한 서비스입니다."));
     }
 
     // 💡 음원 좋아요(내 보관함 담기/취소) 토글 API

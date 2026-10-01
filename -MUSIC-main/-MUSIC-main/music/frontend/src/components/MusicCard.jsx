@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { usePlayer } from '../context/PlayerContext';
+import AddToPlaylistButton from './AddToPlaylistButton';
 
 export default function MusicCard({
   music,
@@ -131,6 +132,9 @@ export default function MusicCard({
             }}
           ></i>
         </button>
+
+        {/* ➕ 플레이리스트에 담기 (로그인 사용자만 보임) */}
+        <AddToPlaylistButton musicId={music.id} />
 
         {/* 💡 오직 관리자(isAdmin이 true)일 때만 수정/삭제 버튼이 렌더링됨 */}
         {isAdmin && (
