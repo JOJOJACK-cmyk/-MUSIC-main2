@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -33,6 +34,7 @@ public class PaymentController {
 
     private final PaymentService paymentService;
     private final PassRepository passRepository;
+    private final com.example.music.repository.PaymentRepository paymentRepository;
     private final AuthenticatedUserResolver authenticatedUserResolver;
 
     @Value("${toss.payments.client-key}")
@@ -61,6 +63,25 @@ public class PaymentController {
         body.put("passName", pass.map(Pass::getPassName).orElse(null));
         body.put("startDate", pass.map(Pass::getStartDate).orElse(null));
         body.put("expireDate", pass.map(Pass::getExpireDate).orElse(null));
+        return ResponseEntity.ok(body);
+    }
+
+    @Operation(summary = "내 결제 내역", description = "현재 로그인 사용자의 결제 내역을 최신순으로 반환합니다.")
+    @GetMapping("/history")
+    public ResponseEntity<List<Map<String, Object>>> myPaymentHistory(Authentication authentication) {
+        User user = authenticatedUserResolver.resolveRequiredUser(authentication);
+        List<Map<String, Object>> body = paymentRepository.findByUser_IdOrderByPaidAtDesc(user.getId())
+                .stream()
+                .map(p -> {
+                    Map<String, Object> m = new HashMap<>();
+                    m.put("orderId", p.getOrderId());
+                    m.put("passType", p.getPassType());
+                    m.put("amount", p.getAmount());
+                    m.put("status", p.getStatus());
+                    m.put("paidAt", p.getPaidAt());
+                    return m; // paymentKey 는 노출하지 않는다
+                })
+                .toList();
         return ResponseEntity.ok(body);
     }
 
