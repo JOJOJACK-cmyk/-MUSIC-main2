@@ -15,7 +15,7 @@
     <artifactId>music</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>music</name>
-    <description>React + Spring Boot music streaming team project backend</description>
+    <description>StreamWave - React + Spring Boot music streaming &amp; live platform backend</description>
 
     <properties>
         <java.version>25</java.version>
@@ -78,7 +78,7 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
-        <!-- Team project planned features -->
+        <!-- Redis / WebSocket -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
