@@ -2376,3 +2376,80 @@ body {
     font-weight: 800;
 }
 .view-switch button.active .view-switch-badge { background: rgba(0, 0, 0, 0.25); }
+
+/* ==========================================
+   📂 보관함 탭 / 플레이리스트
+   ========================================== */
+.lib-tabs { display: flex; gap: 8px; margin: -8px 0 20px; flex-wrap: wrap; }
+.lib-tab {
+    background: transparent; border: 1px solid rgba(255, 255, 255, 0.12); color: var(--text-sub);
+    border-radius: 999px; padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+    transition: all 0.15s ease;
+}
+.lib-tab:hover { color: #fff; border-color: rgba(224, 40, 183, 0.5); }
+.lib-tab.active { color: #fff; background: rgba(224, 40, 183, 0.18); border-color: rgba(224, 40, 183, 0.6); }
+.lib-tab i { margin-right: 4px; font-size: 12px; }
+.lib-retry {
+    margin-top: 12px; padding: 8px 16px; border-radius: 8px; border: 1px solid #412a3c;
+    background: transparent; color: #d9c7d4; cursor: pointer; font-weight: 600;
+}
+
+.pl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 18px; }
+.pl-card {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left;
+    background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 14px; padding: 12px; color: #fff; cursor: pointer; transition: border-color 0.15s, transform 0.15s;
+}
+.pl-card:hover { border-color: rgba(224, 40, 183, 0.5); transform: translateY(-2px); }
+.pl-card strong { font-size: 14px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-card small { font-size: 12px; color: var(--text-sub); }
+.pl-cover {
+    width: 100%; aspect-ratio: 1 / 1; border-radius: 10px; margin-bottom: 6px; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #2b1028, #170a16); color: rgba(224, 40, 183, 0.7); font-size: 28px;
+}
+.pl-cover img { width: 100%; height: 100%; object-fit: cover; }
+.pl-card-new { border-style: dashed; }
+
+.pl-detail-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+.pl-detail-head h3 { margin: 0; font-size: 20px; font-weight: 800; }
+.pl-back {
+    background: none; border: none; color: var(--text-sub); cursor: pointer; font-size: 13px; padding: 4px 0;
+}
+.pl-back:hover { color: #fff; }
+.pl-detail-actions { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+.pl-detail-actions button {
+    background: #1e1e25; border: 1px solid #33333d; color: #ddd; border-radius: 8px;
+    padding: 7px 12px; font-size: 12.5px; cursor: pointer;
+}
+.pl-detail-actions button:hover:not(:disabled) { border-color: rgba(224, 40, 183, 0.6); color: #fff; }
+.pl-detail-actions button:disabled { opacity: 0.5; cursor: default; }
+.pl-detail-actions button.danger { color: #ff8bab; }
+.pl-track { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.pl-track .music-card { min-width: 0; flex: initial; }
+.pl-remove {
+    align-self: center; background: none; border: 1px solid rgba(255, 255, 255, 0.1); color: var(--text-sub);
+    border-radius: 999px; padding: 4px 12px; font-size: 11.5px; cursor: pointer;
+}
+.pl-remove:hover { color: #ff8bab; border-color: rgba(255, 139, 171, 0.5); }
+
+/* 곡 카드의 "플레이리스트에 담기" 팝업 — .card-actions button 기본 스타일을 덮어쓴다 */
+.pl-add { position: relative; display: flex; align-items: center; }
+.pl-add-flash {
+    position: absolute; right: 0; bottom: 32px; white-space: nowrap; font-size: 11px; font-weight: 600;
+    color: #fff; background: rgba(224, 40, 183, 0.9); border-radius: 6px; padding: 3px 8px; pointer-events: none;
+}
+.pl-add-menu {
+    position: absolute; right: 0; bottom: 32px; z-index: 20; width: 190px; max-height: 240px; overflow-y: auto;
+    background: #1e1e25; border: 1px solid #34343e; border-radius: 10px; padding: 6px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+}
+.pl-add-title { font-size: 11px; color: var(--text-sub); padding: 4px 6px 6px; }
+.pl-add-empty { font-size: 12px; color: var(--text-sub); padding: 6px; }
+.card-actions .pl-add-menu .pl-add-item {
+    width: 100%; height: auto; justify-content: space-between; gap: 8px; text-align: left;
+    padding: 7px 8px; font-size: 12.5px; color: #ddd; border-radius: 6px;
+}
+.card-actions .pl-add-menu .pl-add-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-actions .pl-add-menu .pl-add-item small { color: var(--text-sub); font-size: 11px; flex-shrink: 0; }
+.card-actions .pl-add-menu .pl-add-new { justify-content: flex-start; color: var(--primary-hover); border-top: 1px solid #2c2c35; border-radius: 0 0 6px 6px; margin-top: 4px; }

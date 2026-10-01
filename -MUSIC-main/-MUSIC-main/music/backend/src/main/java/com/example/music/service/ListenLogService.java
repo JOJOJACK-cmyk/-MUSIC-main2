@@ -24,6 +24,7 @@ public class ListenLogService {
     private final UserRepository userRepository;
     private final MusicRepository musicRepository;
     private final ChartService chartService;
+    private final RecentPlayService recentPlayService;
 
     // 🔥 이용권(결제) 상태 검증을 위한 PassRepository 주입
     private final PassRepository passRepository;
@@ -47,6 +48,11 @@ public class ListenLogService {
         if (user == null) {
             log.warn("[Log Collector] 인증된 사용자를 찾을 수 없어 로그 기록을 취소합니다.");
             return;
+        }
+
+        // 최근 들은 곡은 이용권과 무관하게 모든 로그인 사용자에게 기록 (차트 반영과는 별개)
+        if (dto.getMusicId() != null && musicRepository.existsById(dto.getMusicId())) {
+            recentPlayService.record(user.getId(), dto.getMusicId());
         }
 
         // 🔥 3. 이용권(결제) 상태 검증 — 관리자/부관리자는 이용권 없이도 청취 기록 인정
