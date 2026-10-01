@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -18,6 +19,7 @@ import java.util.Set;
  * Redis 키 (broadcastId 기준)
  *   broadcast:{id}:poll:options        LIST   옵션 텍스트(등록 순서)
  *   broadcast:{id}:poll:votes          HASH   { indexStr -> count }
+ *   broadcast:{id}:poll:musicIds       HASH   { indexStr -> musicId }  카탈로그에서 고른 옵션만
  *   broadcast:{id}:poll:voter:{who}    STRING 이 시청자가 고른 index
  */
 @Slf4j
@@ -33,27 +35,44 @@ public class SongVoteService {
 
     private String optionsKey(Long b) { return "broadcast:" + b + ":poll:options"; }
     private String votesKey(Long b)   { return "broadcast:" + b + ":poll:votes"; }
+    private String musicIdsKey(Long b) { return "broadcast:" + b + ":poll:musicIds"; }
+
+    /** 투표 옵션 하나. musicId 가 있으면 1위 확정 시 제목 재검색 없이 그 곡을 바로 재생한다. */
+    public record PollOption(String title, Long musicId) {
+        public static PollOption text(String title) { return new PollOption(title, null); }
+    }
     private String voterKey(Long b, String who) { return "broadcast:" + b + ":poll:voter:" + who; }
 
     // ── 스트리머: 옵션 관리 ──────────────────────────────────────────
 
-    /** 곡 목록을 통째로 교체하고 표를 초기화한다. */
+    /** 곡 목록(제목만)을 통째로 교체하고 표를 초기화한다. */
     public void setOptions(Long broadcastId, List<String> options) {
+        List<PollOption> opts = new ArrayList<>();
+        if (options != null) for (String t : options) opts.add(PollOption.text(t));
+        setPollOptions(broadcastId, opts);
+    }
+
+    /** 곡 목록을 통째로 교체하고 표를 초기화한다. (최대 10개) */
+    public void setPollOptions(Long broadcastId, List<PollOption> options) {
         clearVotesOnly(broadcastId);
         redis.delete(optionsKey(broadcastId));
+        redis.delete(musicIdsKey(broadcastId));
         if (options == null) return;
 
-        List<String> clean = new ArrayList<>();
-        for (String s : options) {
-            if (s == null) continue;
-            String t = s.trim();
-            if (!t.isEmpty() && clean.size() < 10) clean.add(t);
+        List<PollOption> clean = new ArrayList<>();
+        for (PollOption o : options) {
+            if (o == null || o.title() == null) continue;
+            String t = o.title().trim();
+            if (!t.isEmpty() && clean.size() < 10) clean.add(new PollOption(t, o.musicId()));
         }
         if (clean.isEmpty()) return;
 
         String key = optionsKey(broadcastId);
-        for (String opt : clean) {
-            redis.opsForList().rightPush(key, opt);
+        for (int i = 0; i < clean.size(); i++) {
+            redis.opsForList().rightPush(key, clean.get(i).title());
+            if (clean.get(i).musicId() != null) {
+                redis.opsForHash().put(musicIdsKey(broadcastId), String.valueOf(i), String.valueOf(clean.get(i).musicId()));
+            }
         }
     }
 
@@ -67,10 +86,12 @@ public class SongVoteService {
 
     /** index 곡 삭제 후 표 초기화(번호가 밀리므로). */
     public void removeOption(Long broadcastId, int index) {
-        List<String> opts = getOptions(broadcastId);
-        if (index < 0 || index >= opts.size()) return;
-        opts.remove(index);
-        setOptions(broadcastId, opts);
+        List<SongVoteDto> poll = getPoll(broadcastId);
+        if (index < 0 || index >= poll.size()) return;
+        poll.remove(index);
+        List<PollOption> opts = new ArrayList<>();
+        for (SongVoteDto d : poll) opts.add(new PollOption(d.getSongTitle(), d.getMusicId()));
+        setPollOptions(broadcastId, opts);
     }
 
     // ── 시청자: 투표 ────────────────────────────────────────────────
@@ -115,11 +136,17 @@ public class SongVoteService {
     public List<SongVoteDto> getPoll(Long broadcastId) {
         List<String> opts = getOptions(broadcastId);
         List<SongVoteDto> out = new ArrayList<>();
+        if (opts.isEmpty()) return out;
+        Map<Object, Object> votes = redis.opsForHash().entries(votesKey(broadcastId));
+        Map<Object, Object> musicIds = redis.opsForHash().entries(musicIdsKey(broadcastId));
         for (int i = 0; i < opts.size(); i++) {
-            Object c = redis.opsForHash().get(votesKey(broadcastId), String.valueOf(i));
+            Object c = votes.get(String.valueOf(i));
             long count = 0;
             try { count = c == null ? 0 : Long.parseLong(String.valueOf(c)); } catch (Exception ignore) {}
-            out.add(new SongVoteDto(i, opts.get(i), Math.max(0, count)));
+            Long musicId = null;
+            Object mid = musicIds.get(String.valueOf(i));
+            try { musicId = mid == null ? null : Long.valueOf(String.valueOf(mid)); } catch (Exception ignore) {}
+            out.add(new SongVoteDto(i, opts.get(i), Math.max(0, count), musicId));
         }
         return out;
     }
@@ -131,14 +158,19 @@ public class SongVoteService {
         return limit > 0 && poll.size() > limit ? poll.subList(0, limit) : poll;
     }
 
+    /** 1위 항목 (동점이면 낮은 번호). 옵션이 없으면 null. */
+    public SongVoteDto getTop1(Long broadcastId) {
+        SongVoteDto best = null;
+        for (SongVoteDto d : getPoll(broadcastId)) {
+            if (best == null || d.getVoteCount() > best.getVoteCount()) best = d;
+        }
+        return best;
+    }
+
     /** 1위 곡 제목 (동점이면 낮은 번호). */
     public String getTop1Song(Long broadcastId) {
-        String best = null;
-        long bestCount = -1;
-        for (SongVoteDto d : getPoll(broadcastId)) {
-            if (d.getVoteCount() > bestCount) { bestCount = d.getVoteCount(); best = d.getSongTitle(); }
-        }
-        return best != null ? best : "등록된 신청곡이 없습니다.";
+        SongVoteDto best = getTop1(broadcastId);
+        return best != null ? best.getSongTitle() : "등록된 신청곡이 없습니다.";
     }
 
     private void clearVotesOnly(Long broadcastId) {
@@ -156,6 +188,7 @@ public class SongVoteService {
     public void clearBroadcastVotes(Long broadcastId) {
         clearVotesOnly(broadcastId);
         redis.delete(optionsKey(broadcastId));
+        redis.delete(musicIdsKey(broadcastId));
         log.info("방송 투표 Redis 정리 완료: broadcastId={}", broadcastId);
     }
 }
