@@ -55,7 +55,7 @@ export default function MyOrdersTab() {
                 <span className={`order-badge ${st.cls}`}>{st.label}</span>
               </div>
               <div className="pp-order-meta">
-                {won(o.unitPrice)} × {o.quantity} = <b>{won(o.totalAmount)}</b>
+                {won(o.unitPrice)} × {o.quantity}{o.discountPct ? ` − ${o.discountPct}% 할인` : ''} = <b>{won(o.totalAmount)}</b>
               </div>
               <div className="pp-order-meta">
                 {o.recipientName} · {o.address} {o.addressDetail || ''}

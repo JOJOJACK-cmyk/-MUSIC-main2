@@ -5,6 +5,8 @@ import com.example.music.dto.SongVoteDto;
 import com.example.music.entity.User;
 import com.example.music.security.AuthenticatedUserResolver;
 import com.example.music.service.BroadcastService;
+import com.example.music.service.PassEntitlementService;
+import com.example.music.service.PassFeature;
 import com.example.music.service.SongVoteService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +33,7 @@ public class ChatController {
     private final BroadcastService broadcastService;
     private final AuthenticatedUserResolver authenticatedUserResolver;
     private final com.example.music.service.ChatModerationService chatModerationService;
+    private final PassEntitlementService entitlementService;
 
     // "투표1", "투표 2", "vote3" 등 → 번호 추출
     private static final Pattern VOTE_CMD =
@@ -97,6 +100,8 @@ public class ChatController {
         Optional<User> me = authenticatedUserResolver.resolveOptionalUser(principal);
         message.setSender(me.map(AuthenticatedUserResolver::displayName).orElse(GUEST_NAME));
         message.setSenderId(me.map(User::getId).orElse(null));
+        // 프리미엄 ♪ 배지 — 클라이언트가 보낸 값은 무시하고 이용권으로 서버가 정한다
+        message.setPremium(me.isPresent() && entitlementService.has(me.get(), PassFeature.CHAT_BADGE));
         message.setMessageId(UUID.randomUUID().toString());
         message.setTimestamp(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
 

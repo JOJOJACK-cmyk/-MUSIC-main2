@@ -4,15 +4,17 @@ import { useNavigate } from 'react-router-dom';
 import { usePlayer } from '../context/PlayerContext';
 import { useAuth } from '../context/AuthContext';
 
-// 무료(비로그인 또는 미결제) 회원이 세션 누적 1분 미리듣기를 모두 소진했을 때 뜨는 안내창.
+// 무료 미리듣기(하루 누적 1분)를 다 썼거나, 곡 수 제한 이용권의 곡을 다 쓴 뒤 미리듣기도 끝났을 때 뜨는 안내창.
 export default function PreviewLockModal() {
-  const { previewLocked, previewLimitSeconds, dismissPreviewLock } = usePlayer();
+  const { previewLocked, previewLimitSeconds, dismissPreviewLock, lockReason, limitedPlay } = usePlayer();
   const { user } = useAuth();
   const navigate = useNavigate();
 
   if (!previewLocked) return null;
 
   const isLoggedIn = Boolean(user);
+  // 곡 수 제한 이용권(라이트)의 곡을 다 쓴 경우 — 이미 들은 곡은 계속 전곡 재생된다
+  const songLimitHit = lockReason === 'songLimit' && limitedPlay;
 
   const go = (path) => {
     dismissPreviewLock();
@@ -36,12 +38,16 @@ export default function PreviewLockModal() {
       >
         <div style={{ fontSize: 34, marginBottom: 12 }}>🔒</div>
         <h3 style={{ margin: '0 0 8px', fontSize: 17, fontWeight: 800 }}>
-          무료 미리듣기 {previewLimitSeconds}초가 끝났어요
+          {songLimitHit
+            ? `이용권의 ${limitedPlay.limit}곡을 모두 들었어요`
+            : `무료 미리듣기 ${previewLimitSeconds}초가 끝났어요`}
         </h3>
         <p style={{ margin: '0 0 20px', fontSize: 13, color: '#a7adb8', lineHeight: 1.6 }}>
-          {isLoggedIn
-            ? '이용권을 구매하면 모든 곡을 제한 없이 감상할 수 있어요.'
-            : '로그인하고 이용권을 구매하면 모든 곡을 제한 없이 감상할 수 있어요.'}
+          {songLimitHit
+            ? `이미 들은 ${limitedPlay.limit}곡은 이용권 기간 동안 계속 전곡으로 들을 수 있어요. 새 곡을 제한 없이 들으려면 스탠다드 이상 이용권이 필요해요.`
+            : isLoggedIn
+              ? '이용권을 구매하면 곡 전체를 감상할 수 있어요.'
+              : '로그인하고 이용권을 구매하면 곡 전체를 감상할 수 있어요.'}
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -53,7 +59,7 @@ export default function PreviewLockModal() {
                 padding: '11px 16px', fontSize: 14, fontWeight: 800, cursor: 'pointer',
               }}
             >
-              이용권 구매하기
+              {songLimitHit ? '이용권 업그레이드' : '이용권 구매하기'}
             </button>
           ) : (
             <button

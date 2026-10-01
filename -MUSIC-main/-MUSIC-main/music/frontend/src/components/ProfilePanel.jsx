@@ -597,6 +597,14 @@ function FollowingTab({ onClose }) {
 }
 
 /* ---------- 내 구독 (이용권) ---------- */
+// 이용권 기능 (서버 PassFeature) — 내 이용권에 든 것은 ✓, 없는 것은 🔒
+const FEATURE_ROWS = [
+  ['UNLIMITED_PLAY', '전곡 무제한 재생'],
+  ['PLAYLIST', '플레이리스트 만들기'],
+  ['CHAT_BADGE', '라이브 채팅 프리미엄 ♪ 배지'],
+  ['STORE_DISCOUNT', '스토어 할인'],
+];
+
 function SubscriptionTab() {
   const { subscription, isPremium, isAdmin, refreshSubscription } = useAuth();
   useEffect(() => { refreshSubscription?.(); }, [refreshSubscription]);
@@ -618,24 +626,55 @@ function SubscriptionTab() {
       <h3 style={sectionTitle}>내 구독</h3>
       <p style={sectionDesc}>스트리밍 이용권(구독) 상태입니다.</p>
       <div style={card}>
-        {isPremium ? (
+        {isAdmin ? (
+          <div>
+            <div style={{ color: '#efe6ec', fontSize: 14, fontWeight: 700 }}>관리자 계정</div>
+            <div style={{ fontSize: 12, color: '#a98db9', marginTop: 4 }}>관리자는 이용권 없이 모든 기능을 쓸 수 있습니다.</div>
+          </div>
+        ) : isPremium ? (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
               <span style={{ fontSize: 11, fontWeight: 800, color: '#fff', background: ACCENT, borderRadius: 20, padding: '4px 10px' }}>이용 중</span>
-              <span style={{ color: '#efe6ec', fontSize: 14, fontWeight: 700 }}>{subscription?.passName || '프리미엄 이용권'}</span>
+              <span style={{ color: '#efe6ec', fontSize: 14, fontWeight: 700 }}>{subscription?.passName || '이용권'}</span>
             </div>
             {expire && <div style={{ fontSize: 13, color: '#a98db9' }}>{expire.toLocaleDateString('ko-KR')} 까지</div>}
+            {subscription?.songLimit ? (
+              <div style={{ marginTop: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#efe6ec', marginBottom: 6 }}>
+                  <span>전곡 재생한 곡</span>
+                  <b>{subscription.songsUsed || 0} / {subscription.songLimit}곡</b>
+                </div>
+                <div style={{ height: 6, borderRadius: 3, background: '#412a3c', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${Math.min(100, ((subscription.songsUsed || 0) / subscription.songLimit) * 100)}%`, background: ACCENT }} />
+                </div>
+              </div>
+            ) : null}
+            <ul style={{ listStyle: 'none', padding: 0, margin: '14px 0 0', display: 'grid', gap: 6 }}>
+              {FEATURE_ROWS.map(([key, label]) => {
+                const on = (subscription?.features || []).includes(key)
+                  || (key === 'UNLIMITED_PLAY' && (subscription?.features || []).includes('LIMITED_PLAY'));
+                const text = key === 'UNLIMITED_PLAY' && !(subscription?.features || []).includes('UNLIMITED_PLAY') && on
+                  ? `전곡 재생 (${subscription?.songLimit || 0}곡)` : label;
+                return (
+                  <li key={key} style={{ fontSize: 12, color: on ? '#efe6ec' : '#6f5a74', display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <i className={`fa-solid ${on ? 'fa-check' : 'fa-lock'}`} style={{ color: on ? ACCENT : '#6f5a74', width: 12 }} />
+                    {text}{key === 'STORE_DISCOUNT' && on && subscription?.storeDiscountPct ? ` ${subscription.storeDiscountPct}%` : ''}
+                  </li>
+                );
+              })}
+            </ul>
+            {(subscription?.upcoming || []).length > 0 && (
+              <div style={{ fontSize: 12, color: '#a98db9', marginTop: 12 }}>
+                예약된 이용권: {subscription.upcoming.map((u) => `${u.passName} (${new Date(u.startDate).toLocaleDateString('ko-KR')}부터)`).join(', ')}
+              </div>
+            )}
+            <button style={{ ...primaryBtn, marginTop: 14 }} onClick={() => (window.location.href = '/payment')}>이용권 변경 · 연장</button>
           </>
-        ) : isAdmin ? (
-          <div>
-            <div style={{ color: '#efe6ec', fontSize: 14, fontWeight: 700 }}>관리자 계정</div>
-            <div style={{ fontSize: 12, color: '#a98db9', marginTop: 4 }}>관리자는 이용권 없이 전곡 재생이 가능합니다.</div>
-          </div>
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
             <div>
               <div style={{ color: '#efe6ec', fontSize: 14, fontWeight: 700 }}>무료 회원</div>
-              <div style={{ fontSize: 12, color: '#a98db9', marginTop: 4 }}>이용권 미보유 시 곡당·전체 미리듣기가 1분으로 제한됩니다.</div>
+              <div style={{ fontSize: 12, color: '#a98db9', marginTop: 4 }}>이용권이 없으면 하루 누적 1분 미리듣기만 할 수 있어요.</div>
             </div>
             <button style={primaryBtn} onClick={() => (window.location.href = '/payment')}>이용권 보기</button>
           </div>

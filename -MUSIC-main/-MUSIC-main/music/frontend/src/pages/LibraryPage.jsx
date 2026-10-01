@@ -4,6 +4,8 @@ import MusicCard from '../components/MusicCard';
 import axios from 'axios';
 import api from '../api/axiosInstance';
 import { usePlayer } from '../context/PlayerContext';
+import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const TABS = [
   { key: 'liked', label: '좋아요', icon: 'fa-heart' },
@@ -31,6 +33,10 @@ function LibState({ icon, children, sub, onRetry }) {
 }
 
 export default function LibraryPage() {
+  const navigate = useNavigate();
+  const { hasFeature } = useAuth() || {};
+  // 만들기 · 이름 변경은 플레이리스트 기능이 있는 이용권만 (이미 만든 목록 보기 · 재생 · 정리는 누구나)
+  const canEditPlaylists = Boolean(hasFeature?.('PLAYLIST'));
   const [tab, setTab] = useState('liked');
   const [likedMusics, setLikedMusics] = useState([]);
   const [recentMusics, setRecentMusics] = useState([]);
@@ -175,7 +181,7 @@ export default function LibraryPage() {
             <button disabled={tracks.length === 0} onClick={() => selectTrack(tracks[0], tracks)}>
               <i className="fa-solid fa-play" /> 전체 재생
             </button>
-            <button onClick={renamePlaylist}><i className="fa-solid fa-pen" /> 이름 변경</button>
+            {canEditPlaylists && <button onClick={renamePlaylist}><i className="fa-solid fa-pen" /> 이름 변경</button>}
             <button className="danger" onClick={deletePlaylist}><i className="fa-solid fa-trash" /> 삭제</button>
           </div>
         </div>
@@ -233,10 +239,18 @@ export default function LibraryPage() {
     if (openPlaylist) return renderPlaylistDetail();
     return (
       <div className="pl-grid">
-        <button className="pl-card pl-card-new" onClick={createPlaylist}>
-          <div className="pl-cover"><i className="fa-solid fa-plus" /></div>
-          <strong>새 플레이리스트</strong>
-        </button>
+        {canEditPlaylists ? (
+          <button className="pl-card pl-card-new" onClick={createPlaylist}>
+            <div className="pl-cover"><i className="fa-solid fa-plus" /></div>
+            <strong>새 플레이리스트</strong>
+          </button>
+        ) : (
+          <button className="pl-card pl-card-new" onClick={() => navigate('/payment')}>
+            <div className="pl-cover"><i className="fa-solid fa-lock" /></div>
+            <strong>스탠다드 이상 이용권</strong>
+            <small>플레이리스트를 만들 수 있어요</small>
+          </button>
+        )}
         {playlists.map((p) => (
           <button key={p.id} className="pl-card" onClick={() => openDetail(p.id)}>
             <div className="pl-cover">

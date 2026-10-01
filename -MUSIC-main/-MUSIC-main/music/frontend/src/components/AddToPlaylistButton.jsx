@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import api from '../api/axiosInstance';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 /**
@@ -7,7 +8,10 @@ import { useAuth } from '../context/AuthContext';
  * 고르면 그 플레이리스트에 담는다. 목록 맨 아래에서 새 플레이리스트를 바로 만들 수도 있다.
  */
 export default function AddToPlaylistButton({ musicId }) {
-  const { user } = useAuth() || {};
+  const { user, hasFeature } = useAuth() || {};
+  const navigate = useNavigate();
+  // 플레이리스트 만들기 · 담기는 스탠다드 이상 이용권 (보기 · 재생은 누구나)
+  const locked = !hasFeature?.('PLAYLIST');
   const [open, setOpen] = useState(false);
   const [playlists, setPlaylists] = useState(null); // null = 불러오는 중
   const [message, setMessage] = useState('');
@@ -33,7 +37,7 @@ export default function AddToPlaylistButton({ musicId }) {
   const toggle = async () => {
     const next = !open;
     setOpen(next);
-    if (!next) return;
+    if (!next || locked) return;
     setPlaylists(null);
     try {
       const r = await api.get('/api/playlists');
@@ -73,7 +77,14 @@ export default function AddToPlaylistButton({ musicId }) {
       {open && (
         <div className="pl-add-menu">
           <div className="pl-add-title">플레이리스트에 담기</div>
-          {playlists === null ? (
+          {locked ? (
+            <>
+              <div className="pl-add-empty">플레이리스트는 스탠다드 · 프리미엄 이용권에서 쓸 수 있어요</div>
+              <button className="pl-add-item pl-add-new" onClick={() => { setOpen(false); navigate('/payment'); }}>
+                <i className="fa-solid fa-ticket" /> 이용권 보기
+              </button>
+            </>
+          ) : playlists === null ? (
             <div className="pl-add-empty">불러오는 중…</div>
           ) : playlists.length === 0 ? (
             <div className="pl-add-empty">아직 플레이리스트가 없어요</div>
@@ -85,9 +96,11 @@ export default function AddToPlaylistButton({ musicId }) {
               </button>
             ))
           )}
-          <button className="pl-add-item pl-add-new" onClick={createAndAdd}>
-            <i className="fa-solid fa-plus" /> 새 플레이리스트
-          </button>
+          {!locked && (
+            <button className="pl-add-item pl-add-new" onClick={createAndAdd}>
+              <i className="fa-solid fa-plus" /> 새 플레이리스트
+            </button>
+          )}
         </div>
       )}
     </div>

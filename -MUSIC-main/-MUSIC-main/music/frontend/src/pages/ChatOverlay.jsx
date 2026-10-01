@@ -135,6 +135,7 @@ export default function ChatOverlay() {
                   textShadow: shadow,
                 }}
               >
+                {chat.premium && <span style={{ color: '#ffd36e', marginRight: 4 }}>♪</span>}
                 {chat.sender}
               </span>
               <span

@@ -4,9 +4,11 @@ import com.example.music.dto.PaymentConfirmDto;
 import com.example.music.dto.PaymentResponseDto;
 import com.example.music.entity.Pass;
 import com.example.music.entity.User;
-import com.example.music.repository.PassRepository;
 import com.example.music.security.AuthenticatedUserResolver;
+import com.example.music.service.PassEntitlementService;
+import com.example.music.service.PassFeature;
 import com.example.music.service.PaymentService;
+import com.example.music.service.PricingPlan;
 import com.example.music.service.TossPaymentClient;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -20,7 +22,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,9 +34,10 @@ import java.util.Optional;
 public class PaymentController {
 
     private final PaymentService paymentService;
-    private final PassRepository passRepository;
     private final com.example.music.repository.PaymentRepository paymentRepository;
     private final AuthenticatedUserResolver authenticatedUserResolver;
+    private final PassEntitlementService entitlementService;
+    private final com.example.music.repository.MusicRepository musicRepository;
 
     @Value("${toss.payments.client-key}")
     private String tossClientKey;
@@ -48,22 +50,81 @@ public class PaymentController {
         return ResponseEntity.ok(body);
     }
 
+    @Operation(summary = "요금제 목록", description = "요금제별 가격 · 기간 · 포함 기능. 결제 화면이 이 목록을 그대로 보여 준다 (로그인 불필요).")
+    @GetMapping("/plans")
+    public ResponseEntity<List<Map<String, Object>>> plans() {
+        List<Map<String, Object>> body = java.util.Arrays.stream(PricingPlan.values()).map(p -> {
+            Map<String, Object> m = new HashMap<>();
+            m.put("id", p.getPlanId());
+            m.put("name", p.getPassName());
+            m.put("amount", p.getAmount());
+            m.put("months", p.getMonths());
+            m.put("songLimit", p.getSongLimit());
+            m.put("storeDiscountPct", p.getStoreDiscountPct());
+            m.put("features", p.getFeatures().stream().map(Enum::name).toList());
+            m.put("highlights", p.getHighlights());
+            return m;
+        }).toList();
+        return ResponseEntity.ok(body);
+    }
+
     @Operation(summary = "내 이용권(구독) 상태 조회",
-            description = "현재 로그인 사용자의 유효한 이용권 여부를 반환합니다. 프론트 플레이어의 미리듣기 제한 해제 판정에 사용합니다.")
+            description = "지금 쓸 수 있는 기능(features), 이용 중인 · 예약된 이용권, 곡 수 제한 이용권의 사용량을 반환합니다. "
+                    + "관리자 · 부관리자는 모든 기능(staff=true).")
     @GetMapping("/subscription")
     public ResponseEntity<Map<String, Object>> mySubscription(Authentication authentication) {
         User user = authenticatedUserResolver.resolveRequiredUser(authentication);
-        LocalDateTime now = LocalDateTime.now();
+        PassEntitlementService.Entitlement e = entitlementService.of(user);
 
-        Optional<Pass> pass = passRepository
-                .findFirstByUser_IdAndIsActiveTrueAndExpireDateAfterOrderByExpireDateDesc(user.getId(), now);
+        // 화면 표시용 대표 이용권: 가장 높은 등급(기능이 많은 것), 같으면 만료가 늦은 것
+        Optional<Pass> main = e.current().stream().max(java.util.Comparator
+                .comparingInt((Pass p) -> PassEntitlementService.planOf(p).map(pl -> pl.getFeatures().size()).orElse(0))
+                .thenComparing(Pass::getExpireDate));
 
         Map<String, Object> body = new HashMap<>();
-        body.put("active", pass.isPresent());
-        body.put("passName", pass.map(Pass::getPassName).orElse(null));
-        body.put("startDate", pass.map(Pass::getStartDate).orElse(null));
-        body.put("expireDate", pass.map(Pass::getExpireDate).orElse(null));
+        body.put("active", !e.current().isEmpty());
+        body.put("staff", e.staff());
+        body.put("features", e.staff()
+                ? java.util.Arrays.stream(PassFeature.values()).map(Enum::name).toList()
+                : e.features().stream().map(Enum::name).toList());
+        body.put("passName", main.map(Pass::getPassName).orElse(null));
+        body.put("planId", main.flatMap(PassEntitlementService::planOf).map(PricingPlan::getPlanId).orElse(null));
+        body.put("startDate", main.map(Pass::getStartDate).orElse(null));
+        body.put("expireDate", main.map(Pass::getExpireDate).orElse(null));
+        body.put("storeDiscountPct", e.storeDiscountPct());
+        body.put("passes", e.current().stream().map(PaymentController::passView).toList());
+        body.put("upcoming", e.upcoming().stream().map(PaymentController::passView).toList());
+        if (e.limitedPass() != null && !e.has(PassFeature.UNLIMITED_PLAY)) {
+            List<Long> claimed = entitlementService.claimedSongIds(e);
+            body.put("songLimit", e.songLimit());
+            body.put("songsUsed", claimed.size());
+            body.put("claimedSongIds", claimed);
+        }
         return ResponseEntity.ok(body);
+    }
+
+    private static Map<String, Object> passView(Pass p) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("passName", p.getPassName());
+        m.put("planId", PassEntitlementService.planOf(p).map(PricingPlan::getPlanId).orElse(null));
+        m.put("startDate", p.getStartDate());
+        m.put("expireDate", p.getExpireDate());
+        return m;
+    }
+
+    public record PlayClaimRequest(Long musicId) {}
+
+    @Operation(summary = "전곡 재생 확인 · 곡 차감",
+            description = "곡 수 제한 이용권이면 이 곡을 1곡 차감하고(같은 곡은 다시 차감 안 함) 전곡 재생 가능 여부를 돌려준다. "
+                    + "무제한 이용권 · 관리자는 항상 allowed. 플레이어가 30초 재생 시점에 호출한다.")
+    @PostMapping("/play-claim")
+    public ResponseEntity<PassEntitlementService.ClaimResult> claimPlay(@RequestBody PlayClaimRequest req,
+                                                                        Authentication authentication) {
+        User user = authenticatedUserResolver.resolveRequiredUser(authentication);
+        if (req == null || req.musicId() == null || !musicRepository.existsById(req.musicId())) {
+            throw new IllegalArgumentException("곡을 찾을 수 없습니다.");
+        }
+        return ResponseEntity.ok(entitlementService.claimSong(user, req.musicId()));
     }
 
     @Operation(summary = "내 결제 내역", description = "현재 로그인 사용자의 결제 내역을 최신순으로 반환합니다.")

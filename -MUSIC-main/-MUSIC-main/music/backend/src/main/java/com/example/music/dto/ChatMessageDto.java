@@ -19,6 +19,7 @@ public class ChatMessageDto {
     private String message;
     private MessageType type;
     private Integer amount;   // DONATION(음표) 일 때 보낸 음표 수 (1음표 = 1원)
+    private Boolean premium;  // 서버가 부여 — 보낸 사람에게 프리미엄 채팅 배지가 있으면 true
     private String timestamp; // 채팅 전송 시간 (예: "2026-08-24 10:15:30")
 
     public enum MessageType {

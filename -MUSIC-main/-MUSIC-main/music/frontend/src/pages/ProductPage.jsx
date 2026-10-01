@@ -17,7 +17,7 @@ const loadShipping = () => {
 export default function ProductPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth() || {};
+  const { user, storeDiscountPct = 0 } = useAuth() || {};
   const [product, setProduct] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [qty, setQty] = useState(1);
@@ -84,7 +84,9 @@ export default function ProductPage() {
 
   const soldOut = product.stock <= 0;
   const maxQty = Math.max(1, Math.min(MAX_QTY, product.stock));
-  const total = product.price * qty;
+  // 이용권 스토어 할인 (서버와 같은 계산: 원 단위 버림). 결제 금액은 서버가 주문을 만들 때 확정한다.
+  const listTotal = product.price * qty;
+  const total = listTotal - Math.floor((listTotal * storeDiscountPct) / 100);
 
   return (
     <>
@@ -110,7 +112,18 @@ export default function ProductPage() {
             {product.musicTitle && (
               <div className="product-music"><i className="fa-solid fa-music" /> {product.musicTitle}</div>
             )}
-            <div className="product-price">{won(product.price)}</div>
+            {storeDiscountPct > 0 ? (
+              <div className="product-price">
+                <s className="product-price-list">{won(product.price)}</s>{' '}
+                {won(product.price - Math.floor((product.price * storeDiscountPct) / 100))}
+                <span className="product-discount">이용권 {storeDiscountPct}% 할인</span>
+              </div>
+            ) : (
+              <>
+                <div className="product-price">{won(product.price)}</div>
+                <div className="product-discount-hint"><i className="fa-solid fa-ticket" /> 프리미엄 이용권이면 10% 할인</div>
+              </>
+            )}
             {product.description && <p className="product-desc">{product.description}</p>}
 
             <div className="product-stock">
