@@ -18,12 +18,12 @@
 <br />
 
 <a href="https://github.com/cjsrudgh98-crypto/-MUSIC-main2/raw/main/docs/portfolio/StreamWave-portfolio.pdf"><img src="https://img.shields.io/badge/📄_포트폴리오_PDF-다운로드-e0207f?style=for-the-badge" alt="포트폴리오 PDF 다운로드" /></a>
-<a href="docs/demo/StreamWave-demo.mp4"><img src="https://img.shields.io/badge/▶_시연_영상-2분_17초-111827?style=for-the-badge" alt="시연 영상 보기" /></a>
+<a href="docs/demo/StreamWave-demo.mp4"><img src="https://img.shields.io/badge/▶_시연_영상-2분_29초-111827?style=for-the-badge" alt="시연 영상 보기" /></a>
 
 </div>
 
 <p align="center">
-  <img src="docs/demo/StreamWave-demo.gif" width="860" alt="StreamWave 시연 - 검색·재생, 관련 상품, 주문·토스 결제창, TOP 100, 라이브 방송·투표·채팅, 음표, 플레이리스트, 관리자 스토어 관리, 모바일 전용 화면" />
+  <img src="docs/demo/StreamWave-demo.gif" width="860" alt="StreamWave 시연 - 검색·재생, 관련 상품, 주문·토스 결제창, TOP 100, 라이브 방송·투표·채팅, 음표, 플레이리스트, 이용권 등급, 관리자 스토어 관리, 모바일 전용 화면" />
   <br />
   <sub>▲ 실제 서비스 화면 시연 (2배속) · 원본 영상: <a href="docs/demo/StreamWave-demo.mp4">StreamWave-demo.mp4</a></sub>
 </p>
@@ -50,7 +50,7 @@
 
 | | |
 |---|---|
-| ▶ **시연 영상** | [StreamWave-demo.mp4](docs/demo/StreamWave-demo.mp4) (2분 17초, 1280×720). 자막으로 단계를 안내하므로 소리 없이 볼 수 있습니다. |
+| ▶ **시연 영상** | [StreamWave-demo.mp4](docs/demo/StreamWave-demo.mp4) (2분 29초, 1280×720). 자막으로 단계를 안내하므로 소리 없이 볼 수 있습니다. |
 | 📄 **포트폴리오 PDF** | [StreamWave-portfolio.pdf](https://github.com/cjsrudgh98-crypto/-MUSIC-main2/raw/main/docs/portfolio/StreamWave-portfolio.pdf) (A4 8쪽): 개요 · 화면 · 시스템 구조 · 기술적 도전과 해결 8가지 · 테스트 |
 
 **영상 순서**
@@ -62,11 +62,12 @@
 5. 실시간 TOP 100 (최근 24시간 청취 → 누적 청취 순)
 6. 라이브 방송 입장 (HLS 재생)
 7. 신청곡 투표 (버튼 / 채팅 "투표1", 1인 1표)
-8. 실시간 채팅 (다른 시청자·방송자와 대화)
+8. 실시간 채팅 (프리미엄 회원은 ♪ PREMIUM 배지)
 9. ♪ 음표로 방송자 응원 → 결제창
 10. 좋아요 · 최근 들은 곡 · 플레이리스트 전체 재생
-11. 관리자: 스토어 관리 (상품 · 곡 연결)
-12. 모바일 전용 화면: 하단 탭바 → 라이브 시청 → 곡 재생 → 전체화면 플레이어
+11. 이용권 등급 (라이트 · 스탠다드 · 프리미엄 기능 비교)
+12. 관리자: 스토어 관리 (상품 · 곡 연결)
+13. 모바일 전용 화면: 하단 탭바 → 라이브 시청 → 곡 재생 → 전체화면 플레이어
 
 <details>
 <summary>영상과 PDF는 코드로 다시 만들 수 있습니다</summary>
