@@ -17,22 +17,22 @@
 
 <br />
 
-<img src="https://img.shields.io/badge/♪_음표-라이브_후원-ff2f7d?style=for-the-badge" alt="음표 라이브 후원" />
-<img src="https://img.shields.io/badge/🛍_스토어-음반·굿즈-7c5cff?style=for-the-badge" alt="스토어" />
-<img src="https://img.shields.io/badge/📡_라이브-신청곡_투표-111827?style=for-the-badge" alt="라이브 신청곡 투표" />
+<a href="https://github.com/cjsrudgh98-crypto/-MUSIC-main2/raw/main/docs/portfolio/StreamWave-portfolio.pdf"><img src="https://img.shields.io/badge/📄_포트폴리오_PDF-다운로드-e0207f?style=for-the-badge" alt="포트폴리오 PDF 다운로드" /></a>
+<a href="docs/demo/StreamWave-demo.mp4"><img src="https://img.shields.io/badge/▶_시연_영상-2분_17초-111827?style=for-the-badge" alt="시연 영상 보기" /></a>
 
 </div>
 
 <p align="center">
-  <img src="docs/screenshots/main.png" width="860" alt="StreamWave 메인 화면 - 오늘의 추천, 실시간 인기 급상승 곡, 하단 플레이어" />
+  <img src="docs/demo/StreamWave-demo.gif" width="860" alt="StreamWave 시연 - 검색·재생, 관련 상품, 주문·토스 결제창, TOP 100, 라이브 방송·투표·채팅, 음표, 플레이리스트, 관리자 스토어 관리, 모바일" />
   <br />
-  <sub>▲ 메인 화면 · 실시간 인기 급상승 곡과 하단 고정 플레이어</sub>
+  <sub>▲ 실제 서비스 화면 시연 (2배속) · 원본 영상: <a href="docs/demo/StreamWave-demo.mp4">StreamWave-demo.mp4</a></sub>
 </p>
 
 ---
 
 ## 목차
 
+- [시연 영상 · 포트폴리오](#-시연-영상--포트폴리오)
 - [프로젝트 소개](#-프로젝트-소개)
 - [주요 기능](#-주요-기능)
 - [화면](#-화면)
@@ -43,6 +43,48 @@
 - [실행 방법](#-실행-방법)
 - [프로젝트 구조](#-프로젝트-구조)
 - [개발자](#-개발자)
+
+---
+
+## 🎬 시연 영상 · 포트폴리오
+
+| | |
+|---|---|
+| ▶ **시연 영상** | [StreamWave-demo.mp4](docs/demo/StreamWave-demo.mp4) (2분 17초, 1280×720). 자막으로 단계를 안내하므로 소리 없이 볼 수 있습니다. |
+| 📄 **포트폴리오 PDF** | [StreamWave-portfolio.pdf](https://github.com/cjsrudgh98-crypto/-MUSIC-main2/raw/main/docs/portfolio/StreamWave-portfolio.pdf) (A4 8쪽): 개요 · 화면 · 시스템 구조 · 기술적 도전과 해결 8가지 · 테스트 |
+
+**영상 순서**
+
+1. 실시간 인기 급상승 곡 · 장르별 최신곡
+2. 띄어쓰기와 상관없는 곡·아티스트 검색 → 바로 재생
+3. 지금 듣는 곡의 음반·굿즈를 플레이어 바에서 바로
+4. 수량·배송지 입력 → 토스페이먼츠 결제창
+5. 최근 24시간 청취 기준 실시간 TOP 100
+6. 라이브 방송 입장 (HLS 재생)
+7. 신청곡 투표 (버튼 / 채팅 "투표1", 1인 1표)
+8. 실시간 채팅 (다른 시청자·방송자와 대화)
+9. ♪ 음표로 방송자 응원 → 결제창
+10. 좋아요 · 최근 들은 곡 · 플레이리스트 전체 재생
+11. 관리자: 스토어 관리 (상품 · 곡 연결)
+12. 모바일: ☰ 메뉴 → 라이브
+
+<details>
+<summary>영상과 PDF는 코드로 다시 만들 수 있습니다</summary>
+
+- 영상: [`record-demo.mjs`](docs/demo/record-demo.mjs)가 실제 서버를 브라우저(Edge)로 조작하며 화면을 녹화합니다(Playwright + CDP screencast). 방송자·다른 시청자 창을 따로 띄워 채팅과 투표를 실제로 주고받습니다. [`make-video.mjs`](docs/demo/make-video.mjs)가 ffmpeg로 MP4와 GIF를 만듭니다.
+- 라이브 영상: OBS·SRS 없이 [`live-test-stream.mjs`](docs/demo/live-test-stream.mjs)가 ffmpeg로 테스트 방송(제목·시계·음파)을 HLS로 만들어 SRS와 같은 주소(`:8081/live/{재생ID}.m3u8`)로 서빙합니다.
+- 데이터: [`seed-demo.py`](docs/demo/seed-demo.py)가 **데모 전용 스키마**로 띄운 서버에 예시 계정·상품·방송·플레이리스트를 넣습니다. 곡 카탈로그는 실제 데이터를 복사해 씁니다.
+- PDF: [`portfolio.html`](docs/portfolio/portfolio.html)을 [`build-pdf.mjs`](docs/portfolio/build-pdf.mjs)가 A4로 인쇄합니다.
+
+```bash
+cd docs && npm install            # playwright-core · ffmpeg-static (브라우저는 설치된 Edge/Chrome 사용)
+python demo/seed-demo.py          # 데모 전용 스키마로 띄운 백엔드(8080)·프론트(3000) 대상
+npm run live                      # 테스트 방송 (다른 터미널에 띄워 둠)
+npm run demo && npm run video     # 녹화 → docs/demo/StreamWave-demo.mp4 / .gif
+npm run pdf                       # docs/portfolio/StreamWave-portfolio.pdf
+```
+
+</details>
 
 ---
 
@@ -102,6 +144,7 @@
 - 이메일 인증번호로 아이디 찾기·비밀번호 재설정 (5분 만료, 5회 실패 시 폐기)
 - 로그인·인증번호 요청 **Rate Limit**
 - 권한 3단계: 일반 회원 / 부 관리자(콘텐츠·스토어) / 최고 관리자(권한 부여)
+- 반응형: 768px 이하에서 사이드바를 ☰ 서랍 메뉴로, 플레이어 바·헤더를 압축
 
 ---
 
@@ -109,14 +152,14 @@
 
 <table>
   <tr>
-    <td align="center"><b>TOP 100 차트</b></td>
-    <td align="center"><b>신청곡 투표 · 채팅 (OBS 채팅 독)</b></td>
+    <td align="center"><b>라이브 방송 · 신청곡 투표 · 채팅</b></td>
     <td align="center"><b>음표 보내기</b></td>
+    <td align="center"><b>TOP 100 차트</b></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/chart.png" width="280" alt="TOP 100 차트" /></td>
-    <td align="center"><img src="docs/screenshots/live-dock.png" width="170" alt="신청곡 투표와 실시간 채팅" /></td>
+    <td><img src="docs/screenshots/live.png" width="280" alt="라이브 방송, 신청곡 투표, 실시간 채팅" /></td>
     <td><img src="docs/screenshots/note-modal.png" width="280" alt="음표 보내기" /></td>
+    <td><img src="docs/screenshots/chart.png" width="280" alt="TOP 100 차트" /></td>
   </tr>
   <tr>
     <td align="center"><b>스토어</b></td>
@@ -131,16 +174,28 @@
   <tr>
     <td align="center"><b>내 플레이리스트</b></td>
     <td align="center"><b>관리자 · 스토어 관리</b></td>
-    <td></td>
+    <td align="center"><b>OBS 채팅 독 (방송자용)</b></td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/playlist.png" width="280" alt="플레이리스트" /></td>
     <td><img src="docs/screenshots/admin-store.png" width="280" alt="스토어 관리" /></td>
-    <td></td>
+    <td align="center"><img src="docs/screenshots/live-dock.png" width="160" alt="OBS 채팅 독" /></td>
+  </tr>
+  <tr>
+    <td align="center"><b>모바일 홈</b></td>
+    <td align="center"><b>☰ 메뉴</b></td>
+    <td align="center"><b>모바일 라이브</b></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/mobile-home.png" width="200" alt="모바일 홈" /></td>
+    <td align="center"><img src="docs/screenshots/mobile-menu.png" width="200" alt="모바일 메뉴" /></td>
+    <td align="center"><img src="docs/screenshots/mobile-live.png" width="200" alt="모바일 라이브" /></td>
   </tr>
 </table>
 
-> 실제 서버를 로컬에서 띄워 브라우저로 촬영했습니다. 곡 카탈로그는 실제 데이터이고, 상품·방송·채팅·플레이리스트는 촬영용 예시 데이터입니다.
+> 모바일(768px 이하)에서는 사이드바가 ☰ 서랍 메뉴로 바뀌고, 플레이어 바는 곡 정보와 이전·재생·다음만 남깁니다.
+
+> 실제 서버를 로컬에서 띄워 브라우저로 촬영했습니다. 곡 카탈로그는 실제 데이터이고, 상품·방송·채팅·플레이리스트는 촬영용 예시 데이터입니다. 라이브 영상은 ffmpeg 테스트 방송입니다.
 
 ---
 
@@ -291,6 +346,14 @@ stateDiagram-v2
 - 웹소켓 접속 출처를 서비스 도메인으로 제한하고, 운영에서는 Swagger를 끕니다.
 </details>
 
+<details>
+<summary><b>9. 라이브 화면 레이아웃 · 모바일 대응 (브라우저로 실측)</b></summary>
+
+- 라이브 페이지 래퍼에 폭이 없어 `margin: auto` 때문에 내용 폭(약 760px)으로 줄어들었고, 영상이 400px, 채팅은 메시지 한 줄만 보였습니다. 새 채팅이 올 때마다 `scrollIntoView`가 페이지 전체를 스크롤해 헤더도 밀려 올라갔습니다.
+- 래퍼 폭 지정, 채팅 칼럼 최소 높이, 투표창 45% 상한, 채팅 목록만 스크롤하도록 고쳐 **1440px 기준 영상 400px → 772px**.
+- 휴대폰에서는 고정 240px 사이드바 때문에 영상이 78px이었습니다. 768px 이하에서 사이드바를 ☰ 서랍 메뉴로 바꾸고, Playwright로 **390 / 768 / 1024 / 1440px** 에서 가로 넘침이 없는지 측정했습니다.
+</details>
+
 ---
 
 ## ✅ 테스트
@@ -299,6 +362,7 @@ stateDiagram-v2
 |---|---|
 | **백엔드** | JUnit 5 테스트 **30개**: 음표 주문·승인 위변조, 스토어 재고 차감·환불·상태 전이, 관련 상품 매칭, 플레이리스트 소유권·곡 삭제 연쇄, 투표 1인 1표, 채팅 금지, 차트 시간당 1점, 소셜 계정 연결 규칙, 곡 목록 FK 회귀, 이용권 만료 알림, Rate Limit |
 | **외부 연동** | 토스 결제 클라이언트는 `@MockitoBean`으로 대체해 실제 결제 없이 승인·취소 흐름을 검증합니다. |
+| **화면** | Playwright + Edge로 1440 / 1024 / 768 / 390px에서 레이아웃을 실측하고, 시연 영상·스크린샷을 스크립트로 생성합니다 ([`docs/demo`](docs/demo)). |
 
 ```bash
 # 백엔드 (로컬 MySQL · Redis 필요)
@@ -414,7 +478,10 @@ docker compose -f docker-compose.prod.yml up -d --build
 │   ├── srs/                          # SRS 설정(로컬·운영), 썸네일 캡처 스크립트
 │   └── caddy/                        # 리버스 프록시 · 자동 HTTPS
 └── docker-compose.prod.yml           # MySQL · Redis · SRS · Spring · Caddy
-docs/screenshots/                     # README 화면
+docs/
+├── demo/                             # 시연 영상(MP4 · GIF) + 녹화·테스트 방송·시드 스크립트
+├── portfolio/                        # 포트폴리오 PDF와 원본 HTML
+└── screenshots/                      # README 화면
 ```
 
 ---
