@@ -6,7 +6,6 @@ import com.example.music.entity.Music;
 import com.example.music.entity.User;
 import com.example.music.repository.ListenLogRepository;
 import com.example.music.repository.MusicRepository;
-import com.example.music.repository.PassRepository; // 💡 PassRepository 추가
 import com.example.music.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,8 +25,8 @@ public class ListenLogService {
     private final ChartService chartService;
     private final RecentPlayService recentPlayService;
 
-    // 🔥 이용권(결제) 상태 검증을 위한 PassRepository 주입
-    private final PassRepository passRepository;
+    // 이용권 기능 판정 (전곡 재생 여부)
+    private final PassEntitlementService passEntitlementService;
 
     @Transactional
     public void recordLog(ListenLogDto dto) {
@@ -55,17 +54,10 @@ public class ListenLogService {
             recentPlayService.record(user.getId(), dto.getMusicId());
         }
 
-        // 🔥 3. 이용권(결제) 상태 검증 — 관리자/부관리자는 이용권 없이도 청취 기록 인정
-        boolean hasValidPass = passRepository.existsByUser_IdAndIsActiveTrueAndExpireDateAfter(
-                user.getId(), LocalDateTime.now()
-        );
-        String role = user.getRole() == null ? "" : user.getRole().toUpperCase();
-        boolean isStaff = role.equals("ROLE_ADMIN") || role.equals("ADMIN")
-                || role.equals("ROLE_SUB_ADMIN") || role.equals("SUB_ADMIN");
-
-        if (!hasValidPass && !isStaff) {
+        // 3. 전곡 재생만 청취 기록 · 차트에 반영 — 무제한 이용권 · 관리자, 또는 곡 수 제한 이용권에서 차감된 곡
+        if (!passEntitlementService.isFullPlay(user, dto.getMusicId())) {
             // 무료 회원의 미리듣기는 차트에 반영하지 않는다 (에러 아님 — 조용히 스킵)
-            log.debug("[Log Collector] 이용권 없는 회원 - 청취 기록/차트 반영 생략: user={}", user.getId());
+            log.debug("[Log Collector] 전곡 재생 권한 없음 - 청취 기록/차트 반영 생략: user={}", user.getId());
             return;
         }
 

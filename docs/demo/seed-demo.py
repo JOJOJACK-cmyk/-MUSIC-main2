@@ -89,9 +89,9 @@ playback_id = mine["streamKey"].split("?")[0]  # OBS 키 "pb_xxx?key=..." 앞부
 call("PUT", f"/api/broadcast/{bid}/poll",
      {"options": [{"musicId": 1235}, {"musicId": 1350}, {"musicId": 2237}, {"musicId": 403}]}, st)
 
-# 시청자: 이용권(시연 중 1분 미리듣기 제한 팝업이 뜨지 않게), 좋아요, 플레이리스트, 최근 들은 곡
-sql("INSERT INTO tb_pass (user_id, pass_name, start_date, expire_date, is_active) "
-    "SELECT id, '무제한 스트리밍 정기 이용권', NOW(), NOW() + INTERVAL 30 DAY, b'1' FROM users "
+# 시청자: 프리미엄 이용권(전곡 재생 · 플레이리스트 · 채팅 배지 · 스토어 할인), 좋아요, 플레이리스트, 최근 들은 곡
+sql("INSERT INTO tb_pass (user_id, pass_name, plan_id, start_date, expire_date, is_active) "
+    "SELECT id, '프리미엄 이용권', 'premium', NOW(), NOW() + INTERVAL 30 DAY, b'1' FROM users "
     "WHERE email='viewer@demo.streamwave.kr'")
 vt = viewer["token"]
 for mid in [1235, 1240, 1350, 403, 353]:

@@ -201,7 +201,7 @@ export const AuthProvider = ({ children }) => {
     window.location.replace('/');
   };
 
-  // 💡 프리미엄(유료 이용권) 판정: 오직 서버의 유효한 이용권(tb_pass) 상태만 신뢰한다.
+  // 💡 유료 이용권 보유 여부: 오직 서버의 유효한 이용권(tb_pass) 상태만 신뢰한다.
   //    role/premium 힌트로 판정하면 "구매 안 했는데 구매됨" 버그가 생긴다.
   const isPremium = Boolean(subscription?.active);
 
@@ -212,8 +212,38 @@ export const AuthProvider = ({ children }) => {
   // 관리자(부 관리자 포함): 음원 등록/수정/삭제 등 콘텐츠 관리
   const isAdmin = isSuperAdmin || ['ROLE_SUB_ADMIN', 'SUB_ADMIN'].includes(roleUpper);
 
-  // 미리듣기 제한 해제 판정의 단일 소스: 유료 이용권 보유자 또는 관리자
-  const hasFullAccess = Boolean(isPremium || isAdmin);
+  // 이용권 기능 (서버 PassFeature): UNLIMITED_PLAY · LIMITED_PLAY · PLAYLIST · CHAT_BADGE · STORE_DISCOUNT
+  // 관리자 · 부관리자는 이용권 없이 모든 기능. 최종 판정은 서버가 다시 한다.
+  const features = subscription?.features || [];
+  const hasFeature = useCallback(
+    (f) => isAdmin || features.includes(f),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isAdmin, features.join(',')]
+  );
+
+  // 전곡 무제한 재생: 무제한 이용권 또는 관리자 (곡 수 제한 이용권은 PlayerContext 가 곡별로 판정)
+  const hasFullAccess = hasFeature('UNLIMITED_PLAY');
+  // 스토어 할인율(%) — 서버가 이용권 · 관리자 기준으로 계산해 준다 (주문 금액도 서버가 확정)
+  const storeDiscountPct = subscription?.storeDiscountPct || 0;
+
+  // 곡 수 제한 이용권(라이트): 한도 · 사용량 · 이미 차감된 곡
+  const limitedPlay = !hasFullAccess && subscription?.songLimit
+    ? { limit: subscription.songLimit, used: subscription.songsUsed || 0, claimedIds: subscription.claimedSongIds || [] }
+    : null;
+
+  // 곡 차감 결과를 바로 반영 (다시 불러오지 않고)
+  const applySongClaim = useCallback((musicId, result) => {
+    setSubscription((prev) => {
+      if (!prev || !result) return prev;
+      const ids = prev.claimedSongIds || [];
+      const has = ids.some((x) => String(x) === String(musicId));
+      return {
+        ...prev,
+        songsUsed: typeof result.used === 'number' ? result.used : prev.songsUsed,
+        claimedSongIds: result.allowed && !has ? [...ids, Number(musicId)] : ids,
+      };
+    });
+  }, []);
 
   return (
     <AuthContext.Provider
@@ -229,6 +259,10 @@ export const AuthProvider = ({ children }) => {
         isAdmin,
         isSuperAdmin,
         hasFullAccess,
+        hasFeature,
+        storeDiscountPct,
+        limitedPlay,
+        applySongClaim,
         refreshSubscription,
       }}
     >

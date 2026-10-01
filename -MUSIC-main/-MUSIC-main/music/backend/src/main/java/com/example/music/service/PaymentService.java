@@ -72,17 +72,25 @@ public class PaymentService {
                 .build();
         paymentRepository.save(payment);
 
-        // 아직 유효한 이용권이 있으면 남은 기간을 버리지 않고 그 만료일 뒤로 이어 붙인다.
-        LocalDateTime startDate = LocalDateTime.now();
-        LocalDateTime base = passRepository
-                .findFirstByUser_IdAndIsActiveTrueAndExpireDateAfterOrderByExpireDateDesc(user.getId(), startDate)
+        // 같은 기능의 이용권(같은 요금제, 월간↔연간 프리미엄, 예전 이용권 포함)이 남아 있으면
+        // 남은 기간을 버리지 않고 그 만료일 뒤로 이어 붙인다 (예약 → 시작일이 오면 이어서 적용).
+        // 다른 등급이면 지금부터 바로 시작 — 기능은 지금 쓰는 이용권과 합쳐서 적용된다.
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime startDate = passRepository
+                .findByUser_IdAndIsActiveTrueAndExpireDateAfterOrderByStartDateAsc(user.getId(), now)
+                .stream()
+                .filter(p -> PassEntitlementService.planOf(p)
+                        .map(existing -> existing.getFeatures().equals(plan.getFeatures()))
+                        .orElse(false))
                 .map(Pass::getExpireDate)
-                .orElse(startDate);
-        LocalDateTime expireDate = base.plusMonths(plan.getMonths());
+                .max(LocalDateTime::compareTo)
+                .orElse(now);
+        LocalDateTime expireDate = startDate.plusMonths(plan.getMonths());
 
         Pass pass = Pass.builder()
                 .user(user)
                 .passName(plan.getPassName())
+                .planId(plan.getPlanId())
                 .startDate(startDate)
                 .expireDate(expireDate)
                 .isActive(true)
