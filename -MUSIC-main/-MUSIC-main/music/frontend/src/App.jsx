@@ -18,6 +18,9 @@ import LivePage from './pages/LivePage';
 import ChatOverlay from './pages/ChatOverlay';
 import ChatDock from './pages/ChatDock';
 import NoteResultPage from './pages/NoteResultPage';
+import ShopPage from './pages/ShopPage';
+import ProductPage from './pages/ProductPage';
+import ShopResultPage from './pages/ShopResultPage';
 import LibraryPage from './pages/LibraryPage';
 import PaymentPage from './pages/PaymentPage';
 import PaymentSuccessPage from './pages/PaymentSuccessPage';
@@ -218,6 +221,16 @@ function AppShell() {
                   }
                 />
                 <Route path="/live/:broadcastId" element={<LiveDetailPage />} />
+                <Route path="/shop" element={<ShopPage />} />
+                <Route
+                  path="/shop/result"
+                  element={
+                    <ProtectedRoute>
+                      <ShopResultPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route path="/shop/:id" element={<ProductPage />} />
                 <Route
                   path="/notes/result"
                   element={

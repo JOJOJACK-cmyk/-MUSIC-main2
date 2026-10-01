@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { useAuth } from '../context/AuthContext';
 import { getNotifPrefs, setNotifPrefs, useNotifications } from '../context/NotificationContext';
 import { LIVE_CATEGORIES } from '../constants/liveCategories';
+import MyOrdersTab from './MyOrdersTab';
+import StoreAdminTab from './StoreAdminTab';
 
 const API = ''; // Vite 프록시로 동일 출처 요청 (세션 쿠키 전달)
 const ACCENT = '#F244CB';        // 앱 시그니처 마젠타
@@ -25,9 +27,11 @@ const TABS = [
   { key: 'clips', label: '내 클립', icon: 'fa-scissors' },
   { key: 'following', label: '팔로잉 채널', icon: 'fa-heart' },
   { key: 'subscription', label: '내 구독', icon: 'fa-ticket' },
+  { key: 'orders', label: '주문 내역', icon: 'fa-box' },
   { key: 'noti', label: '알림', icon: 'fa-bell' },
   { key: 'account', label: '내 정보', icon: 'fa-user' },
   // superAdmin 전용 (아래 render 에서 필터)
+  { key: 'store', label: '스토어 관리', icon: 'fa-store', adminOnly: true },
   { key: 'roles', label: '권한 관리', icon: 'fa-user-shield', superAdminOnly: true },
 ];
 
@@ -58,9 +62,9 @@ const sectionDesc = { fontSize: 12, color: '#a98db9', margin: '0 0 18px' };
 const card = { background: '#1d0819', border: '1px solid #38213230', borderRadius: 12, padding: 16 };
 
 export default function ProfilePanel({ onClose }) {
-  const { user, isSuperAdmin } = useAuth();
+  const { user, isSuperAdmin, isAdmin } = useAuth();
   const [tab, setTab] = useState('studio');
-  const visibleTabs = TABS.filter((t) => !t.superAdminOnly || isSuperAdmin);
+  const visibleTabs = TABS.filter((t) => (!t.superAdminOnly || isSuperAdmin) && (!t.adminOnly || isAdmin));
   const overlayRef = useRef(null);
 
   useEffect(() => {
@@ -144,6 +148,8 @@ export default function ProfilePanel({ onClose }) {
           {tab === 'clips' && <ClipsTab />}
           {tab === 'following' && <FollowingTab onClose={onClose} />}
           {tab === 'subscription' && <SubscriptionTab />}
+          {tab === 'orders' && <MyOrdersTab />}
+          {tab === 'store' && isAdmin && <StoreAdminTab />}
           {tab === 'noti' && <NotiTab />}
           {tab === 'account' && <AccountTab user={user} />}
           {tab === 'roles' && isSuperAdmin && <RolesTab me={user} />}

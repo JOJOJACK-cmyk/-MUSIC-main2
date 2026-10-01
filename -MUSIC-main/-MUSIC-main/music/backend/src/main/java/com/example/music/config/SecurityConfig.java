@@ -104,6 +104,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, "/api/musics/**").hasAnyRole("ADMIN", "SUB_ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/musics/**").hasAnyRole("ADMIN", "SUB_ADMIN")
 
+                        // 스토어 관리 - 관리자 + 부 관리자 (아래 상품 조회 permitAll 보다 먼저)
+                        .requestMatchers("/api/shop/admin/**").hasAnyRole("ADMIN", "SUB_ADMIN")
+                        // 스토어 상품 조회는 누구나 (주문/결제는 아래 anyRequest().authenticated())
+                        .requestMatchers(HttpMethod.GET, "/api/shop/products", "/api/shop/products/**").permitAll()
+
                         // 4. 기존 음악 조회 등 퍼블릭 경로 (차트/알림 조회 포함)
                         .requestMatchers(HttpMethod.GET, "/api/musics/**", "/api/broadcast/**", "/api/music-snapshot/**",
                                 "/api/live/status", "/api/chart/**", "/api/notifications/**")

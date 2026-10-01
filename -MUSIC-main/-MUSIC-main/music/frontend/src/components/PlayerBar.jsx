@@ -1,5 +1,6 @@
 import React from 'react';
 import { usePlayer } from '../context/PlayerContext';
+import RelatedProductsButton from './RelatedProductsButton';
 
 export default function PlayerBar() {
   const {
@@ -153,6 +154,9 @@ export default function PlayerBar() {
 
       {/* 볼륨 및 기타 설정 (우측) */}
       <div className="player-extra">
+        {/* 🛍️ 지금 듣는 곡의 관련 음반/굿즈 (있을 때만 보임) */}
+        <RelatedProductsButton musicId={currentTrack?.id} />
+
         {/* 음소거/볼륨 아이콘 버튼 */}
         <button
           type="button"

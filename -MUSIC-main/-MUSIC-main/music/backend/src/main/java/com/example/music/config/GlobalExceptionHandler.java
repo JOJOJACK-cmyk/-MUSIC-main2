@@ -75,6 +75,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(response);
     }
 
+    // 400 Bad Request: 토스 결제 승인/취소 실패 (토스가 준 사유를 그대로 전달)
+    @ExceptionHandler(com.example.music.service.TossPaymentClient.TossPaymentException.class)
+    public ResponseEntity<ErrorResponse> handleTossPayment(com.example.music.service.TossPaymentClient.TossPaymentException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse("ERROR", "PAYMENT_FAILED", e.getMessage()));
+    }
+
     // 500 Internal Server Error: 그 외 예상치 못한 모든 서버 에러 처리
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneralException(Exception e) {
