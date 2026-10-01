@@ -5,3 +5,8 @@
 **/.env
 # 로컬 개발용 비밀 설정 (application.properties 가 optional import)
 **/application-secret.properties
+
+# Node 의존성 (docs 도구 포함)
+**/node_modules/
+# 시연 영상 녹화 중간 산출물
+docs/demo/out/
