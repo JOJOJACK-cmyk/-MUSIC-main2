@@ -1,323 +1,449 @@
-# MUSIC 프로젝트 실행 가이드
+<div align="center">
 
-YouTube 기반 음악 스트리밍 및 라이브 방송 프로젝트입니다.
+<h1>🎧 StreamWave</h1>
 
-## 1. 사용 기술
+**YouTube 음악 스트리밍과 라이브 방송을 한곳에서. 방송을 보며 신청곡에 투표하고, 음표로 응원하고, 듣던 곡의 음반까지 바로 사는 음악 플랫폼**
 
-### Backend
-- Java
-- Spring Boot
-- Spring Security
-- Spring Data JPA
-- MySQL
-- Redis
-- AWS S3
-- CloudFront
-- WebSocket
+![Java](https://img.shields.io/badge/Java-25-007396?logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot&logoColor=white)
+![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
+![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)
+![MySQL](https://img.shields.io/badge/MySQL-8-4479A1?logo=mysql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-DC382D?logo=redis&logoColor=white)
+![WebSocket](https://img.shields.io/badge/STOMP-WebSocket-010101?logo=socketdotio&logoColor=white)
+![SRS](https://img.shields.io/badge/SRS-RTMP%20%2F%20HLS-E02D2D)
+![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)
+![Caddy](https://img.shields.io/badge/Caddy-1F88C0?logo=caddy&logoColor=white)
 
-### Frontend
-- React
-- Vite
-- Axios
-- hls.js
-- YouTube IFrame API
+<br />
 
-### Infrastructure
-- Docker
-- Redis
-- SRS
-- OBS
-- AWS S3
-- CloudFront
+<img src="https://img.shields.io/badge/♪_음표-라이브_후원-ff2f7d?style=for-the-badge" alt="음표 라이브 후원" />
+<img src="https://img.shields.io/badge/🛍_스토어-음반·굿즈-7c5cff?style=for-the-badge" alt="스토어" />
+<img src="https://img.shields.io/badge/📡_라이브-신청곡_투표-111827?style=for-the-badge" alt="라이브 신청곡 투표" />
 
+</div>
+
+<p align="center">
+  <img src="docs/screenshots/main.png" width="860" alt="StreamWave 메인 화면 - 오늘의 추천, 실시간 인기 급상승 곡, 하단 플레이어" />
+  <br />
+  <sub>▲ 메인 화면 · 실시간 인기 급상승 곡과 하단 고정 플레이어</sub>
+</p>
 
 ---
 
-# 2. 프로젝트 구조
+## 목차
 
-```text
-music
-├─ backend
-│  └─ Spring Boot
-│
-├─ frontend
-│  └─ React
-│
-└─ infra
-   └─ srs
-      ├─ docker-compose.yml
-      └─ srs.conf
-3. 사전 설치
+- [프로젝트 소개](#-프로젝트-소개)
+- [주요 기능](#-주요-기능)
+- [화면](#-화면)
+- [기술 스택](#-기술-스택)
+- [아키텍처](#-아키텍처)
+- [기술적으로 고민한 부분](#-기술적으로-고민한-부분)
+- [테스트](#-테스트)
+- [실행 방법](#-실행-방법)
+- [프로젝트 구조](#-프로젝트-구조)
+- [개발자](#-개발자)
 
-다음 프로그램이 필요합니다.
+---
 
-Java JDK
-IntelliJ IDEA
-Node.js / npm
-MySQL
-Docker Desktop
-Git
-OBS Studio (라이브 방송 테스트 시)
-4. MySQL 설정
+## 📌 프로젝트 소개
 
-로컬 MySQL에 프로젝트 DB를 생성합니다.
+음악은 혼자 듣기도 하지만, 누군가의 방송에서 함께 듣기도 합니다. 그런데 두 경험은 보통 서로 다른 서비스에 흩어져 있습니다.
 
-CREATE DATABASE music_db;
+**StreamWave**는 이 둘을 하나로 묶었습니다.
 
-각자 로컬 환경에 맞게 application.properties에서
-MySQL 계정 정보를 설정해야 합니다.
+1. **듣기**: YouTube 음원 카탈로그를 차트·장르·검색으로 탐색하고, 플레이리스트와 최근 들은 곡으로 내 취향을 쌓습니다.
+2. **함께 듣기**: OBS로 송출하는 라이브 방송에서 시청자가 **신청곡에 투표**하면, 1위 곡이 방송자의 플레이어에 바로 예약됩니다.
+3. **응원하고 소장하기**: 방송자에게 **음표(♪)** 로 후원하고, 지금 듣는 곡의 **음반·굿즈를 스토어에서 바로 구매**합니다.
 
-예시:
+이용권 결제, 스토어 주문·환불, 채팅 관리, 관리자 기능까지 실제 운영을 전제로 만들었습니다.
 
-spring.datasource.url=jdbc:mysql://localhost:3306/music_db
-spring.datasource.username=본인_MYSQL_ID
-spring.datasource.password=본인_MYSQL_PASSWORD
-5. Redis 실행
+---
 
-Docker Desktop을 먼저 실행합니다.
+## ✨ 주요 기능
 
-Redis 컨테이너가 없는 경우:
+### 🎵 음악 스트리밍
+| 기능 | 설명 |
+|---|---|
+| **YouTube 카탈로그** | 플레이리스트·채널·지역별 인기 차트를 동기화합니다. 쇼츠·인터뷰·라이브 클립 같은 비음악 영상은 길이·키워드·채널 규칙으로 걸러냅니다. |
+| **같은 곡 중복 정리** | 레이블·업로더만 다른 같은 곡을 정규화한 제목과 **재생시간(±5초)** 으로 묶어 대표 1곡만 보여 줍니다. |
+| **실시간 TOP 100** | 최근 24시간 청취 기준 차트입니다. 청취가 부족한 자리는 YouTube 조회수로 채웁니다. |
+| **플레이어** | 곡 목록 단위 재생 큐, 셔플·반복, 새로고침해도 이어지는 재생 위치, 백그라운드 탭 자동 넘김. |
+| **내 보관함** | 좋아요 · 최근 들은 곡(30초 이상 청취, 최근 50곡) · **직접 만드는 플레이리스트** |
+| **이용권** | 토스페이먼츠 결제. 무료 회원은 하루 누적 60초 미리듣기, 이용권이 남아 있을 때 재결제하면 기간이 이어 붙습니다. |
 
+### 📡 라이브 방송
+| 기능 | 설명 |
+|---|---|
+| **OBS 송출** | SRS 미디어 서버로 RTMP를 받아 HLS로 재생합니다. 2분마다 방송 화면을 캡처해 목록 썸네일로 씁니다. |
+| **실시간 채팅** | STOMP over SockJS. 발신자는 서버가 로그인 정보로 정하므로 닉네임 사칭이 불가능합니다. |
+| **신청곡 투표** | 방송자가 카탈로그에서 곡을 골라 투표를 열면, 시청자는 버튼이나 채팅 `투표1`로 1인 1표. **1위 곡 다음 재생**을 누르면 방송자의 플레이어에 그 곡이 예약됩니다. |
+| **채팅 관리** | 방송자가 메시지를 삭제하고 시청자를 10분 / 방송 동안 채팅 금지할 수 있습니다. 연결당 도배 제한도 있습니다. |
+| **OBS 오버레이 · 채팅 독** | 투명 배경 채팅 오버레이(방송 화면용)와 입력 가능한 채팅 독(OBS 커스텀 독용)을 제공합니다. |
+| **미니 플레이어 · 알림** | 다른 페이지로 가도 방송이 작은 창으로 이어지고, 팔로우한 채널이 방송을 켜면 알림이 옵니다. |
+
+### ♪ 음표 (라이브 후원)
+| 기능 | 설명 |
+|---|---|
+| **음표 보내기** | 1음표 = 1원. 1,000 ~ 500,000개를 메시지와 함께 보냅니다. |
+| **음표 알림** | 결제가 승인되면 채팅창과 OBS 오버레이에 음표 모양 알림이 뜹니다. 이 알림은 서버만 보낼 수 있습니다. |
+| **받은 음표** | 방송자는 스튜디오에서 받은 음표 목록과 누적 개수를 확인합니다. |
+
+### 🛍 스토어
+| 기능 | 설명 |
+|---|---|
+| **관련 상품** | 재생 중인 곡과 연결된 상품, 같은 아티스트의 상품을 플레이어 바에서 바로 보여 줍니다. |
+| **주문 · 결제** | 배송지 입력 → 토스 결제. 금액은 서버가 계산하고, 재고는 결제 승인 직전에 원자적으로 차감합니다. |
+| **취소 · 환불** | 구매자는 배송 전까지, 관리자는 배송 중까지 취소할 수 있으며 결제 취소와 재고 복구가 함께 처리됩니다. |
+| **스토어 관리** | 관리자가 상품 등록·수정·판매 중지, 곡 연결, 주문 상태(배송 시작 → 배송 완료) 관리를 합니다. |
+
+### 🔐 회원 · 관리자
+- 이메일 회원가입 + **소셜 로그인**(Kakao, Naver, Google OAuth2)
+- 이메일 인증번호로 아이디 찾기·비밀번호 재설정 (5분 만료, 5회 실패 시 폐기)
+- 로그인·인증번호 요청 **Rate Limit**
+- 권한 3단계: 일반 회원 / 부 관리자(콘텐츠·스토어) / 최고 관리자(권한 부여)
+
+---
+
+## 📱 화면
+
+<table>
+  <tr>
+    <td align="center"><b>TOP 100 차트</b></td>
+    <td align="center"><b>신청곡 투표 · 채팅 (OBS 채팅 독)</b></td>
+    <td align="center"><b>음표 보내기</b></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/chart.png" width="280" alt="TOP 100 차트" /></td>
+    <td align="center"><img src="docs/screenshots/live-dock.png" width="170" alt="신청곡 투표와 실시간 채팅" /></td>
+    <td><img src="docs/screenshots/note-modal.png" width="280" alt="음표 보내기" /></td>
+  </tr>
+  <tr>
+    <td align="center"><b>스토어</b></td>
+    <td align="center"><b>상품 상세 · 주문</b></td>
+    <td align="center"><b>지금 듣는 곡의 관련 상품</b></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/shop.png" width="280" alt="스토어" /></td>
+    <td><img src="docs/screenshots/product.png" width="280" alt="상품 상세와 배송지 입력" /></td>
+    <td><img src="docs/screenshots/related.png" width="280" alt="플레이어 바의 관련 상품" /></td>
+  </tr>
+  <tr>
+    <td align="center"><b>내 플레이리스트</b></td>
+    <td align="center"><b>관리자 · 스토어 관리</b></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/playlist.png" width="280" alt="플레이리스트" /></td>
+    <td><img src="docs/screenshots/admin-store.png" width="280" alt="스토어 관리" /></td>
+    <td></td>
+  </tr>
+</table>
+
+> 실제 서버를 로컬에서 띄워 브라우저로 촬영했습니다. 곡 카탈로그는 실제 데이터이고, 상품·방송·채팅·플레이리스트는 촬영용 예시 데이터입니다.
+
+---
+
+## 🧰 기술 스택
+
+| 영역 | 기술 |
+|---|---|
+| **Backend** | Java 25, Spring Boot 4.1 (Web, Data JPA, Security, OAuth2 Client, WebSocket/STOMP, Mail, Validation), springdoc-openapi |
+| **Auth** | Bearer 불투명 토큰(Redis, 7일) + 세션, OAuth2 (Kakao / Naver / Google) |
+| **Data** | MySQL 8, Redis (토큰 · 차트 · 투표 · 시청자 수 · 알림 · 채팅 금지) |
+| **Live** | SRS 6 (RTMP 수신 → HLS), HTTP 훅으로 송출 검증, ffmpeg 썸네일 캡처, OBS |
+| **외부 연동** | YouTube Data API v3 (다중 키 로테이션), 토스페이먼츠 결제위젯·승인·취소, AWS S3 + CloudFront, Gmail SMTP |
+| **Frontend** | React 18, Vite 5, React Router 6, Axios, @stomp/stompjs + SockJS, hls.js, react-youtube |
+| **Test** | JUnit 5, Spring Boot Test, Mockito (`@MockitoBean`) |
+| **Infra** | Docker Compose (MySQL · Redis · SRS · Spring · Caddy), Caddy 자동 HTTPS 리버스 프록시 |
+
+---
+
+## 🏗 아키텍처
+
+```mermaid
+flowchart LR
+    subgraph Client
+        B[React SPA<br/>YouTube IFrame · hls.js]
+        OBS[OBS Studio]
+    end
+
+    subgraph Server["Docker Compose"]
+        CADDY[Caddy<br/>HTTPS · 정적 파일 · 프록시]
+        API[Spring Boot<br/>REST · STOMP · OAuth2]
+        SRS[SRS<br/>RTMP → HLS]
+        DB[(MySQL)]
+        RD[(Redis)]
+    end
+
+    YT[YouTube Data API]
+    TOSS[토스페이먼츠]
+    S3[S3 + CloudFront]
+    OAUTH[Kakao · Naver · Google]
+
+    B -- "/api · /ws" --> CADDY --> API
+    B -- "/live/*.m3u8" --> CADDY --> SRS
+    OBS -- "RTMP :1935<br/>{재생ID}?key={비밀키}" --> SRS
+    SRS -- "on_publish / on_unpublish 훅" --> API
+    API --> DB
+    API --> RD
+    API --> YT
+    API --> TOSS
+    API --> S3
+    API <--> OAUTH
+```
+
+- 프론트 빌드 결과는 Caddy 이미지에 들어가고, `/api`·`/ws`는 Spring으로, HLS 파일만 SRS로 보냅니다. SRS 웹훅 경로(`/api/broadcast/srs/*`)는 외부에서 막혀 있습니다.
+- 라이브 송출 흐름:
+
+```mermaid
+sequenceDiagram
+    participant O as OBS
+    participant S as SRS
+    participant A as Spring
+    participant V as 시청자
+    O->>S: RTMP publish (pb_xxx?key=live_xxx)
+    S->>A: on_publish 훅 (stream=pb_xxx, param=?key=…)
+    A-->>S: 키 일치 → "0" 허용 / 불일치 → 403 거부
+    A->>A: 방송 ON + 팔로워 알림 (방송당 10분 1회)
+    V->>S: /live/pb_xxx.m3u8 (HLS 재생, 비밀키 노출 없음)
+    O->>S: 송출 종료
+    S->>A: on_unpublish 훅 → 방송 OFF · 투표 정리
+```
+
+- 스토어 주문 상태:
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING: 주문서 생성 (서버가 금액 계산)
+    PENDING --> PAID: 금액 검증 + 재고 차감 + 토스 승인
+    PENDING --> [*]: 하루 지나면 정리
+    PAID --> SHIPPING: 관리자 배송 시작
+    SHIPPING --> DELIVERED: 배송 완료
+    PAID --> CANCELLED: 구매자/관리자 취소 (환불 + 재고 복구)
+    SHIPPING --> CANCELLED: 관리자 취소
+```
+
+---
+
+## 💡 기술적으로 고민한 부분
+
+<details>
+<summary><b>1. 라이브 방송 가로채기 방지: 재생 ID와 송출 키 분리</b></summary>
+
+- 처음에는 스트림 키가 곧 HLS 파일 이름이라, 시청자가 주소창에서 키를 보고 같은 키로 송출해 **방송을 가로챌 수 있었습니다.**
+- 공개용 `playbackId`와 비밀 `streamKey`를 나눴습니다. OBS에는 `{playbackId}?key={streamKey}`를 넣고, SRS가 넘겨주는 `param`의 키를 `on_publish` 훅에서 **상수 시간 비교**로 검증해 틀리면 송출을 거부합니다.
+- 웹훅 경로는 Caddy에서 외부 접근을 막아, 남의 방송을 강제로 OFF 처리할 수도 없게 했습니다.
+</details>
+
+<details>
+<summary><b>2. 결제 금액 위변조와 재고 정합성 (이용권 · 음표 · 스토어)</b></summary>
+
+- 결제창을 열기 전에 서버가 금액을 고정한 **PENDING 주문**을 만들고, 승인 요청의 금액이 이와 다르면 토스를 호출하지 않고 거절합니다. 같은 주문의 중복 승인(새로고침)은 한 번만 처리합니다.
+- 스토어는 `UPDATE … SET stock = stock - :qty WHERE stock >= :qty`로 **재고를 원자적으로 차감한 뒤** 토스 승인을 호출합니다. 승인이 실패하면 트랜잭션이 롤백되어 재고도 돌아옵니다. 동시에 결제해도 재고보다 많이 팔리지 않습니다.
+- 환불은 토스 결제 취소가 성공한 경우에만 재고 복구와 상태 변경을 합니다. 결제창에서 그만둔 PENDING 주문은 스케줄러가 하루 뒤 정리합니다.
+</details>
+
+<details>
+<summary><b>3. 실시간 채팅의 신원과 1인 1표</b></summary>
+
+- 클라이언트가 보낸 `sender` 이름을 믿으면 방송자 닉네임으로 투표창 명령을 보내거나, 이름을 바꿔 가며 무제한 투표할 수 있었습니다.
+- 웹소켓 핸드셰이크에서 인증된 **STOMP `Principal`** 로 발신자를 서버가 정하고, 투표는 사용자 PK 기준 Redis `SETNX`로 **원자적 1인 1표**를 보장합니다. 채팅 `투표1`과 버튼 투표가 같은 표로 합산됩니다.
+- 음표 알림·삭제 신호 같은 시스템 메시지 타입은 클라이언트가 보낼 수 없고, 연결당 5초 5개의 도배 제한과 방송자 채팅 금지(Redis TTL)를 둡니다.
+</details>
+
+<details>
+<summary><b>4. YouTube API 할당량 (하루 10,000유닛)</b></summary>
+
+- `search.list`는 호출당 100유닛이라 하루 약 100번이면 끝납니다. 동기화는 1유닛짜리 `playlistItems`·`videos.list` 위주로 바꾸고, 대량 키워드 검색은 격일 새벽에만 돌립니다.
+- 키를 여러 개 두고, **할당량 사유의 403/429일 때만** 그 키를 태평양 자정까지 봉인하고 다음 키로 넘어갑니다. (키 설정 오류 같은 403까지 봉인하면 멀쩡한 키가 하루 동안 막힙니다.)
+- 검색 결과가 부족할 때 YouTube에서 보강하는 기능은 **로그인 사용자만**, 사이트 전체 **시간당 10회 · 하루 40회** 상한 안에서 동작합니다. 비로그인 사용자가 검색어를 바꿔 가며 할당량을 소진하는 것을 막기 위해서입니다.
+</details>
+
+<details>
+<summary><b>5. "실시간" 차트를 진짜 실시간으로</b></summary>
+
+- 기존 Redis ZSET은 점수가 줄지 않는 누적값이라, 한번 올라간 곡이 계속 상위에 남았습니다.
+- 청취 점수를 **시간대별 버킷**(`chart:h:{epochHour}`)에 쌓고, 조회할 때 최근 24개 버킷을 합산합니다. 결과는 30초 캐시합니다. 오래된 버킷은 조회 시 정리합니다.
+- 같은 사용자가 같은 곡을 반복 재생해도 **한 시간에 1점**만 반영해 차트 조작을 막았습니다.
+</details>
+
+<details>
+<summary><b>6. 소셜 로그인 계정 연결과 계정 탈취</b></summary>
+
+- 이메일로 계정을 찾아 연결하는데, 카카오는 **미인증 이메일**을 줄 수 있어 남의 이메일을 넣은 카카오 계정으로 그 사람 계정에 들어갈 수 있었습니다.
+- 제공자가 인증한 이메일(`is_email_verified`, `email_verified`)만 받고, 같은 이메일의 일반 계정에 처음 연결될 때는 기존 비밀번호를 무효화합니다. 이메일 인증 없이 **남이 먼저 내 이메일로 가입해 둔 계정**을 공격자가 계속 쓰지 못하게 하기 위해서입니다.
+- 로그인 직후 토큰은 쿼리(`?`)가 아닌 프래그먼트(`#`)로 넘겨 서버 로그·Referer에 남지 않게 했습니다.
+</details>
+
+<details>
+<summary><b>7. 곡 삭제와 외래키: 목록 조회가 통째로 실패하던 문제</b></summary>
+
+- 비음악 영상은 목록을 조회하면서 정리(삭제)하는데, 좋아요·청취기록이 걸린 곡을 지우면 **커밋 시점에 FK 오류**가 나서 홈 화면 곡 목록 요청 전체가 500이 됐습니다. (실제 재현 테스트로 확인)
+- 모든 삭제 경로를 `MusicRemover`로 통일해 참조 기록을 먼저 지우고, 새로 만든 테이블(플레이리스트·상품)은 `ON DELETE CASCADE / SET NULL`로 설계했습니다. 회귀 테스트로 고정했습니다.
+</details>
+
+<details>
+<summary><b>8. 운영 보안 기본기</b></summary>
+
+- 비밀값은 저장소에서 빼고 로컬은 `application-secret.properties`(git 제외), 운영은 `.env` 환경변수로 주입합니다. Docker 이미지에도 들어가지 않게 `.dockerignore`를 뒀습니다.
+- 500 응답에는 SQL·테이블 이름 대신 **오류 ID**만 내보내고, 원인은 같은 ID로 서버 로그에서 찾습니다.
+- 웹소켓 접속 출처를 서비스 도메인으로 제한하고, 운영에서는 Swagger를 끕니다.
+</details>
+
+---
+
+## ✅ 테스트
+
+| 구분 | 내용 |
+|---|---|
+| **백엔드** | JUnit 5 테스트 **30개**: 음표 주문·승인 위변조, 스토어 재고 차감·환불·상태 전이, 관련 상품 매칭, 플레이리스트 소유권·곡 삭제 연쇄, 투표 1인 1표, 채팅 금지, 차트 시간당 1점, 소셜 계정 연결 규칙, 곡 목록 FK 회귀, 이용권 만료 알림, Rate Limit |
+| **외부 연동** | 토스 결제 클라이언트는 `@MockitoBean`으로 대체해 실제 결제 없이 승인·취소 흐름을 검증합니다. |
+
+```bash
+# 백엔드 (로컬 MySQL · Redis 필요)
+cd ./-MUSIC-main/-MUSIC-main/music/backend && ./mvnw test
+
+# 프론트엔드 빌드
+cd ./-MUSIC-main/-MUSIC-main/music/frontend && npm ci && npm run build
+```
+
+---
+
+## 🚀 실행 방법
+
+### 요구 사항
+- JDK 25, Node.js 18+
+- MySQL 8, Redis
+- Docker Desktop (라이브 방송용 SRS)
+- OBS Studio (방송 테스트 시)
+
+### 1. 로컬 개발
+
+```bash
+# 1) DB
+mysql -uroot -p -e "CREATE DATABASE music_db"
+
+# 2) Redis
 docker run -d --name music-redis -p 6379:6379 redis:7-alpine
 
-이미 생성되어 있다면:
+# 3) SRS (라이브)
+cd ./-MUSIC-main/-MUSIC-main/music/infra/srs && docker compose up -d
+```
+
+`backend/src/main/resources/application-secret.properties`를 만들어 비밀값을 넣습니다. (git에 올라가지 않습니다)
+
+```properties
+spring.datasource.password=본인_MYSQL_비밀번호
+youtube.api.keys=키1,키2
+spring.security.oauth2.client.registration.kakao.client-id=...
+spring.security.oauth2.client.registration.kakao.client-secret=...
+spring.security.oauth2.client.registration.google.client-id=...
+spring.security.oauth2.client.registration.google.client-secret=...
+spring.security.oauth2.client.registration.naver.client-id=...
+spring.security.oauth2.client.registration.naver.client-secret=...
+spring.mail.username=...
+spring.mail.password=...
+toss.payments.client-key=test_gck_...
+toss.payments.secret-key=test_gsk_...
+```
+
+```bash
+# 4) 백엔드  → http://localhost:8080 (Swagger: /swagger-ui.html)
+cd ./-MUSIC-main/-MUSIC-main/music/backend && ./mvnw spring-boot:run
+
+# 5) 프론트엔드 → http://localhost:3000 (API·WebSocket은 8080으로 프록시)
+cd ./-MUSIC-main/-MUSIC-main/music/frontend && npm install && npm run dev
+```
+
+### 2. OBS 방송
+
+| 항목 | 값 |
+|---|---|
+| 서버 | `rtmp://localhost/live` |
+| 스트림 키 | 프로필 → **스튜디오**에서 발급한 키 그대로 (`pb_…?key=live_…` 형식) |
+| 채팅 오버레이 | 스튜디오에 표시되는 URL을 OBS **브라우저 소스**로 추가 |
+
+| 포트 | 용도 |
+|---|---|
+| 1935 | RTMP 송출 |
+| 1985 | SRS HTTP API (로컬 전용) |
+| 8081 | HLS 재생 |
+| 8080 | Spring Boot |
+| 3000 | Vite 개발 서버 |
+
+### 3. 운영 배포 (Docker Compose)
+
+```bash
+cd ./-MUSIC-main/-MUSIC-main/music
+cp .env.example .env   # 값 채우기 (아래 표)
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+| 변수 | 용도 |
+|---|---|
+| `APP_HOST` | 서비스 도메인 (Caddy 자동 HTTPS) |
+| `MYSQL_ROOT_PASSWORD` | DB 비밀번호 |
+| `YOUTUBE_API_KEYS` | YouTube API 키 (콤마로 여러 개) |
+| `KAKAO_*`, `NAVER_*`, `GOOGLE_*` | OAuth 클라이언트 ID / 시크릿 |
+| `MAIL_USERNAME`, `MAIL_PASSWORD` | 인증번호 메일 발송 |
+| `AWS_*` | S3 업로드 / CloudFront |
+| `TOSS_CLIENT_KEY`, `TOSS_SECRET_KEY` | 토스페이먼츠 |
+
+---
+
+## 📁 프로젝트 구조
+
+```
+-MUSIC-main/-MUSIC-main/music
+├── backend/                          # Spring Boot
+│   └── src/main/java/com/example/music/
+│       ├── config/                   # Security, WebSocket(STOMP), 예외 처리, S3, Swagger
+│       ├── controller/               # 음악 · 라이브 · 채팅 · 음표 · 스토어 · 결제 · 플레이리스트 · 관리자
+│       ├── service/                  # YouTube 동기화, 차트, 투표, 결제(Toss), 스토어, 음표 ...
+│       ├── entity/  repository/  dto/
+│       ├── scheduler/                # YouTube 동기화, 이용권 만료 알림, 결제 대기 정리
+│       └── security/                 # 토큰 인증, OAuth2, Rate Limit
+├── frontend/                         # React + Vite
+│   └── src/
+│       ├── pages/                    # 메인, 차트, 라이브, 스토어, 보관함, 결제, OBS 오버레이·독 ...
+│       ├── components/               # 플레이어, 채팅, 투표, 음표 모달, 관련 상품, 스토어 관리 ...
+│       ├── context/                  # 인증, 플레이어, 알림, 라이브 미니 플레이어
+│       └── hooks/  utils/  api/  styles/
+├── infra/
+│   ├── srs/                          # SRS 설정(로컬·운영), 썸네일 캡처 스크립트
+│   └── caddy/                        # 리버스 프록시 · 자동 HTTPS
+└── docker-compose.prod.yml           # MySQL · Redis · SRS · Spring · Caddy
+docs/screenshots/                     # README 화면
+```
+
+---
+
+## 👤 개발자
+
+<table>
+  <tr>
+    <td align="center" width="160">
+      <a href="https://github.com/cjsrudgh98-crypto"><img src="https://github.com/cjsrudgh98-crypto.png" width="100" alt="천경호" /></a>
+      <br /><b>천경호</b>
+      <br /><sub>풀스택 (기획 · 백엔드 · 프론트엔드 · 배포)</sub>
+    </td>
+    <td>
 
-docker start music-redis
+| | |
+|---|---|
+| 📞 **연락처** | 010-7757-5062 |
+| ✉️ **이메일** | [cjsrudgh98@gmail.com](mailto:cjsrudgh98@gmail.com) |
+| 🐙 **GitHub** | [@cjsrudgh98-crypto](https://github.com/cjsrudgh98-crypto) |
 
-실행 확인:
+    </td>
+  </tr>
+</table>
 
-docker ps
+---
 
-Redis 연결 테스트:
+<div align="center">
 
-docker exec -it music-redis redis-cli
+**StreamWave**: 듣고, 함께 듣고, 응원하세요 🎧
 
-Redis 내부:
-
-PING
-
-정상 결과:
-
-PONG
-6. Redis 음악 스냅샷
-
-Spring Boot의 스케줄러가 음악 정보를 Redis에 주기적으로 저장합니다.
-
-전체 음악 스냅샷 Redis Key:
-
-music:snapshot:all
-
-확인:
-
-GET music:snapshot:all
-7. Redis TOP100
-
-음악을 일정 시간 이상 청취하면 MySQL의 listen_log에
-청취 기록이 저장됩니다.
-
-Spring Boot 스케줄러는 해당 로그를 음악별로 집계하여
-Redis TOP100을 생성합니다.
-
-Redis Key:
-
-music:ranking:top100
-
-확인:
-
-docker exec -it music-redis redis-cli --raw GET music:ranking:top100
-
-TOP100 조회 API:
-
-GET /api/music-snapshot/top100
-
-동작 구조:
-
-음악 청취
-   ↓
-listen_log
-   ↓
-음악별 청취 횟수 집계
-   ↓
-TOP100 생성
-   ↓
-Redis
-   ↓
-GET /api/music-snapshot/top100
-8. SRS 라이브 스트리밍 서버
-
-Docker Desktop이 실행 중이어야 합니다.
-
-SRS 폴더:
-
-music/infra/srs
-
-해당 폴더에서:
-
-docker compose up -d
-
-실행 확인:
-
-docker ps
-
-정상 실행 시:
-
-music-srs
-
-컨테이너가 Up 상태로 표시됩니다.
-
-9. SRS 포트
-1935 → RTMP 송출
-1985 → SRS HTTP API
-8081 → HLS 재생
-
-Spring Boot:
-
-8080
-
-따라서 Spring Boot와 SRS의 HTTP 포트가 충돌하지 않습니다.
-
-10. OBS 설정
-
-OBS → 설정 → 방송
-
-서비스:
-
-사용자 지정
-
-서버:
-
-rtmp://localhost/live
-
-스트림 키:
-
-livestream
-
-최종 RTMP 주소:
-
-rtmp://localhost/live/livestream
-11. HLS 재생
-
-OBS 방송 시작 후:
-
-http://localhost:8081/live/livestream.m3u8
-
-현재 SRS HLS 설정:
-
-hls_fragment 1;
-hls_window 6;
-
-로컬 테스트 기준 약 7~8초 수준의 지연을 확인했습니다.
-
-10분 연속 방송 테스트에서도 끊김 없이 정상 동작했습니다.
-
-12. AWS S3
-
-S3 Bucket:
-
-streamwave-media-sy-2026
-
-S3 버킷은 Public으로 공개하지 않습니다.
-
-AWS 인증 정보는 GitHub에 올리지 말고
-각자의 로컬 환경에 등록해야 합니다.
-
-필요한 환경 변수:
-
-AWS_ACCESS_KEY_ID
-AWS_SECRET_ACCESS_KEY
-AWS_REGION
-AWS_S3_BUCKET
-
-예:
-
-AWS_REGION=ap-northeast-2
-AWS_S3_BUCKET=streamwave-media-sy-2026
-
-주의:
-
-AWS_ACCESS_KEY_ID
-AWS_SECRET_ACCESS_KEY
-
-값은 README나 GitHub에 절대 작성하지 않습니다.
-
-13. CloudFront CDN
-
-CloudFront가 Private S3의 파일을 사용자에게 전달합니다.
-
-구조:
-
-Spring Boot
-   ↓
-S3 파일 저장
-   ↓
-CloudFront
-   ↓
-React / Browser
-
-CloudFront Domain:
-
-https://d1g99hi566ituv.cloudfront.net
-
-S3 업로드 API는 업로드 완료 후 다음과 같이
-CloudFront URL을 반환합니다.
-
-{
-  "key": "uploads/example.jpg",
-  "url": "https://d1g99hi566ituv.cloudfront.net/uploads/example.jpg",
-  "message": "S3 파일 업로드 성공"
-}
-14. Spring Boot 실행
-
-Backend 폴더를 IntelliJ로 실행합니다.
-
-정상 실행:
-
-http://localhost:8080
-
-Swagger:
-
-http://localhost:8080/swagger-ui/index.html
-15. React 실행
-
-Frontend 폴더에서:
-
-npm install
-npm run dev
-
-개발 서버:
-
-http://localhost:3000
-16. 실행 순서
-
-로컬에서 전체 프로젝트를 테스트할 때 권장 순서:
-
-1. MySQL 실행
-
-2. Docker Desktop 실행
-
-3. Redis 실행
-
-4. SRS 실행
-
-5. Spring Boot 실행
-
-6. React 실행
-
-7. 필요 시 OBS 실행
-17. 주요 확인 명령어
-
-Docker 컨테이너:
-
-docker ps
-
-Redis:
-
-docker exec -it music-redis redis-cli
-
-Redis 전체 음악:
-
-GET music:snapshot:all
-
-Redis TOP100:
-
-docker exec -it music-redis redis-cli --raw GET music:ranking:top100
+</div>
