@@ -2008,6 +2008,8 @@ body {
     overflow: hidden;
 }
 .ld-chat-body { flex: 1; min-height: 0; display: flex; }
+/* 투표창은 채팅 칼럼의 절반 가까이까지만 — 곡이 많으면 투표창 안에서 스크롤, 채팅은 항상 남은 공간 확보 */
+.ld-chat .lp-wrap { max-height: 45%; overflow-y: auto; }
 @media (max-width: 1040px) {
     .ld-stage { grid-template-columns: 1fr; }
     .ld-chat { height: 520px; }
