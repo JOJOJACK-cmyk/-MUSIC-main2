@@ -178,6 +178,12 @@ public class BroadcastService {
                                         )
                         );
 
+        String normalized = status == null ? "" : status.trim().toUpperCase();
+        if (!"ON".equals(normalized) && !"OFF".equals(normalized)) {
+            throw new IllegalArgumentException("방송 상태는 ON 또는 OFF 만 가능합니다.");
+        }
+        status = normalized;
+
         String prevStatus = broadcast.getStatus();
         broadcast.setStatus(status);
 
@@ -298,8 +304,20 @@ public class BroadcastService {
                 b.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
+    // 같은 방송의 "라이브 시작" 알림은 이 간격 안에 한 번만 (ON/OFF 연타로 전체 사용자에게 알림 폭탄 방지)
+    private static final java.time.Duration LIVE_NOTIFY_COOLDOWN = java.time.Duration.ofMinutes(10);
+    private final java.util.Map<Long, java.time.Instant> lastLiveNotifyAt = new java.util.concurrent.ConcurrentHashMap<>();
+
     /** "OO님이 라이브를 시작했어요" 앱 내 알림 발행 (broadcasterId 포함 → 프론트에서 팔로우 여부 판별) */
     private void notifyLiveStart(Broadcast broadcast) {
+        java.time.Instant now = java.time.Instant.now();
+        java.time.Instant last = lastLiveNotifyAt.get(broadcast.getId());
+        if (last != null && last.plus(LIVE_NOTIFY_COOLDOWN).isAfter(now)) {
+            log.info("[알림] 라이브 시작 알림 생략 (최근 {}분 내 발송) broadcastId={}",
+                    LIVE_NOTIFY_COOLDOWN.toMinutes(), broadcast.getId());
+            return;
+        }
+        lastLiveNotifyAt.put(broadcast.getId(), now);
         try {
             Long hostId = broadcast.getUser() != null ? broadcast.getUser().getId() : null;
             String host = broadcast.getUser() != null ? broadcast.getUser().getNickname() : "누군가";

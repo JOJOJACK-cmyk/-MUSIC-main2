@@ -38,6 +38,7 @@ public class YouTubeApiService {
     private final NotificationService notificationService;
     private final com.example.music.repository.ListenLogRepository listenLogRepository;
     private final com.example.music.repository.LikedMusicRepository likedMusicRepository;
+    private final MusicRemover musicRemover;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
@@ -1097,7 +1098,7 @@ public class YouTubeApiService {
                 for (Music m : batch) {
                     JsonNode item = itemById.get(m.getYoutubeVideoId());
                     if (item == null) {   // 영상이 삭제/비공개됨
-                        musicRepository.delete(m);
+                        musicRemover.remove(m);
                         deleted++;
                         continue;
                     }
@@ -1114,7 +1115,7 @@ public class YouTubeApiService {
 
                     boolean failsSongGate = seconds == 0L || isNonMusicTitle(m.getTitle()) || !isValidSongDuration(seconds);
                     if (failsSongGate && !Boolean.TRUE.equals(m.getManualAdd())) {
-                        musicRepository.delete(m);
+                        musicRemover.remove(m);
                         deleted++;
                     } else {
                         if (seconds > 0L) m.updateDuration(seconds);
@@ -1373,10 +1374,7 @@ public class YouTubeApiService {
     /** 참조(listen_log·liked_music) 정리 후 음원 삭제. 성공 true. */
     private boolean deleteMusicSafely(Music m) {
         try {
-            Long mid = m.getId();
-            listenLogRepository.deleteByMusicId(mid);
-            likedMusicRepository.deleteByMusicId(mid);
-            musicRepository.deleteById(mid);
+            musicRemover.remove(m);
             return true;
         } catch (Exception e) {
             log.warn("[정리] 삭제 실패: {} - {} ({})", m.getId(), m.getTitle(), e.getMessage());

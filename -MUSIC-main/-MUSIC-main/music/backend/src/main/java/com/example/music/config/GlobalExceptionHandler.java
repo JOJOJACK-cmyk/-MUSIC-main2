@@ -85,18 +85,16 @@ public class GlobalExceptionHandler {
     // 500 Internal Server Error: 그 외 예상치 못한 모든 서버 에러 처리
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneralException(Exception e) {
-        // 서버 콘솔에는 원본 에러 스택을 남겨서 디버깅 가능하게 유지
+        // 원인(SQL·테이블·제약 이름 등)은 서버 로그에만 남기고, 응답에는 추적용 ID 만 준다.
+        // 문제 신고가 오면 이 ID 로 서버 로그에서 원본 스택을 찾는다.
+        String errorId = java.util.UUID.randomUUID().toString().substring(0, 8);
         org.slf4j.LoggerFactory.getLogger(GlobalExceptionHandler.class)
-                .error("[500] {} : {}", e.getClass().getName(), e.getMessage(), e);
-
-        Throwable root = e;
-        while (root.getCause() != null && root.getCause() != root) root = root.getCause();
+                .error("[500] errorId={} {} : {}", errorId, e.getClass().getName(), e.getMessage(), e);
 
         ErrorResponse response = new ErrorResponse(
                 "ERROR",
                 "INTERNAL_SERVER_ERROR",
-                e.getClass().getSimpleName() + ": " + e.getMessage()
-                        + " | root=" + root.getClass().getSimpleName() + ": " + root.getMessage()
+                "서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요. (오류 ID: " + errorId + ")"
         );
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }

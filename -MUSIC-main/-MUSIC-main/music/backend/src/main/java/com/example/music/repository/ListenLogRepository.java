@@ -44,6 +44,16 @@ public interface ListenLogRepository extends JpaRepository<ListenLog, Long> {
             """)
     List<Object[]> findMusicRanking();
 
+    // 최근 N시간 음악별 청취 횟수 (실시간 차트 DB 폴백)
+    @Query("""
+            SELECT l.music.id, COUNT(l)
+            FROM ListenLog l
+            WHERE l.listenedAt >= :since
+            GROUP BY l.music.id
+            ORDER BY COUNT(l) DESC
+            """)
+    List<Object[]> findMusicRankingSince(@Param("since") LocalDateTime since);
+
     // 카탈로그 정리 시 참조 무결성 위해 먼저 삭제
     @Modifying
     @Transactional

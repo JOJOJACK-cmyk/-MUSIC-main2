@@ -52,9 +52,45 @@ public class ChatController {
         return "u:" + user.getId();
     }
 
+    // 도배 방지: 웹소켓 연결(세션)당 5초에 5개까지
+    private static final long FLOOD_WINDOW_MS = 5_000;
+    private static final int FLOOD_MAX_MESSAGES = 5;
+    private record FloodWindow(long startedAt, int count) {}
+    private final java.util.concurrent.ConcurrentHashMap<String, FloodWindow> floodWindows = new java.util.concurrent.ConcurrentHashMap<>();
+    private volatile long lastFloodSweep = System.currentTimeMillis();
+
+    /** 이번 메시지를 허용하면 true */
+    private boolean allowBySessionRate(String sessionId) {
+        if (sessionId == null) return true;
+        long now = System.currentTimeMillis();
+        if (now - lastFloodSweep > 60_000) {
+            lastFloodSweep = now;
+            floodWindows.entrySet().removeIf(e -> now - e.getValue().startedAt() > FLOOD_WINDOW_MS);
+        }
+        FloodWindow w = floodWindows.compute(sessionId, (k, cur) ->
+                (cur == null || now - cur.startedAt() > FLOOD_WINDOW_MS)
+                        ? new FloodWindow(now, 1)
+                        : new FloodWindow(cur.startedAt(), cur.count() + 1));
+        return w.count() <= FLOOD_MAX_MESSAGES;
+    }
+
     @MessageMapping("/chat/message")
-    public void message(ChatMessageDto message, Principal principal) {
+    public void message(ChatMessageDto message, Principal principal,
+                        @org.springframework.messaging.handler.annotation.Header(name = "simpSessionId", required = false) String sessionId) {
         if (message == null || message.getRoomId() == null) return;
+
+        if (!allowBySessionRate(sessionId)) {
+            if (principal != null) {
+                messagingTemplate.convertAndSendToUser(principal.getName(), "/queue/chat-notice",
+                        ChatMessageDto.builder()
+                                .roomId(message.getRoomId())
+                                .type(ChatMessageDto.MessageType.NOTICE)
+                                .message("채팅을 너무 빠르게 보내고 있어요. 잠시 후 다시 보내 주세요.")
+                                .messageId(UUID.randomUUID().toString())
+                                .build());
+            }
+            return;
+        }
 
         // 발신자는 클라이언트가 보낸 값이 아니라 웹소켓 인증 정보(Principal)로 정한다.
         // (클라이언트 sender 를 믿으면 방송자 사칭 → "!투표창", 이름 바꿔가며 무제한 투표가 가능해짐)

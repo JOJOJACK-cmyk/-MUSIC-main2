@@ -20,9 +20,20 @@ public class UserService {
     private final PassRepository passRepository;
     private final PasswordEncoder passwordEncoder;
 
+    /** 닉네임 규칙: 2~20자, 채팅의 비로그인 표시 이름("게스트") 사용 불가 */
+    public static String validateNickname(String nickname) {
+        String n = nickname == null ? "" : nickname.trim();
+        if (n.length() < 2 || n.length() > 20) throw new IllegalArgumentException("닉네임은 2~20자로 입력해주세요.");
+        if ("게스트".equals(n)) throw new IllegalArgumentException("사용할 수 없는 닉네임입니다.");
+        return n;
+    }
+
     // 회원가입
     @Transactional
     public void signup(SignupRequestDto requestDto) {
+
+        // 0. 닉네임 규칙 (2~20자, "게스트" 불가 — 채팅의 비로그인 표시와 헷갈리지 않게)
+        requestDto.setNickname(validateNickname(requestDto.getNickname()));
 
         // 1. 이메일 중복 검사
         if (userRepository.findByEmail(requestDto.getEmail()).isPresent()) {
@@ -66,7 +77,7 @@ public class UserService {
         // 2. 소셜 로그인 회원인지 확인
         if (user.getPassword() == null) {
             throw new IllegalArgumentException(
-                    "소셜 로그인으로 가입한 회원입니다."
+                    "소셜 로그인으로 연결된 계정입니다. 카카오/네이버/구글 로그인을 이용해 주세요."
             );
         }
 

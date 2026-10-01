@@ -95,7 +95,8 @@ public class ListenLogService {
         listenLogRepository.save(logEntity);
 
         // 7. 실시간 차트 점수 누적 연동 (청취가 정상 기록될 때 Redis ZSet 점수 1점 증가)
-        chartService.incrementScore(dto.getMusicId(), 1.0);
+        //    같은 사용자·곡은 시간당 1점만 (반복 재생으로 차트 올리기 방지)
+        chartService.recordListen(user.getId(), dto.getMusicId());
 
         log.info("[Log Collector] ✅ 청취 로그 저장 완료 및 실시간 차트 반영 - User: {} ({}), Music: {}, Duration: {}s",
                 user.getId(), user.getEmail(), music.getTitle(), dto.getListenSeconds());

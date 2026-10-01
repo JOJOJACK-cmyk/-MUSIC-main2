@@ -35,6 +35,7 @@ public class MusicService {
     private final UserRepository userRepository;
     private final LikedMusicRepository likedMusicRepository;
     private final AuthenticatedUserResolver authenticatedUserResolver;
+    private final MusicRemover musicRemover;
 
     // 검색어별 마지막 유튜브 보강 시각 (재검색·할당량 낭비 방지, 재시작 시 초기화)
     private final Map<String, Instant> youtubeSearchAt = new ConcurrentHashMap<>();
@@ -112,8 +113,10 @@ public class MusicService {
 
                     if (nonMusicTitle || badDuration) {
                         try {
-                            musicRepository.delete(music);
-                        } catch (Exception e) {}
+                            musicRemover.remove(music); // 좋아요·청취기록까지 정리 (FK 오류로 목록 전체가 실패하지 않게)
+                        } catch (Exception e) {
+                            log.warn("[정리] 곡 삭제 실패 id={}: {}", music.getId(), e.getMessage());
+                        }
                         return false;
                     }
                     return true;
@@ -139,18 +142,23 @@ public class MusicService {
      * (HTTP 호출이 있으므로 트랜잭션 밖에서 수행 — NOT_SUPPORTED)
      */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public List<MusicDto.Response> searchMusics(String keyword) {
-        String kw = keyword == null ? "" : keyword.trim();
+    public List<MusicDto.Response> searchMusics(String keyword, boolean allowYoutube) {
+        // LIKE 와일드카드(%, _)와 이스케이프 문자는 검색어에서 뺀다 ("%" 하나로 전체 목록이 나오지 않게)
+        String kw = keyword == null ? ""
+                : keyword.replace("%", "").replace("_", "").replace("\\", "").trim();
         if (kw.isBlank()) return List.of();
+        if (kw.length() > 50) kw = kw.substring(0, 50);
         // 💡 띄어쓰기 관계없이 제목/아티스트만 맞으면 검색되도록, 공백을 지우고 비교한다.
         String kwNoSpaces = kw.replace(" ", "");
 
         List<Music> local = musicRepository.findByTitleOrArtistIgnoringSpaces(kwNoSpaces);
 
-        if (shouldEnrichFromYoutube(kw, local.size())) {
+        // 유튜브 보강(search.list = 100유닛, 하루 약 100회 한도)은 로그인 사용자 검색에서만,
+        // 그리고 전체 시간당/일일 상한 안에서만 한다. (비로그인이 검색어를 바꿔가며 할당량을 소진하는 것 방지)
+        if (allowYoutube && shouldEnrichFromYoutube(kw, local.size())) {
             synchronized (youtubeLock) {
                 // 락 대기 중 다른 요청이 이미 채웠거나 쿨다운에 걸렸을 수 있으니 재확인
-                if (shouldEnrichFromYoutube(kw, local.size())) {
+                if (shouldEnrichFromYoutube(kw, local.size()) && takeSearchBudget()) {
                     youtubeSearchAt.put(kw.toLowerCase(), Instant.now());
                     try {
                         youTubeApiService.syncLatestMusicByKeyword(kw, YT_FETCH_PER_SEARCH);
@@ -203,6 +211,30 @@ public class MusicService {
         return result;
     }
 
+    // 검색 보강용 유튜브 호출 상한 (자동 동기화 몫을 남겨 둔다)
+    private static final int SEARCH_BUDGET_PER_HOUR = 10;
+    private static final int SEARCH_BUDGET_PER_DAY = 40;
+    private long budgetHour = -1;
+    private long budgetDay = -1;
+    private int usedThisHour = 0;
+    private int usedToday = 0;
+
+    /** youtubeLock 안에서 호출. 상한이 남아 있으면 1회 차감하고 true */
+    private boolean takeSearchBudget() {
+        long nowHour = Instant.now().getEpochSecond() / 3600;
+        long nowDay = nowHour / 24;
+        if (nowHour != budgetHour) { budgetHour = nowHour; usedThisHour = 0; }
+        if (nowDay != budgetDay) { budgetDay = nowDay; usedToday = 0; }
+        if (usedThisHour >= SEARCH_BUDGET_PER_HOUR || usedToday >= SEARCH_BUDGET_PER_DAY) {
+            log.info("[Search] 유튜브 보강 상한 도달 (시간당 {}/{}, 일 {}/{}) - DB 결과만 반환",
+                    usedThisHour, SEARCH_BUDGET_PER_HOUR, usedToday, SEARCH_BUDGET_PER_DAY);
+            return false;
+        }
+        usedThisHour++;
+        usedToday++;
+        return true;
+    }
+
     private boolean shouldEnrichFromYoutube(String keyword, int localCount) {
         if (keyword.length() < 2) return false;               // 1글자 검색은 유튜브 호출 안 함
         if (localCount >= DB_ENOUGH_RESULTS) return false;     // 이미 충분
@@ -240,7 +272,7 @@ public class MusicService {
     public void deleteMusic(Long id) {
         Music music = musicRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("음원을 찾을 수 없습니다. id=" + id));
-        musicRepository.delete(music);
+        musicRemover.remove(music);
     }
 
     // 💡 카테고리별(KPOP/JPOP/VTUBER/POP) 유튜브 최신곡 수동 동기화 (관리자용/테스트용)

@@ -59,7 +59,12 @@ export default function LoginPage() {
         alert(err.response.data?.message || '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.');
         return;
       }
-      alert('회원가입 실패: 이미 존재하는 이메일이거나 오류가 발생했습니다.');
+      // 서버가 알려준 사유(이메일/닉네임 중복, 닉네임 규칙 등)를 그대로 보여준다
+      const data = err.response?.data;
+      const reason = typeof data === 'string' ? data : data?.message;
+      alert(err.response?.status === 400 && reason
+        ? `회원가입 실패: ${reason}`
+        : '회원가입 실패: 이미 존재하는 이메일이거나 오류가 발생했습니다.');
     }
   };
 
@@ -239,9 +244,11 @@ export default function LoginPage() {
               <i className="fa-solid fa-lock"></i>
               <input
                 type="password"
-                placeholder="비밀번호"
+                placeholder="비밀번호 (6자 이상)"
                 value={signupData.password}
                 onChange={(e) => setSignupData({ ...signupData, password: e.target.value })}
+                minLength={6}
+                maxLength={64}
                 required
               />
             </div>
@@ -249,9 +256,11 @@ export default function LoginPage() {
               <i className="fa-solid fa-id-card"></i>
               <input
                 type="text"
-                placeholder="닉네임"
+                placeholder="닉네임 (2~20자)"
                 value={signupData.nickname}
                 onChange={(e) => setSignupData({ ...signupData, nickname: e.target.value })}
+                minLength={2}
+                maxLength={20}
                 required
               />
             </div>

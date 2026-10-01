@@ -182,9 +182,7 @@ public class BroadcastController {
         } catch (Exception e) {
             org.slf4j.LoggerFactory.getLogger(BroadcastController.class)
                     .error("[poll] setOptions 실패 broadcastId={}", broadcastId, e);
-            return ResponseEntity.status(500).body(Map.of(
-                    "message", "투표 목록 저장 실패",
-                    "error", e.getClass().getSimpleName() + ": " + String.valueOf(e.getMessage())));
+            return ResponseEntity.status(500).body(Map.of("message", "투표 목록 저장 실패"));
         }
     }
 
