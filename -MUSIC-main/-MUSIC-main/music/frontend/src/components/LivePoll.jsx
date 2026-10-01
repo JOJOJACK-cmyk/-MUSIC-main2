@@ -20,7 +20,9 @@ export default function LivePoll({ broadcastId, isBroadcaster }) {
   const [options, setOptions] = useState([]); // [{index, songTitle, voteCount}]
   const [alert, setAlert] = useState('');
   const [draft, setDraft] = useState('');
-  const [edit, setEdit] = useState([]);
+  const [edit, setEdit] = useState([]); // [{ title, musicId }] — musicId 가 있으면 카탈로그 곡
+  const [results, setResults] = useState([]); // 카탈로그 검색 결과
+  const [searching, setSearching] = useState(false);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [myVote, setMyVote] = useState(() => {
@@ -93,11 +95,18 @@ export default function LivePoll({ broadcastId, isBroadcaster }) {
     c.publish({ destination: `/app/broadcast/${broadcastId}/next-song`, body: JSON.stringify({}) });
   };
 
-  const startEdit = () => { setEdit(options.map((o) => o.songTitle)); setEditing(true); };
+  const startEdit = () => {
+    setEdit(options.map((o) => ({ title: o.songTitle, musicId: o.musicId ?? null })));
+    setResults([]);
+    setEditing(true);
+  };
   const saveEdit = async () => {
     setBusy(true);
     try {
-      await axios.put(`/api/broadcast/${broadcastId}/poll`, { options: edit.filter((s) => s.trim()) }, { withCredentials: true });
+      const payload = edit
+        .filter((o) => o.musicId || o.title.trim())
+        .map((o) => (o.musicId ? { musicId: o.musicId, title: o.title } : o.title.trim()));
+      await axios.put(`/api/broadcast/${broadcastId}/poll`, { options: payload }, { withCredentials: true });
       setEditing(false);
       setMyVote(null);
       try { localStorage.removeItem(`poll:vote:${broadcastId}`); } catch {}
@@ -113,10 +122,34 @@ export default function LivePoll({ broadcastId, isBroadcaster }) {
     } catch (_) {}
   };
   const alertOnce = (t) => { setAlert(t); setTimeout(() => setAlert(''), 4000); };
+  // 카탈로그에 없는 곡은 제목을 직접 추가 (1위가 되면 제목으로 검색해서 재생)
   const addDraft = () => {
     const t = draft.trim();
     if (!t) return;
-    setEdit((prev) => [...prev, t].slice(0, 10));
+    setEdit((prev) => [...prev, { title: t, musicId: null }].slice(0, 10));
+    setDraft('');
+    setResults([]);
+  };
+  // 카탈로그 검색 — 고른 곡은 musicId 로 연결돼 1위 시 정확히 그 곡이 재생된다
+  const searchCatalog = async () => {
+    const q = draft.trim();
+    if (!q) return;
+    setSearching(true);
+    try {
+      const r = await axios.get('/api/musics/search', { params: { keyword: q } });
+      const list = (Array.isArray(r.data) ? r.data : []).filter((m) => m.youtubeVideoId).slice(0, 6);
+      setResults(list);
+      if (list.length === 0) alertOnce('카탈로그에 없는 곡이에요. "직접 추가"로 제목만 넣을 수 있어요');
+    } catch (_) {
+      alertOnce('검색에 실패했어요');
+    }
+    setSearching(false);
+  };
+  const addFromCatalog = (m) => {
+    if (edit.some((o) => o.musicId === m.id)) return;
+    const title = m.artist ? `${m.title} - ${m.artist}` : m.title;
+    setEdit((prev) => [...prev, { title, musicId: m.id }].slice(0, 10));
+    setResults([]);
     setDraft('');
   };
 
@@ -128,14 +161,20 @@ export default function LivePoll({ broadcastId, isBroadcaster }) {
           <button className="lp-mini" onClick={() => setEditing(false)}>닫기</button>
         </div>
         <div className="lp-edit-list">
-          {edit.map((s, i) => (
+          {edit.map((o, i) => (
             <div key={i} className="lp-edit-row">
               <span className="lp-num">{i + 1}</span>
-              <input
-                value={s}
-                onChange={(e) => setEdit((p) => p.map((x, j) => (j === i ? e.target.value : x)))}
-                placeholder="곡 제목"
-              />
+              {o.musicId ? (
+                <span className="lp-linked" title="카탈로그 곡 — 1위 시 이 곡이 재생돼요">
+                  <i className="fa-solid fa-music" /> {o.title}
+                </span>
+              ) : (
+                <input
+                  value={o.title}
+                  onChange={(e) => setEdit((p) => p.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))}
+                  placeholder="곡 제목"
+                />
+              )}
               <button onClick={() => setEdit((p) => p.filter((_, j) => j !== i))}>✕</button>
             </div>
           ))}
@@ -144,11 +183,26 @@ export default function LivePoll({ broadcastId, isBroadcaster }) {
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && addDraft()}
-            placeholder="곡 추가 후 Enter"
+            onKeyDown={(e) => e.key === 'Enter' && searchCatalog()}
+            placeholder="곡 검색 후 Enter"
           />
-          <button onClick={addDraft}>추가</button>
+          <button onClick={searchCatalog} disabled={searching}>{searching ? '…' : '검색'}</button>
+          <button onClick={addDraft} title="카탈로그에 없는 곡을 제목만으로 추가">직접 추가</button>
         </div>
+        {results.length > 0 && (
+          <div className="lp-results">
+            {results.map((m) => (
+              <button key={m.id} className="lp-result" onClick={() => addFromCatalog(m)}>
+                {m.thumbnailUrl && <img src={m.thumbnailUrl} alt="" />}
+                <span className="lp-result-text">
+                  <strong>{m.title}</strong>
+                  <small>{m.artist}</small>
+                </span>
+                <i className="fa-solid fa-plus" />
+              </button>
+            ))}
+          </div>
+        )}
         <button className="lp-save" disabled={busy} onClick={saveEdit}>
           {busy ? '저장 중…' : '저장하고 투표 시작'}
         </button>
@@ -195,7 +249,10 @@ export default function LivePoll({ broadcastId, isBroadcaster }) {
             >
               <span className="lp-fill" style={{ width: `${pct}%` }} />
               <span className="lp-num">{o.index + 1}</span>
-              <span className="lp-song">{o.songTitle}</span>
+              <span className="lp-song">
+                {o.musicId && <i className="fa-solid fa-music lp-song-icon" title="카탈로그 곡" />}
+                {o.songTitle}
+              </span>
               <span className="lp-count">{o.voteCount}</span>
             </button>
           );

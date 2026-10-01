@@ -30,6 +30,7 @@ public class BroadcastController {
     private final SongVoteService songVoteService;
     private final LiveViewerService liveViewerService;
     private final BroadcastRepository broadcastRepository;
+    private final com.example.music.repository.MusicRepository musicRepository;
     private final com.example.music.service.FollowService followService;
     private final AuthenticatedUserResolver authenticatedUserResolver;
     private final org.springframework.messaging.simp.SimpMessageSendingOperations messagingTemplate;
@@ -148,7 +149,12 @@ public class BroadcastController {
                 .orElse(false);
     }
 
-    /** [스트리머] 투표 곡 목록 설정 (REST). body: {"options": ["곡A","곡B", ...]} */
+    /**
+     * [스트리머] 투표 곡 목록 설정 (REST).
+     * body: {"options": ["직접 입력 제목", {"musicId": 12}, {"title": "곡B", "musicId": 34}, ...]}
+     *  - musicId 가 있으면 카탈로그 곡의 "제목 - 아티스트"로 표시하고, 1위 시 그 곡을 바로 재생한다.
+     *  - 카탈로그에 없는 musicId 는 title 만 남긴다 (title 도 없으면 제외).
+     */
     @PutMapping("/{broadcastId}/poll")
     public ResponseEntity<?> setPoll(
             @PathVariable Long broadcastId,
@@ -159,10 +165,15 @@ public class BroadcastController {
             return ResponseEntity.status(403).body(Map.of("message", "방송자만 설정할 수 있습니다."));
         }
         Object opts = body.get("options");
-        List<String> options = new java.util.ArrayList<>();
-        if (opts instanceof List<?> l) for (Object o : l) if (o != null) options.add(String.valueOf(o));
+        List<SongVoteService.PollOption> options = new java.util.ArrayList<>();
+        if (opts instanceof List<?> l) {
+            for (Object o : l) {
+                SongVoteService.PollOption parsed = parsePollOption(o);
+                if (parsed != null) options.add(parsed);
+            }
+        }
         try {
-            songVoteService.setOptions(broadcastId, options);
+            songVoteService.setPollOptions(broadcastId, options);
             List<SongVoteDto> poll = songVoteService.getPoll(broadcastId);
             messagingTemplate.convertAndSend("/topic/broadcast/" + broadcastId + "/ranking", poll);
             return ResponseEntity.ok(poll);
@@ -173,6 +184,30 @@ public class BroadcastController {
                     "message", "투표 목록 저장 실패",
                     "error", e.getClass().getSimpleName() + ": " + String.valueOf(e.getMessage())));
         }
+    }
+
+    private SongVoteService.PollOption parsePollOption(Object o) {
+        if (o == null) return null;
+        if (!(o instanceof Map<?, ?> m)) return SongVoteService.PollOption.text(String.valueOf(o));
+
+        Object rawTitle = m.get("title");
+        String title = rawTitle == null ? null : String.valueOf(rawTitle).trim();
+        Long musicId = null;
+        try {
+            Object rawId = m.get("musicId");
+            if (rawId != null) musicId = Long.valueOf(String.valueOf(rawId));
+        } catch (NumberFormatException ignore) {}
+
+        if (musicId != null) {
+            var music = musicRepository.findById(musicId).orElse(null);
+            if (music != null) {
+                String label = music.getArtist() != null && !music.getArtist().isBlank()
+                        ? music.getTitle() + " - " + music.getArtist()
+                        : music.getTitle();
+                return new SongVoteService.PollOption(label, music.getId());
+            }
+        }
+        return (title == null || title.isEmpty()) ? null : SongVoteService.PollOption.text(title);
     }
 
     /** [스트리머] 표만 초기화 (곡 목록 유지). */
@@ -201,7 +236,7 @@ public class BroadcastController {
      * 다음 곡 알림 payload. songTitle 을 채워서 보내면, 방송자 본인의 다른 창(예: OBS 채팅
      * 독)에서 눌러도 실제로 음악이 재생 중인 창(사이트 탭)이 이를 받아 재생하도록 프론트에서 사용한다.
      */
-    public record NextSongMsg(String message, String songTitle) {}
+    public record NextSongMsg(String message, String songTitle, Long musicId) {}
 
     @MessageMapping("/broadcast/{broadcastId}/next-song")
     @SendTo("/topic/broadcast/{broadcastId}/next-song")
@@ -253,13 +288,12 @@ public class BroadcastController {
             );
         }
 
-        // 권한 확인 성공 후 1위 곡 선택
-        String nextSong =
-                songVoteService.getTop1Song(
-                        broadcastId
-                );
-
-        return new NextSongMsg("다음 곡: " + nextSong, nextSong);
+        // 권한 확인 성공 후 1위 곡 선택 (카탈로그 곡이면 musicId 도 함께 → 재검색 없이 바로 재생)
+        SongVoteDto top = songVoteService.getTop1(broadcastId);
+        if (top == null) {
+            return new NextSongMsg("등록된 신청곡이 없습니다.", null, null);
+        }
+        return new NextSongMsg("다음 곡: " + top.getSongTitle(), top.getSongTitle(), top.getMusicId());
     }
     /** 투표 버튼 payload: { number: 1 } (1-base). voter 는 무시하고 웹소켓 인증 사용자로 판정한다. */
     public record VoteMsg(String voter, Integer number) {}

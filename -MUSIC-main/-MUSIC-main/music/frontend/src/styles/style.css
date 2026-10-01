@@ -2134,6 +2134,26 @@ body {
 .lp-add { display: flex; gap: 6px; margin-bottom: 8px; }
 .lp-add button { background: #2a2a33; border: 1px solid #3a3a44; color: #ddd; border-radius: 7px; padding: 0 12px; font-size: 12px; cursor: pointer; }
 .lp-save { width: 100%; background: #ff2f7d; border: none; color: #fff; border-radius: 8px; padding: 9px; font-size: 12.5px; font-weight: 800; cursor: pointer; }
+.lp-add button:disabled { opacity: 0.6; cursor: default; }
+.lp-linked {
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 12px; color: #f0dcea; padding: 7px 9px;
+    background: rgba(255,47,125,0.1); border: 1px solid rgba(255,47,125,0.3); border-radius: 7px;
+}
+.lp-linked i, .lp-song-icon { color: #ff5c9a; font-size: 10px; margin-right: 4px; }
+.lp-results { display: flex; flex-direction: column; gap: 4px; margin: -2px 0 8px; max-height: 220px; overflow-y: auto; }
+.lp-result {
+    display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+    background: #1a1a20; border: 1px solid #2c2c35; color: #ddd; border-radius: 7px;
+    padding: 5px 8px; cursor: pointer;
+}
+.lp-result:hover { border-color: #ff2f7d; }
+.lp-result img { width: 34px; height: 34px; object-fit: cover; border-radius: 4px; flex-shrink: 0; }
+.lp-result-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.lp-result-text strong, .lp-result-text small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lp-result-text strong { font-size: 12px; }
+.lp-result-text small { font-size: 10.5px; color: #8d8494; }
+.lp-result i { color: #ff5c9a; font-size: 11px; }
 
 /* ---- 실시간 채팅 (리디자인) ---- */
 .lc-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; color: #fff; }

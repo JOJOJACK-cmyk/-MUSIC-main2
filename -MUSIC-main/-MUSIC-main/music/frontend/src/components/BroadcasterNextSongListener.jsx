@@ -47,7 +47,7 @@ export default function BroadcasterNextSongListener() {
         client.subscribe(`/topic/broadcast/${myBroadcastId}/next-song`, (msg) => {
           try {
             const payload = JSON.parse(msg.body);
-            if (payload?.songTitle) resolveAndQueueWinner(payload.songTitle, queueTrackThenList);
+            if (payload?.songTitle || payload?.musicId) resolveAndQueueWinner(payload, queueTrackThenList);
           } catch (_) {}
         });
       },
