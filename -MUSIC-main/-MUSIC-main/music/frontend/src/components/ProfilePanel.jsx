@@ -547,6 +547,17 @@ function SubscriptionTab() {
   useEffect(() => { refreshSubscription?.(); }, [refreshSubscription]);
   const expire = subscription?.expireDate ? new Date(subscription.expireDate) : null;
 
+  // 결제 내역 (null = 불러오는 중)
+  const [history, setHistory] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    req('/api/v1/payments/history')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => { if (alive) setHistory(Array.isArray(d) ? d : []); })
+      .catch(() => { if (alive) setHistory([]); });
+    return () => { alive = false; };
+  }, []);
+
   return (
     <div>
       <h3 style={sectionTitle}>내 구독</h3>
@@ -573,6 +584,40 @@ function SubscriptionTab() {
             </div>
             <button style={primaryBtn} onClick={() => (window.location.href = '/payment')}>이용권 보기</button>
           </div>
+        )}
+      </div>
+
+      <h4 style={{ ...sectionTitle, fontSize: 14, margin: '24px 0 10px' }}>결제 내역</h4>
+      <div style={card}>
+        {history === null ? (
+          <div style={{ fontSize: 12, color: '#a98db9' }}>불러오는 중…</div>
+        ) : history.length === 0 ? (
+          <div style={{ fontSize: 12, color: '#a98db9' }}>결제 내역이 없습니다.</div>
+        ) : (
+          history.map((p, i) => (
+            <div
+              key={p.orderId}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                padding: '10px 0', borderTop: i === 0 ? 'none' : '1px solid #33202e',
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <div style={{ color: '#efe6ec', fontSize: 13, fontWeight: 700 }}>{p.passType}</div>
+                <div style={{ fontSize: 11, color: '#8d7896', marginTop: 2 }}>
+                  {p.paidAt ? new Date(p.paidAt).toLocaleString('ko-KR') : ''} · 주문번호 {p.orderId}
+                </div>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ color: '#efe6ec', fontSize: 13, fontWeight: 700 }}>
+                  {Number(p.amount || 0).toLocaleString('ko-KR')}원
+                </div>
+                <div style={{ fontSize: 11, color: p.status === 'DONE' ? '#7ee0a1' : '#a98db9', marginTop: 2 }}>
+                  {p.status === 'DONE' ? '결제 완료' : p.status}
+                </div>
+              </div>
+            </div>
+          ))
         )}
       </div>
     </div>
