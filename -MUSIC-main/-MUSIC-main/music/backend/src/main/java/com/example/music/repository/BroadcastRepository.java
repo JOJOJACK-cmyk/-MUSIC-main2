@@ -15,6 +15,10 @@ public interface BroadcastRepository
 
     Optional<Broadcast> findByStreamKey(String streamKey);
 
+    Optional<Broadcast> findByPlaybackId(String playbackId);
+
+    List<Broadcast> findByPlaybackIdIsNull();
+
     List<Broadcast> findByStreamKeyIn(
             Collection<String> streamKeys
     );

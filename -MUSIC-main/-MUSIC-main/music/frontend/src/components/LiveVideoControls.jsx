@@ -65,10 +65,14 @@ export default function LiveVideoControls({ videoRef, wrapRef, startedAt, viewer
     if (!el) return;
     if (manualPauseRef) manualPauseRef.current = false;
     try {
-      const end = el.seekable.end(el.seekable.length - 1);
-      el.currentTime = Math.max(0, end - 0.5);
-      el.play().catch(() => {});
+      // seekable 이 아직 안 채워졌으면(초기 버퍼링 중 등) buffered 로 대체
+      const ranges = el.seekable && el.seekable.length ? el.seekable : el.buffered;
+      if (ranges && ranges.length) {
+        const end = ranges.end(ranges.length - 1);
+        el.currentTime = Math.max(0, end - 0.5);
+      }
     } catch (_) {}
+    el.play().catch(() => {});
   };
   const toggleFs = () => {
     const w = wrapRef.current;

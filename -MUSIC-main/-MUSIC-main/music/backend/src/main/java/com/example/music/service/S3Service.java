@@ -9,6 +9,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.io.IOException;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -26,20 +27,31 @@ public class S3Service {
         this.s3Client = s3Client;
     }
 
+    // 업로드 허용: 이미지(프로필/배너/썸네일)만, 5MB 이하
+    private static final long MAX_UPLOAD_BYTES = 5L * 1024 * 1024;
+    private static final Map<String, String> ALLOWED_TYPES = Map.of(
+            "image/jpeg", "jpg",
+            "image/png", "png",
+            "image/webp", "webp",
+            "image/gif", "gif"
+    );
+
     public String uploadFile(MultipartFile file) {
 
-        // 원래 파일 이름
-        String originalFilename = file.getOriginalFilename();
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("업로드할 파일이 없습니다.");
+        }
+        if (file.getSize() > MAX_UPLOAD_BYTES) {
+            throw new IllegalArgumentException("파일 크기는 5MB 이하만 업로드할 수 있습니다.");
+        }
+        String contentType = file.getContentType() == null ? "" : file.getContentType().toLowerCase();
+        String ext = ALLOWED_TYPES.get(contentType);
+        if (ext == null) {
+            throw new IllegalArgumentException("이미지 파일(jpg, png, webp, gif)만 업로드할 수 있습니다.");
+        }
 
-        // 파일 이름 중복 방지를 위한 UUID
-        String fileName =
-                UUID.randomUUID()
-                        + "_"
-                        + originalFilename;
-
-        // S3 안에서 저장될 위치
-        String key =
-                "uploads/" + fileName;
+        // 원본 파일명은 쓰지 않는다 (경로 문자·특수문자로 인한 키 오염 방지). 확장자는 MIME 기준.
+        String key = "uploads/" + UUID.randomUUID() + "." + ext;
 
         try {
 
@@ -47,7 +59,7 @@ public class S3Service {
                     PutObjectRequest.builder()
                             .bucket(bucketName)
                             .key(key)
-                            .contentType(file.getContentType())
+                            .contentType(contentType)
                             .build();
 
             s3Client.putObject(

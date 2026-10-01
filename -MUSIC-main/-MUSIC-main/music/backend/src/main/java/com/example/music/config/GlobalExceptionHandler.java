@@ -53,9 +53,26 @@ public class GlobalExceptionHandler {
         ErrorResponse response = new ErrorResponse(
                 "ERROR",
                 "BAD_REQUEST",
-                "유효하지 않은 요청이거나 지원하지 않는 유튜브 링크입니다."
+                // 실제 사유를 그대로 노출한다 (영상 없음/비공개/삭제/잘못된 ID 등)
+                e.getMessage() != null && !e.getMessage().isBlank()
+                        ? e.getMessage()
+                        : "유효하지 않은 요청이거나 지원하지 않는 유튜브 링크입니다."
         );
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    // 429 Too Many Requests: YouTube API 일일 할당량 소진
+    @ExceptionHandler(com.example.music.service.YouTubeApiService.QuotaExceededException.class)
+    public ResponseEntity<ErrorResponse> handleQuotaExceeded(
+            com.example.music.service.YouTubeApiService.QuotaExceededException e) {
+        ErrorResponse response = new ErrorResponse(
+                "ERROR",
+                "YOUTUBE_QUOTA_EXCEEDED",
+                e.getMessage() != null && !e.getMessage().isBlank()
+                        ? e.getMessage()
+                        : "YouTube API 일일 할당량이 소진되었습니다. 잠시 후 다시 시도해 주세요."
+        );
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(response);
     }
 
     // 500 Internal Server Error: 그 외 예상치 못한 모든 서버 에러 처리

@@ -13,7 +13,7 @@ services:
   mysql:
     image: mysql:8.0
     container_name: music-mysql
-    restart: unless-stopped
+    restart: always
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: music_db
@@ -36,7 +36,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: music-redis
-    restart: unless-stopped
+    restart: always
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis_data:/data
@@ -55,7 +55,7 @@ services:
   srs:
     image: ossrs/srs:6
     container_name: music-srs
-    restart: unless-stopped
+    restart: always
     ports:
       - "1935:1935"
       - "127.0.0.1:1985:1985"
@@ -76,7 +76,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: music-backend
-    restart: unless-stopped
+    restart: always
     depends_on:
       mysql:
         condition: service_healthy
@@ -119,7 +119,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: music-caddy
-    restart: unless-stopped
+    restart: always
     depends_on:
       - backend
       - srs

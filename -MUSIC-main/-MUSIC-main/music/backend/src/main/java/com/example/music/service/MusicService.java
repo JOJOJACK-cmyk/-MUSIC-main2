@@ -72,6 +72,7 @@ public class MusicService {
                 .artist(request.getArtist())
                 .thumbnailUrl(request.getThumbnailUrl())
                 .genre(resolvedGenre)
+                .manualAdd(true)
                 .build();
 
         Music music = musicRepository.save(musicEntity);
@@ -93,6 +94,11 @@ public class MusicService {
         //   "최신곡만" 노출은 프론트의 카테고리 섹션에서만 적용한다.
         return dedupeByTitle(allMusic).stream()
                 .filter(music -> {
+                    // 💡 관리자가 URL 을 직접 등록한 곡은 자동 정리 대상에서 제외 (길이/키워드 무관하게 노출)
+                    if (Boolean.TRUE.equals(music.getManualAdd())) {
+                        return true;
+                    }
+
                     String a = music.getArtist() != null ? music.getArtist().toLowerCase() : "";
                     Long duration = music.getDurationSeconds();
 
@@ -136,9 +142,10 @@ public class MusicService {
     public List<MusicDto.Response> searchMusics(String keyword) {
         String kw = keyword == null ? "" : keyword.trim();
         if (kw.isBlank()) return List.of();
+        // 💡 띄어쓰기 관계없이 제목/아티스트만 맞으면 검색되도록, 공백을 지우고 비교한다.
+        String kwNoSpaces = kw.replace(" ", "");
 
-        List<Music> local =
-                musicRepository.findByTitleContainingIgnoreCaseOrArtistContainingIgnoreCase(kw, kw);
+        List<Music> local = musicRepository.findByTitleOrArtistIgnoringSpaces(kwNoSpaces);
 
         if (shouldEnrichFromYoutube(kw, local.size())) {
             synchronized (youtubeLock) {
@@ -153,7 +160,7 @@ public class MusicService {
                     } catch (Exception e) {
                         log.warn("[Search] 유튜브 보강 실패 (keyword='{}'): {}", kw, e.getMessage());
                     }
-                    local = musicRepository.findByTitleContainingIgnoreCaseOrArtistContainingIgnoreCase(kw, kw);
+                    local = musicRepository.findByTitleOrArtistIgnoringSpaces(kwNoSpaces);
                 }
             }
         }
@@ -163,24 +170,37 @@ public class MusicService {
                 .collect(Collectors.toList());
     }
 
-    /** 같은 곡이 다른 videoId 로 여러 개 들어온 경우 정리 — 정규화한 (제목|아티스트) 기준, 조회수 높은 것만 남긴다. */
+    /**
+     * 같은 곡이 다른 videoId 로 여러 개 들어온 경우 정리 — 정규화한 제목으로 묶고, 그 안에서
+     * 재생시간(또는 아티스트)이 같은 것만 "같은 녹음"으로 보아 대표 1곡만 남긴다.
+     * (레이블/업로더 채널마다 아티스트 표기가 크게 달라 제목만으로 우선 묶는다 — [[YouTubeApiService.isSameRecording]])
+     */
     private List<Music> dedupeByTitle(List<Music> list) {
-        java.util.LinkedHashMap<String, Music> best = new java.util.LinkedHashMap<>();
+        java.util.LinkedHashMap<String, List<Music>> groups = new java.util.LinkedHashMap<>();
         for (Music m : list) {
             String nt = YouTubeApiService.normalizeTitleForDedupe(m.getTitle());
-            String na = YouTubeApiService.normalizeArtistForDedupe(m.getArtist());
             // 정규화 후 비면 병합하지 않고 그대로 노출 (videoId 로 고유 키 유지)
-            String key = (nt.isEmpty() || na.isEmpty()) ? ("__" + m.getYoutubeVideoId()) : (nt + "|" + na);
-            Music cur = best.get(key);
-            if (cur == null) {
-                best.put(key, m);
-            } else {
-                long a = m.getViewCount() == null ? 0 : m.getViewCount();
-                long b = cur.getViewCount() == null ? 0 : cur.getViewCount();
-                if (a > b) best.put(key, m);
-            }
+            String key = nt.isEmpty() ? ("__" + m.getYoutubeVideoId()) : nt;
+            groups.computeIfAbsent(key, k -> new java.util.ArrayList<>()).add(m);
         }
-        return new java.util.ArrayList<>(best.values());
+
+        List<Music> result = new java.util.ArrayList<>();
+        for (List<Music> group : groups.values()) {
+            List<Music> reps = new java.util.ArrayList<>(); // 같은 제목이지만 서로 다른 실제 곡일 수 있는 대표들
+            for (Music m : group) {
+                Music match = null;
+                for (Music r : reps) {
+                    if (YouTubeApiService.isSameRecording(r, m)) { match = r; break; }
+                }
+                if (match == null) {
+                    reps.add(m);
+                } else if (YouTubeApiService.isBetterRepresentative(m, match)) {
+                    reps.set(reps.indexOf(match), m);
+                }
+            }
+            result.addAll(reps);
+        }
+        return result;
     }
 
     private boolean shouldEnrichFromYoutube(String keyword, int localCount) {
@@ -244,7 +264,11 @@ public class MusicService {
 
     @Transactional
     public MusicDto.Response createMusicFromYouTube(String videoId) throws Exception {
-        YouTubeVideoDto video = youTubeApiService.getVideoInfo(videoId);
+        // 관리자가 URL 을 직접 붙여넣어 등록하는 경로.
+        // 자동 동기화용 "단곡 게이트"(재생시간 90~480초·비음악 키워드·임베드·카테고리)를 적용하면
+        // 8분 넘는 MV·라이브·제목에 live/cover 등이 든 정상 곡까지 400 으로 막히므로,
+        // 여기서는 메타데이터만 가져와 그대로 저장한다. (영상이 없을 때만 실패)
+        YouTubeVideoDto video = youTubeApiService.getVideoInfoLenient(videoId);
 
         Music music = musicRepository.findByYoutubeVideoId(video.getYoutubeVideoId())
                 .orElseGet(() -> {

@@ -100,6 +100,9 @@ public class MusicDto {
         @Schema(description = "현재 유튜브 인기차트 순위 (1위=가장 인기, null=차트 밖)", example = "5")
         private final Integer trendingRank;
 
+        @Schema(description = "관리자가 직접 등록한 곡 여부 (true 면 자동 정리·필터 예외)", example = "true")
+        private final Boolean manualAdd;
+
         public Response(Music music) {
             this.id = music.getId();
             this.youtubeVideoId = music.getYoutubeVideoId();
@@ -111,6 +114,7 @@ public class MusicDto {
             this.publishedAt = music.getPublishedAt();
             this.viewCount = music.getViewCount();
             this.trendingRank = music.getTrendingRank();
+            this.manualAdd = music.getManualAdd();
         }
     }
 }

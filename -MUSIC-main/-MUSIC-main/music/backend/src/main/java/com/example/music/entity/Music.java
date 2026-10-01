@@ -54,9 +54,15 @@ public class Music {
     @Column(name = "trending_rank")
     private Integer trendingRank;
 
+    // 💡 관리자가 URL 을 직접 붙여넣어 등록한 곡. true 면 getAllMusic() 의 자동 정리(삭제) 대상에서 제외한다.
+    //    (자동 동기화로 들어온 곡은 null/false → 기존처럼 단곡 게이트로 정리)
+    @Column(name = "manual_add")
+    private Boolean manualAdd;
+
     @Builder
     public Music(String youtubeVideoId, String title, String artist, String thumbnailUrl,
-                 String genre, Long durationSeconds, LocalDateTime publishedAt, Long viewCount) {
+                 String genre, Long durationSeconds, LocalDateTime publishedAt, Long viewCount,
+                 Boolean manualAdd) {
         this.youtubeVideoId = youtubeVideoId;
         this.title = title;
         this.artist = artist;
@@ -65,6 +71,11 @@ public class Music {
         this.durationSeconds = durationSeconds;
         this.publishedAt = publishedAt;
         this.viewCount = viewCount;
+        this.manualAdd = manualAdd;
+    }
+
+    public void markManualAdd() {
+        this.manualAdd = true;
     }
 
     public void update(String title, String artist, String thumbnailUrl, String genre) {

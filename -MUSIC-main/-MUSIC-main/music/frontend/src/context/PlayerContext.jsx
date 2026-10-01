@@ -501,6 +501,14 @@ export const PlayerProvider = ({ children }) => {
   // 다음 곡
   // =========================
   const handleNextTrack = () => {
+    // "1위 곡 재생" 등으로 예약된 곡이 있으면(자동 종료뿐 아니라 수동 "다음 곡" 클릭에도) 그 곡부터
+    if (forceNextRef.current != null) {
+      const wid = forceNextRef.current;
+      forceNextRef.current = null;
+      const w = (playlistRef.current || []).find((t) => String(t?.id) === String(wid));
+      if (w) { playTrack(w); return; }
+    }
+
     if (playlist.length === 0) return;
 
     const currentIndex = playlist.findIndex(

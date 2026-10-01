@@ -18,6 +18,9 @@ public class SrsCallbackDto {
     // vhost 하위 app 이름 (여기선 "live" 고정)
     private String app;
 
-    // 스트림 키 (Broadcast.streamKey와 매칭됨)
+    // 스트림 이름 = 공개 재생 ID (Broadcast.playbackId 와 매칭됨)
     private String stream;
+
+    // 스트림 이름 뒤의 쿼리 문자열 (예: "?key=live_xxx") — 송출 비밀 키 검증용
+    private String param;
 }

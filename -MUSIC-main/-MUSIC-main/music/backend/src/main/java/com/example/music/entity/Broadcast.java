@@ -23,8 +23,14 @@ public class Broadcast {
     @Column(nullable = false)
     private String title;
 
+    // 송출용 비밀 키. OBS 에는 "{playbackId}?key={streamKey}" 형태로 넣는다 (obsStreamKey()).
+    // 공개 HLS 주소에는 절대 노출하지 않는다.
     @Column(name = "stream_key", nullable = false, unique = true)
     private String streamKey;
+
+    // 공개 재생 ID. SRS 스트림 이름 = HLS/썸네일 파일명 (/live/{playbackId}.m3u8)
+    @Column(name = "playback_id", unique = true, length = 40)
+    private String playbackId;
 
     @Column(name = "thumbnail_url", length = 500)
     private String thumbnailUrl;
@@ -56,4 +62,13 @@ public class Broadcast {
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
+
+    public static String newPlaybackId() {
+        return "pb_" + java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 20);
+    }
+
+    /** OBS "스트림 키" 칸에 넣을 값. SRS 는 '?' 앞을 스트림 이름, 뒤를 param 으로 넘겨준다. */
+    public String obsStreamKey() {
+        return playbackId + "?key=" + streamKey;
+    }
 }

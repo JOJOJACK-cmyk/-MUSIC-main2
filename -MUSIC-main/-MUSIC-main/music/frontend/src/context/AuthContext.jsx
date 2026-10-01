@@ -107,8 +107,6 @@ export const AuthProvider = ({ children }) => {
         urlParams.get('picture') ||
         hashParams.get('profileImageUrl');
 
-      const role = urlParams.get('role') || hashParams.get('role');
-
       if (token || nickname || email) {
         if (token) localStorage.setItem('accessToken', token);
 
@@ -120,15 +118,15 @@ export const AuthProvider = ({ children }) => {
             : '소셜 사용자',
           email: email ? decodeURIComponent(email) : '',
           profileImageUrl: profileImageUrl ? decodeURIComponent(profileImageUrl) : '',
-          role: role ? decodeURIComponent(role) : 'ROLE_USER',
+          // URL 의 role 은 누구나 조작할 수 있으므로 쓰지 않는다. 실제 권한은 아래 /me 응답으로 덮어쓴다.
+          role: 'ROLE_USER',
         };
 
         localStorage.setItem('user', JSON.stringify(socialUser));
         setUser(socialUser);
 
         window.history.replaceState({}, document.title, window.location.pathname);
-        setLoading(false);
-        return;
+        // return 하지 않고 아래 /api/auth/me 로 서버 기준 사용자 정보(권한 포함)를 확인한다.
       }
 
       const savedUser = localStorage.getItem('user');

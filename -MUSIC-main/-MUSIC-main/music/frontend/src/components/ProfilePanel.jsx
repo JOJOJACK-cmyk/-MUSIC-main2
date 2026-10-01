@@ -175,6 +175,7 @@ function LogoutButton() {
 
 /* ---------- 스튜디오 ---------- */
 function StudioTab() {
+  const { user } = useAuth();
   const [b, setB] = useState(null);
   const [showKey, setShowKey] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -271,14 +272,31 @@ function StudioTab() {
         {b?.id ? (
           <>
             <Row
-              label="채팅 오버레이 URL (투명 배경)"
+              label="채팅 오버레이 URL (투명 배경, 읽기 전용 · 방송 화면용)"
               value={`${window.location.origin}/live/${b.id}/chat`}
               tag="chat"
             />
             <Row
-              label="채팅 오버레이 URL (검정 배경)"
+              label="채팅 오버레이 URL (검정 배경, 읽기 전용 · 방송 화면용)"
               value={`${window.location.origin}/live/${b.id}/chat?theme=dark`}
               tag="chatd"
+            />
+            <Row
+              label="채팅 독 URL (입력 가능 · OBS 커스텀 브라우저 독용, 로그인 정보 포함)"
+              value={(() => {
+                const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+                const base = `${window.location.origin}/live/${b.id}/dock`;
+                // OBS 독은 사이트 탭과 세션 쿠키를 공유하지 않는 별도 브라우저라, 로그인 정보를
+                // URL에 실어 보내야 로그인/방송자 권한(1위 곡 다음 재생 등)이 인식된다.
+                //  - AuthContext.checkAuthStatus() 가 이 파라미터들을 그대로 읽어 로그인 상태로 복원한다.
+                if (!token) return base;
+                const params = new URLSearchParams({ token });
+                if (user?.nickname) params.set('nickname', user.nickname);
+                if (user?.email) params.set('email', user.email);
+                if (user?.role) params.set('role', user.role);
+                return `${base}?${params.toString()}`;
+              })()}
+              tag="dock"
             />
           </>
         ) : (
@@ -629,6 +647,94 @@ function AccountTab({ user }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button style={primaryBtn} disabled={saving} onClick={save}>{saving ? '저장 중…' : '변경사항 저장'}</button>
+          {msg && <span style={{ fontSize: 12, color: msg.ok ? ACCENT : '#ff6b6b' }}>{msg.text}</span>}
+        </div>
+      </div>
+
+      <PasswordTab />
+    </div>
+  );
+}
+
+/* ---------- 비밀번호 변경 (내 정보 탭 하단) ---------- */
+function PasswordTab() {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changing, setChanging] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const change = async () => {
+    setMsg(null);
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setMsg({ ok: false, text: '모든 항목을 입력해주세요.' });
+      return;
+    }
+    if (newPassword.length < 6) {
+      setMsg({ ok: false, text: '새 비밀번호는 6자 이상이어야 합니다.' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setMsg({ ok: false, text: '새 비밀번호가 서로 일치하지 않습니다.' });
+      return;
+    }
+    setChanging(true);
+    try {
+      const r = await req('/api/auth/password', {
+        method: 'PATCH',
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (r.ok) {
+        setMsg({ ok: true, text: data.message || '비밀번호가 변경되었습니다.' });
+        setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
+      } else {
+        setMsg({ ok: false, text: data.message || '비밀번호 변경에 실패했습니다.' });
+      }
+    } catch { setMsg({ ok: false, text: '네트워크 오류' }); }
+    setChanging(false);
+  };
+
+  return (
+    <div style={{ marginTop: 24 }}>
+      <h3 style={sectionTitle}>비밀번호 변경</h3>
+      <p style={sectionDesc}>소셜 로그인 계정은 비밀번호를 변경할 수 없습니다.</p>
+      <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div>
+          <label style={fieldLabel}>현재 비밀번호</label>
+          <input
+            style={field}
+            type="password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            autoComplete="current-password"
+          />
+        </div>
+        <div>
+          <label style={fieldLabel}>새 비밀번호</label>
+          <input
+            style={field}
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            autoComplete="new-password"
+            placeholder="6자 이상"
+          />
+        </div>
+        <div>
+          <label style={fieldLabel}>새 비밀번호 확인</label>
+          <input
+            style={field}
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            autoComplete="new-password"
+          />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button style={primaryBtn} disabled={changing} onClick={change}>
+            {changing ? '변경 중…' : '비밀번호 변경'}
+          </button>
           {msg && <span style={{ fontSize: 12, color: msg.ok ? ACCENT : '#ff6b6b' }}>{msg.text}</span>}
         </div>
       </div>
