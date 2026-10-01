@@ -32,16 +32,32 @@ export default function useLiveChat(broadcastId, { sender, limit = 200 } = {}) {
       reconnectDelay: 5000,
       onConnect: () => {
         setConnected(true);
+        const append = (msg) =>
+          setMessages((prev) => {
+            const next = [...prev, msg];
+            return next.length > limit ? next.slice(next.length - limit) : next;
+          });
+
         client.subscribe(`/sub/chat/room/${broadcastId}`, (frame) => {
           try {
             const msg = JSON.parse(frame.body);
-            setMessages((prev) => {
-              const next = [...prev, msg];
-              return next.length > limit ? next.slice(next.length - limit) : next;
-            });
+            // 방송자가 삭제한 메시지 → 목록에서 제거
+            if (msg.type === 'DELETE') {
+              setMessages((prev) => prev.filter((m) => m.messageId !== msg.messageId));
+              return;
+            }
+            append(msg);
           } catch (e) {
             console.error('채팅 메시지 파싱 실패:', e);
           }
+        });
+
+        // 나에게만 오는 안내 (예: 채팅 금지 중) — 같은 방 메시지만 표시
+        client.subscribe('/user/queue/chat-notice', (frame) => {
+          try {
+            const msg = JSON.parse(frame.body);
+            if (String(msg.roomId) === String(broadcastId)) append(msg);
+          } catch (_) {}
         });
 
         if (sender) {

@@ -31,6 +31,8 @@ public class BroadcastController {
     private final LiveViewerService liveViewerService;
     private final BroadcastRepository broadcastRepository;
     private final com.example.music.repository.MusicRepository musicRepository;
+    private final com.example.music.repository.UserRepository userRepository;
+    private final com.example.music.service.ChatModerationService chatModerationService;
     private final com.example.music.service.FollowService followService;
     private final AuthenticatedUserResolver authenticatedUserResolver;
     private final org.springframework.messaging.simp.SimpMessageSendingOperations messagingTemplate;
@@ -208,6 +210,96 @@ public class BroadcastController {
             }
         }
         return (title == null || title.isEmpty()) ? null : SongVoteService.PollOption.text(title);
+    }
+
+    // ==========================================
+    // 💬 [채팅 관리] 방송자 전용 — 메시지 삭제 / 채팅 금지
+    // ==========================================
+
+    /** [스트리머] 채팅 메시지 삭제. body: {"messageId": "..."} → 시청자 화면에서 해당 메시지 제거 */
+    @PostMapping("/{broadcastId}/chat/delete")
+    public ResponseEntity<?> deleteChatMessage(
+            @PathVariable Long broadcastId,
+            @RequestBody Map<String, String> body,
+            Authentication authentication) {
+        User user = authenticatedUserResolver.resolveRequiredUser(authentication);
+        if (!isBroadcasterOf(broadcastId, user.getEmail())) {
+            return ResponseEntity.status(403).body(Map.of("message", "방송자만 메시지를 삭제할 수 있습니다."));
+        }
+        String messageId = body.get("messageId");
+        if (messageId == null || messageId.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "messageId 가 필요합니다."));
+        }
+        messagingTemplate.convertAndSend("/sub/chat/room/" + broadcastId,
+                com.example.music.dto.ChatMessageDto.builder()
+                        .roomId(String.valueOf(broadcastId))
+                        .type(com.example.music.dto.ChatMessageDto.MessageType.DELETE)
+                        .messageId(messageId)
+                        .build());
+        return ResponseEntity.ok().build();
+    }
+
+    /** [스트리머] 채팅 금지. body: {"userId": 12, "minutes": 10|60|720} */
+    @PostMapping("/{broadcastId}/chat/mute")
+    public ResponseEntity<?> muteChatUser(
+            @PathVariable Long broadcastId,
+            @RequestBody Map<String, Object> body,
+            Authentication authentication) {
+        User user = authenticatedUserResolver.resolveRequiredUser(authentication);
+        if (!isBroadcasterOf(broadcastId, user.getEmail())) {
+            return ResponseEntity.status(403).body(Map.of("message", "방송자만 채팅을 금지할 수 있습니다."));
+        }
+        Long targetId;
+        int minutes;
+        try {
+            targetId = Long.valueOf(String.valueOf(body.get("userId")));
+            minutes = Integer.parseInt(String.valueOf(body.getOrDefault("minutes", 10)));
+        } catch (NumberFormatException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", "userId / minutes 형식이 올바르지 않습니다."));
+        }
+        if (!com.example.music.service.ChatModerationService.isAllowedMinutes(minutes)) {
+            return ResponseEntity.badRequest().body(Map.of("message", "금지 시간은 10분, 60분, 720분 중 하나입니다."));
+        }
+        if (targetId.equals(user.getId())) {
+            return ResponseEntity.badRequest().body(Map.of("message", "본인은 채팅 금지할 수 없습니다."));
+        }
+        User target = userRepository.findById(targetId).orElse(null);
+        if (target == null) {
+            return ResponseEntity.badRequest().body(Map.of("message", "사용자를 찾을 수 없습니다."));
+        }
+
+        chatModerationService.mute(broadcastId, targetId, minutes);
+        String label = minutes >= 720 ? "이번 방송 동안" : (minutes >= 60 ? (minutes / 60) + "시간" : minutes + "분");
+        sendChatNotice(broadcastId, AuthenticatedUserResolver.displayName(target) + " 님의 채팅이 " + label + " 금지되었어요");
+        return ResponseEntity.ok(Map.of("userId", targetId, "minutes", minutes));
+    }
+
+    /** [스트리머] 채팅 금지 해제 */
+    @DeleteMapping("/{broadcastId}/chat/mute/{userId}")
+    public ResponseEntity<?> unmuteChatUser(
+            @PathVariable Long broadcastId,
+            @PathVariable Long userId,
+            Authentication authentication) {
+        User user = authenticatedUserResolver.resolveRequiredUser(authentication);
+        if (!isBroadcasterOf(broadcastId, user.getEmail())) {
+            return ResponseEntity.status(403).body(Map.of("message", "방송자만 해제할 수 있습니다."));
+        }
+        chatModerationService.unmute(broadcastId, userId);
+        userRepository.findById(userId).ifPresent(target ->
+                sendChatNotice(broadcastId, AuthenticatedUserResolver.displayName(target) + " 님의 채팅 금지가 해제되었어요"));
+        return ResponseEntity.ok().build();
+    }
+
+    private void sendChatNotice(Long broadcastId, String text) {
+        messagingTemplate.convertAndSend("/sub/chat/room/" + broadcastId,
+                com.example.music.dto.ChatMessageDto.builder()
+                        .roomId(String.valueOf(broadcastId))
+                        .type(com.example.music.dto.ChatMessageDto.MessageType.NOTICE)
+                        .message(text)
+                        .messageId(java.util.UUID.randomUUID().toString())
+                        .timestamp(java.time.LocalDateTime.now().format(
+                                java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")))
+                        .build());
     }
 
     /** [스트리머] 표만 초기화 (곡 목록 유지). */

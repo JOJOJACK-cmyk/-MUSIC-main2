@@ -353,7 +353,7 @@ export default function LiveDetailPage() {
                   <LivePoll broadcastId={broadcastId} isBroadcaster={isBroadcaster} />
                 )}
                 <div className="ld-chat-body">
-                  <LiveChat broadcastId={broadcastId} />
+                  <LiveChat broadcastId={broadcastId} isBroadcaster={isBroadcaster} />
                 </div>
               </aside>
             </div>
