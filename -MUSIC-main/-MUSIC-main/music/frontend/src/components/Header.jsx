@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 import ProfilePanel from './ProfilePanel';
-import { useMobileMenu } from '../context/MobileMenuContext';
 
 function timeAgo(ms) {
   const s = Math.floor((Date.now() - ms) / 1000);
@@ -18,21 +17,6 @@ function iconFor(type) {
   if (type === 'NEW_HOT_SONG') return 'fa-fire';
   if (type === 'PASS_EXPIRY') return 'fa-ticket';
   return 'fa-bell';
-}
-
-function MenuToggle() {
-  const { open, setOpen } = useMobileMenu();
-  return (
-    <button
-      type="button"
-      className="menu-toggle"
-      aria-label={open ? '메뉴 닫기' : '메뉴 열기'}
-      aria-expanded={open}
-      onClick={() => setOpen(!open)}
-    >
-      <i className="fa-solid fa-bars" />
-    </button>
-  );
 }
 
 export default function Header({ searchTerm, setSearchTerm }) {
@@ -64,9 +48,6 @@ export default function Header({ searchTerm, setSearchTerm }) {
 
   return (
     <header className="top-header">
-      {/* 📱 모바일 ☰ 메뉴 버튼 (데스크톱에서는 CSS 로 숨김) */}
-      <MenuToggle />
-
       {/* 1. 검색바 영역 */}
       <div className="search-bar">
         <i className="fa-solid fa-magnifying-glass"></i>

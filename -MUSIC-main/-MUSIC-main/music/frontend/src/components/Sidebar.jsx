@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { musicApi } from '../api/musicApi';
 
-// open/onClose: 모바일(좁은 화면)에서 ☰ 로 여는 서랍 메뉴 상태. 데스크톱에서는 CSS 로 항상 보인다.
-export default function Sidebar({ onOpenAddModal, open = false, onClose }) {
+export default function Sidebar({ onOpenAddModal }) {
   const [cleaning, setCleaning] = useState(false);
 
   const handleRevalidate = async () => {
@@ -45,17 +44,13 @@ export default function Sidebar({ onOpenAddModal, open = false, onClose }) {
   }
 
   return (
-    <aside className={`sidebar ${open ? 'open' : ''}`}>
-      {/* 모바일 서랍 닫기 */}
-      <button type="button" className="sidebar-close" onClick={onClose} aria-label="메뉴 닫기">
-        <i className="fa-solid fa-xmark" />
-      </button>
+    <aside className="sidebar">
       {/* 🎵 왼쪽 상단 'Music' 로고 영역 */}
       <NavLink
         to="/"
         className="logo"
         tabIndex={-1}
-        onClick={(e) => { e.currentTarget.blur(); onClose?.(); }}
+        onClick={(e) => e.currentTarget.blur()}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -81,7 +76,7 @@ export default function Sidebar({ onOpenAddModal, open = false, onClose }) {
         <NavLink
           to="/"
           tabIndex={-1}
-          onClick={(e) => { e.currentTarget.blur(); onClose?.(); }}
+          onClick={(e) => e.currentTarget.blur()}
           className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
         >
           <i className="fa-solid fa-house"></i> 홈
@@ -89,7 +84,7 @@ export default function Sidebar({ onOpenAddModal, open = false, onClose }) {
         <NavLink
           to="/charts"
           tabIndex={-1}
-          onClick={(e) => { e.currentTarget.blur(); onClose?.(); }}
+          onClick={(e) => e.currentTarget.blur()}
           className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
         >
           <i className="fa-solid fa-chart-line"></i> TOP 100 차트
@@ -97,7 +92,7 @@ export default function Sidebar({ onOpenAddModal, open = false, onClose }) {
         <NavLink
           to="/live"
           tabIndex={-1}
-          onClick={(e) => { e.currentTarget.blur(); onClose?.(); }}
+          onClick={(e) => e.currentTarget.blur()}
           className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
         >
           <i className="fa-solid fa-tv"></i> 실시간 라이브
@@ -105,7 +100,7 @@ export default function Sidebar({ onOpenAddModal, open = false, onClose }) {
         <NavLink
           to="/library"
           tabIndex={-1}
-          onClick={(e) => { e.currentTarget.blur(); onClose?.(); }}
+          onClick={(e) => e.currentTarget.blur()}
           className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
         >
           <i className="fa-solid fa-lines-leaning"></i> 내 보관함
@@ -114,7 +109,7 @@ export default function Sidebar({ onOpenAddModal, open = false, onClose }) {
         <NavLink
           to="/payment"
           tabIndex={-1}
-          onClick={(e) => { e.currentTarget.blur(); onClose?.(); }}
+          onClick={(e) => e.currentTarget.blur()}
           className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
         >
           <i className="fa-solid fa-credit-card"></i> 이용권 결제
@@ -123,7 +118,7 @@ export default function Sidebar({ onOpenAddModal, open = false, onClose }) {
         <NavLink
           to="/shop"
           tabIndex={-1}
-          onClick={(e) => { e.currentTarget.blur(); onClose?.(); }}
+          onClick={(e) => e.currentTarget.blur()}
           className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
         >
           <i className="fa-solid fa-bag-shopping"></i> 스토어
