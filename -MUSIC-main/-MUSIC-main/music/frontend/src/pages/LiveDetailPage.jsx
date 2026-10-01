@@ -8,6 +8,7 @@ import LiveChat from '../components/LiveChat';
 import LiveVideoControls from '../components/LiveVideoControls';
 import FollowButton from '../components/FollowButton';
 import NoteDonationModal from '../components/NoteDonationModal';
+import useIsMobile from '../hooks/useIsMobile';
 import { useAuth } from '../context/AuthContext';
 import { useLiveView } from '../context/LiveViewContext';
 
@@ -31,6 +32,8 @@ const getViewerId = () => {
 
 export default function LiveDetailPage() {
   const [showNotes, setShowNotes] = useState(false); // 음표 보내기 모달
+  const isMobile = useIsMobile();
+  const [mobileTab, setMobileTab] = useState('chat'); // 모바일: 채팅 | 투표
   const { broadcastId } = useParams();
   const navigate = useNavigate();
   const videoRef = useRef(null);
@@ -248,6 +251,94 @@ export default function LiveDetailPage() {
       mq.removeEventListener('change', update);
     };
   }, [loading, broadcast?.id]);
+
+  // ── 모바일 전용 화면: 영상(상단 고정) · 방송 정보 · [채팅 | 투표] 탭 ──
+  //    채팅/투표는 탭을 바꿔도 연결이 끊기지 않게 둘 다 띄워 두고 보이기만 바꾼다.
+  if (isMobile) {
+    const video = (
+      <div className="mld-video">
+        <div className="ld-video" ref={videoWrapRef}>
+          <video
+            ref={videoRef}
+            autoPlay
+            muted
+            playsInline
+            style={{ width: '100%', height: '100%', display: 'block', objectFit: 'contain', background: '#000' }}
+          />
+          {playerMessage && <div className="ld-video-msg">{playerMessage}</div>}
+        </div>
+        {broadcast && (
+          <LiveVideoControls
+            videoRef={videoRef}
+            wrapRef={videoWrapRef}
+            startedAt={broadcast.startedAt}
+            viewerCount={broadcast.viewerCount}
+            manualPauseRef={manualPauseRef}
+          />
+        )}
+      </div>
+    );
+    return (
+      <div className="mld">
+        {loading ? (
+          <div className="m-empty"><i className="fa-solid fa-tower-broadcast fa-fade" />방송 정보를 불러오는 중…</div>
+        ) : !broadcast ? (
+          <div className="m-empty">
+            <i className="fa-solid fa-tower-broadcast" />종료되었거나 없는 방송이에요
+            <button className="m-btn ghost small" onClick={() => navigate('/live')}>라이브 목록</button>
+          </div>
+        ) : (
+          <>
+            {video}
+            <div className="mld-info">
+              <span className="m-live-av">{(broadcast.broadcaster || '?').charAt(0)}</span>
+              <div className="mld-info-text">
+                <strong>{broadcast.title}</strong>
+                <small>{broadcast.broadcaster} · 👥 {broadcast.viewerCount ?? 0}명 시청 중</small>
+              </div>
+              <FollowButton channelUserId={broadcast.broadcasterId} size="sm" />
+            </div>
+            {canSendNotes && (
+              <button className="note-open-btn mld-note" onClick={() => setShowNotes(true)}>
+                <span className="note-open-icon">♪</span> 음표 보내기
+              </button>
+            )}
+            <div className="mld-tabs">
+              <button className={mobileTab === 'chat' ? 'active' : ''} onClick={() => setMobileTab('chat')}>
+                <i className="fa-solid fa-comment-dots" /> 채팅
+              </button>
+              {broadcast.songRequestEnabled && (
+                <button className={mobileTab === 'poll' ? 'active' : ''} onClick={() => setMobileTab('poll')}>
+                  <i className="fa-solid fa-square-poll-vertical" /> 신청곡 투표
+                </button>
+              )}
+            </div>
+            <div className="mld-panel">
+              <div className="mld-pane" style={{ display: mobileTab === 'chat' ? 'flex' : 'none' }}>
+                <LiveChat
+                  broadcastId={broadcastId}
+                  isBroadcaster={isBroadcaster}
+                  onSendNotes={canSendNotes ? () => setShowNotes(true) : undefined}
+                />
+              </div>
+              {broadcast.songRequestEnabled && (
+                <div className="mld-pane poll" style={{ display: mobileTab === 'poll' ? 'block' : 'none' }}>
+                  <LivePoll broadcastId={broadcastId} isBroadcaster={isBroadcaster} />
+                </div>
+              )}
+            </div>
+          </>
+        )}
+        {showNotes && broadcast && (
+          <NoteDonationModal
+            broadcastId={broadcast.id}
+            broadcasterName={broadcast.broadcaster}
+            onClose={() => setShowNotes(false)}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <>

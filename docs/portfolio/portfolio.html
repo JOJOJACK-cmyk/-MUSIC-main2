@@ -237,17 +237,17 @@
   </div>
   <div class="phones shot-card" style="margin-top:6mm">
     <figure><div class="crop contain"><img src="../screenshots/mobile-home.png" alt="" /></div>
-      <figcaption><b>모바일 홈</b><span>768px 이하에서 사이드바는 ☰ 서랍 메뉴로.</span></figcaption></figure>
-    <figure><div class="crop contain"><img src="../screenshots/mobile-menu.png" alt="" /></div>
-      <figcaption><b>☰ 메뉴</b><span>배경 탭·Esc·페이지 이동 시 닫힘.</span></figcaption></figure>
+      <figcaption><b>모바일 홈</b><span>데스크톱과 분리한 전용 화면. 하단 탭바 · 미니 플레이어.</span></figcaption></figure>
+    <figure><div class="crop contain"><img src="../screenshots/mobile-player.png" alt="" /></div>
+      <figcaption><b>전체화면 플레이어</b><span>미니 플레이어를 누르면 올라옴. 좋아요·관련 상품·다음 곡.</span></figcaption></figure>
     <figure><div class="crop contain"><img src="../screenshots/mobile-live.png" alt="" /></div>
-      <figcaption><b>모바일 라이브</b><span>영상 아래 투표·채팅이 이어집니다.</span></figcaption></figure>
+      <figcaption><b>모바일 라이브</b><span>영상 아래 [채팅 | 신청곡 투표] 탭.</span></figcaption></figure>
   </div>
   <div class="qr">
     <div style="font-size:26pt">▶</div>
     <div>
       <b>시연 영상 (2분 17초)</b>
-      <p>검색·재생 → 관련 상품 → 주문·토스 결제창 → TOP 100 → 라이브 입장 → 투표·채팅 → 음표 → 플레이리스트 → 관리자 스토어 관리 → 모바일</p>
+      <p>검색·재생 → 관련 상품 → 주문·토스 결제창 → TOP 100 → 라이브 입장 → 투표·채팅 → 음표 → 플레이리스트 → 관리자 스토어 관리 → 모바일 전용 화면</p>
       <p><code>github.com/cjsrudgh98-crypto/-MUSIC-main2/blob/main/docs/demo/StreamWave-demo.mp4</code></p>
     </div>
   </div>
@@ -261,7 +261,7 @@
   <div class="arch">
     <div class="tier client">
       <h4>Client</h4>
-      <div class="node"><b>React 18 SPA</b>Vite · React Router 6<br />반응형 (모바일 ☰ 메뉴)</div>
+      <div class="node"><b>React 18 SPA</b>Vite · React Router 6<br />데스크톱 / 모바일 전용 화면 분리</div>
       <div class="node"><b>플레이어</b>YouTube IFrame API<br />라이브 hls.js</div>
       <div class="node"><b>실시간</b>STOMP over SockJS<br />채팅 · 투표 · 알림</div>
       <div class="node"><b>OBS Studio</b>RTMP 송출<br />채팅 오버레이 · 독</div>
@@ -370,10 +370,10 @@
   </div>
 
   <div class="case">
-    <h3><span class="n">08</span>라이브 화면 레이아웃 · 모바일</h3>
+    <h3><span class="n">08</span>라이브 화면 레이아웃 · 모바일 전용 화면</h3>
     <dl class="psr">
       <dt class="p">문제</dt><dd>페이지 래퍼에 폭이 없어 내용 폭(약 760px)으로 줄어들어 영상 400px, 채팅은 메시지 한 줄. 새 채팅마다 페이지 전체가 스크롤. 휴대폰에서는 고정 사이드바 때문에 영상이 78px</dd>
-      <dt class="s">해결</dt><dd>래퍼 폭 지정 · 채팅 최소 높이 · 투표창 45% 상한, 채팅 목록만 스크롤. 768px 이하에서 사이드바를 ☰ 서랍 메뉴로, 플레이어 바·헤더 압축</dd>
+      <dt class="s">해결</dt><dd>래퍼 폭 지정 · 채팅 최소 높이 · 투표창 45% 상한, 채팅 목록만 스크롤. 768px 이하는 화면 틀을 분리해 하단 탭바 · 미니/전체화면 플레이어 · 전용 페이지로 (데이터·플레이어·채팅 부품은 공유)</dd>
       <dt class="r">결과</dt><dd>1440px 기준 영상 400px → 772px · 390px 휴대폰에서 가로 넘침 없음 (브라우저로 실측)</dd>
     </dl>
   </div>

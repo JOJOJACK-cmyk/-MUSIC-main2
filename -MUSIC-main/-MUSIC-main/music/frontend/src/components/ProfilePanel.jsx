@@ -85,6 +85,7 @@ export default function ProfilePanel({ onClose }) {
       }}
     >
       <div
+        className="pp-modal"
         style={{
           width: 830, maxWidth: '95vw', height: 584, maxHeight: '92vh', background: '#180712',
           border: '1px solid #3a1f33', borderRadius: 18, display: 'flex', overflow: 'hidden',
@@ -92,7 +93,7 @@ export default function ProfilePanel({ onClose }) {
         }}
       >
         {/* 좌측 내비 */}
-        <aside style={{ width: 214, background: '#0a0308', borderRight: '1px solid #23161f', padding: '20px 12px', display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <aside className="pp-nav" style={{ width: 214, background: '#0a0308', borderRight: '1px solid #23161f', padding: '20px 12px', display: 'flex', flexDirection: 'column', gap: 3 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 8px 18px' }}>
             <div style={{ borderRadius: '50%', padding: 2, background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT_DEEP})` }}>
               <Avatar url={user?.profileImageUrl} size={34} />
@@ -136,7 +137,7 @@ export default function ProfilePanel({ onClose }) {
         </aside>
 
         {/* 우측 콘텐츠 */}
-        <section style={{ flex: 1, position: 'relative', overflowY: 'auto', padding: '24px 28px' }}>
+        <section className="pp-body" style={{ flex: 1, position: 'relative', overflowY: 'auto', padding: '24px 28px' }}>
           <button
             onClick={onClose}
             style={{ position: 'absolute', top: 16, right: 18, background: 'transparent', border: 'none', color: '#8a6f83', fontSize: 16, cursor: 'pointer' }}
