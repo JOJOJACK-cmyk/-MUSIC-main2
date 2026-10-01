@@ -30,6 +30,7 @@ import { PlayerProvider } from './context/PlayerContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { LiveViewProvider } from './context/LiveViewContext';
+import { MobileMenuContext } from './context/MobileMenuContext';
 import { musicApi } from './api/musicApi';
 import './styles/style.css';
 
@@ -124,6 +125,17 @@ function AppRoot() {
 function AppShell() {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // 📱 모바일 ☰ 메뉴: 페이지를 옮기거나 Esc 를 누르면 닫는다
+  const [menuOpen, setMenuOpen] = useState(false);
+  const location = useLocation();
+  useEffect(() => { setMenuOpen(false); }, [location.pathname]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e) => e.key === 'Escape' && setMenuOpen(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [menuOpen]);
+
   // 💡 로컬스토리지에서 관리자(ROLE_ADMIN) 여부 확인
   let isAdmin = false;
   try {
@@ -163,12 +175,17 @@ function AppShell() {
   // (크롬리스 경로 /login, /live/:id/chat 는 AppRoot 에서 이미 처리됨)
 
   return (
+          <MobileMenuContext.Provider value={{ open: menuOpen, setOpen: setMenuOpen }}>
           <div className="app-container">
             {/* 💡 관리자일 때만 모달 오픈 함수 전달 */}
             <Sidebar
               onOpenAddModal={isAdmin ? () => setIsModalOpen(true) : null}
               isAdmin={isAdmin}
+              open={menuOpen}
+              onClose={() => setMenuOpen(false)}
             />
+            {/* 모바일 서랍 메뉴 뒤 어두운 배경 (탭하면 닫힘) */}
+            {menuOpen && <div className="sidebar-backdrop" onClick={() => setMenuOpen(false)} />}
 
             <main className="main-content">
               <Routes>
@@ -260,5 +277,6 @@ function AppShell() {
             <LiveMiniPlayer />
 
           </div>
+          </MobileMenuContext.Provider>
   );
 }
