@@ -23,7 +23,7 @@
 </div>
 
 <p align="center">
-  <img src="docs/demo/StreamWave-demo.gif" width="860" alt="StreamWave 시연 - 검색·재생, 관련 상품, 주문·토스 결제창, TOP 100, 라이브 방송·투표·채팅, 음표, 플레이리스트, 관리자 스토어 관리, 모바일" />
+  <img src="docs/demo/StreamWave-demo.gif" width="860" alt="StreamWave 시연 - 검색·재생, 관련 상품, 주문·토스 결제창, TOP 100, 라이브 방송·투표·채팅, 음표, 플레이리스트, 관리자 스토어 관리, 모바일 전용 화면" />
   <br />
   <sub>▲ 실제 서비스 화면 시연 (2배속) · 원본 영상: <a href="docs/demo/StreamWave-demo.mp4">StreamWave-demo.mp4</a></sub>
 </p>
@@ -66,7 +66,7 @@
 9. ♪ 음표로 방송자 응원 → 결제창
 10. 좋아요 · 최근 들은 곡 · 플레이리스트 전체 재생
 11. 관리자: 스토어 관리 (상품 · 곡 연결)
-12. 모바일: ☰ 메뉴 → 라이브
+12. 모바일 전용 화면: 하단 탭바 → 라이브 시청 → 곡 재생 → 전체화면 플레이어
 
 <details>
 <summary>영상과 PDF는 코드로 다시 만들 수 있습니다</summary>
@@ -144,7 +144,7 @@ npm run pdf                       # docs/portfolio/StreamWave-portfolio.pdf
 - 이메일 인증번호로 아이디 찾기·비밀번호 재설정 (5분 만료, 5회 실패 시 폐기)
 - 로그인·인증번호 요청 **Rate Limit**
 - 권한 3단계: 일반 회원 / 부 관리자(콘텐츠·스토어) / 최고 관리자(권한 부여)
-- 반응형: 768px 이하에서 사이드바를 ☰ 서랍 메뉴로, 플레이어 바·헤더를 압축
+- **모바일 전용 화면**: 768px 이하에서는 데스크톱을 줄인 화면이 아니라 하단 탭바 · 미니 플레이어 · 전체화면 플레이어로 된 별도 화면
 
 ---
 
@@ -183,17 +183,17 @@ npm run pdf                       # docs/portfolio/StreamWave-portfolio.pdf
   </tr>
   <tr>
     <td align="center"><b>모바일 홈</b></td>
-    <td align="center"><b>☰ 메뉴</b></td>
-    <td align="center"><b>모바일 라이브</b></td>
+    <td align="center"><b>모바일 전체화면 플레이어</b></td>
+    <td align="center"><b>모바일 라이브 시청</b></td>
   </tr>
   <tr>
     <td align="center"><img src="docs/screenshots/mobile-home.png" width="200" alt="모바일 홈" /></td>
-    <td align="center"><img src="docs/screenshots/mobile-menu.png" width="200" alt="모바일 메뉴" /></td>
+    <td align="center"><img src="docs/screenshots/mobile-player.png" width="200" alt="모바일 전체화면 플레이어" /></td>
     <td align="center"><img src="docs/screenshots/mobile-live.png" width="200" alt="모바일 라이브" /></td>
   </tr>
 </table>
 
-> 모바일(768px 이하)에서는 사이드바가 ☰ 서랍 메뉴로 바뀌고, 플레이어 바는 곡 정보와 이전·재생·다음만 남깁니다.
+> 모바일(768px 이하)은 데스크톱을 줄인 화면이 아니라 별도로 설계한 화면입니다: 상단 앱 바 · 하단 탭바(홈/차트/라이브/스토어/보관함) · 미니 플레이어 → 전체화면 플레이어 · 곡 ⋯ 시트 · 라이브는 영상 아래 [채팅 | 신청곡 투표] 탭.
 
 > 실제 서버를 로컬에서 띄워 브라우저로 촬영했습니다. 곡 카탈로그는 실제 데이터이고, 상품·방송·채팅·플레이리스트는 촬영용 예시 데이터입니다. 라이브 영상은 ffmpeg 테스트 방송입니다.
 
@@ -347,11 +347,12 @@ stateDiagram-v2
 </details>
 
 <details>
-<summary><b>9. 라이브 화면 레이아웃 · 모바일 대응 (브라우저로 실측)</b></summary>
+<summary><b>9. 라이브 화면 레이아웃 · 모바일 전용 화면 (브라우저로 실측)</b></summary>
 
 - 라이브 페이지 래퍼에 폭이 없어 `margin: auto` 때문에 내용 폭(약 760px)으로 줄어들었고, 영상이 400px, 채팅은 메시지 한 줄만 보였습니다. 새 채팅이 올 때마다 `scrollIntoView`가 페이지 전체를 스크롤해 헤더도 밀려 올라갔습니다.
 - 래퍼 폭 지정, 채팅 칼럼 최소 높이, 투표창 45% 상한, 채팅 목록만 스크롤하도록 고쳐 **1440px 기준 영상 400px → 772px**.
-- 휴대폰에서는 고정 240px 사이드바 때문에 영상이 78px이었습니다. 768px 이하에서 사이드바를 ☰ 서랍 메뉴로 바꾸고, Playwright로 **390 / 768 / 1024 / 1440px** 에서 가로 넘침이 없는지 측정했습니다.
+- 휴대폰에서는 고정 240px 사이드바 때문에 영상이 78px이었습니다. 처음엔 사이드바를 ☰ 서랍으로 접었지만 데스크톱을 줄여 놓은 느낌이 남아, 768px 이하에서는 **화면 틀 자체를 분리**했습니다 (`MobileShell`: 앱 바 · 하단 탭바 · 미니/전체화면 플레이어, 홈·차트·라이브·스토어·보관함·검색 전용 페이지). 플레이어·로그인·API·채팅/투표 부품은 데스크톱과 같은 것을 씁니다.
+- Playwright로 **390 / 768 / 1024 / 1440px** 에서 가로 넘침이 없는지와 데스크톱 화면이 그대로인지 측정했습니다.
 </details>
 
 ---

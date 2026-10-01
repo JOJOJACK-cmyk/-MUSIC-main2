@@ -30,22 +30,18 @@ import { PlayerProvider } from './context/PlayerContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { LiveViewProvider } from './context/LiveViewContext';
-import { MobileMenuContext } from './context/MobileMenuContext';
+import useIsMobile from './hooks/useIsMobile';
+import MobileShell from './components/mobile/MobileShell';
+import MobileHome from './pages/mobile/MobileHome';
+import MobileChart from './pages/mobile/MobileChart';
+import MobileLive from './pages/mobile/MobileLive';
+import MobileLibrary from './pages/mobile/MobileLibrary';
+import MobileShop from './pages/mobile/MobileShop';
+import MobileSearch from './pages/mobile/MobileSearch';
 import { musicApi } from './api/musicApi';
 import './styles/style.css';
-
-// 🔒 비로그인 유저의 접근을 막는 라우트 가드 컴포넌트
-function ProtectedRoute({ children }) {
-  const user = localStorage.getItem('user');
-  const token = localStorage.getItem('token') || localStorage.getItem('accessToken');
-
-  if (!user && !token) {
-    alert('로그인이 필요한 서비스입니다.');
-    return <Navigate to="/login" replace />;
-  }
-
-  return children;
-}
+import './styles/mobile.css';
+import ProtectedRoute from './components/ProtectedRoute';
 
 // 💡 소셜 로그인 직후 URL 파라미터를 감지하여 인증 상태를 동기화하는 컴포넌트
 function AuthHandler() {
@@ -124,17 +120,8 @@ function AppRoot() {
 
 function AppShell() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-
-  // 📱 모바일 ☰ 메뉴: 페이지를 옮기거나 Esc 를 누르면 닫는다
-  const [menuOpen, setMenuOpen] = useState(false);
-  const location = useLocation();
-  useEffect(() => { setMenuOpen(false); }, [location.pathname]);
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onKey = (e) => e.key === 'Escape' && setMenuOpen(false);
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [menuOpen]);
+  // 📱 모바일(768px 이하)은 하단 탭바·미니 플레이어로 된 전용 화면을 쓴다
+  const isMobile = useIsMobile();
 
   // 💡 로컬스토리지에서 관리자(ROLE_ADMIN) 여부 확인
   let isAdmin = false;
@@ -174,18 +161,15 @@ function AppShell() {
 
   // (크롬리스 경로 /login, /live/:id/chat 는 AppRoot 에서 이미 처리됨)
 
+  if (isMobile) return <MobileApp />;
+
   return (
-          <MobileMenuContext.Provider value={{ open: menuOpen, setOpen: setMenuOpen }}>
           <div className="app-container">
             {/* 💡 관리자일 때만 모달 오픈 함수 전달 */}
             <Sidebar
               onOpenAddModal={isAdmin ? () => setIsModalOpen(true) : null}
               isAdmin={isAdmin}
-              open={menuOpen}
-              onClose={() => setMenuOpen(false)}
             />
-            {/* 모바일 서랍 메뉴 뒤 어두운 배경 (탭하면 닫힘) */}
-            {menuOpen && <div className="sidebar-backdrop" onClick={() => setMenuOpen(false)} />}
 
             <main className="main-content">
               <Routes>
@@ -277,6 +261,38 @@ function AppShell() {
             <LiveMiniPlayer />
 
           </div>
-          </MobileMenuContext.Provider>
+  );
+}
+
+// 📱 모바일 전용 화면: 페이지 구성이 다른 곳(홈·차트·라이브·스토어·보관함·검색)은 모바일 페이지,
+//    상품 상세·결제처럼 그대로 써도 되는 곳은 데스크톱 페이지를 모바일 틀 안에서 재사용한다.
+function MobileApp() {
+  const guard = (el) => <ProtectedRoute>{el}</ProtectedRoute>;
+  return (
+    <>
+      <MobileShell>
+        <Routes>
+          <Route path="/" element={<MobileHome />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/charts" element={<MobileChart />} />
+          <Route path="/search" element={<MobileSearch />} />
+          <Route path="/library" element={guard(<MobileLibrary />)} />
+          <Route path="/live" element={guard(<MobileLive />)} />
+          <Route path="/live/:broadcastId" element={<LiveDetailPage />} />
+          <Route path="/shop" element={<MobileShop />} />
+          <Route path="/shop/result" element={guard(<ShopResultPage />)} />
+          <Route path="/shop/:id" element={<ProductPage />} />
+          <Route path="/notes/result" element={guard(<NoteResultPage />)} />
+          <Route path="/payment" element={guard(<PaymentPage />)} />
+          <Route path="/payment/success" element={guard(<PaymentSuccessPage />)} />
+          <Route path="/payment/fail" element={guard(<PaymentFailPage />)} />
+        </Routes>
+      </MobileShell>
+      <YouTubePlayer />
+      <HlsAudioPlayer />
+      <PreviewLockModal />
+      <BroadcasterNextSongListener />
+      <LiveMiniPlayer />
+    </>
   );
 }

@@ -40,7 +40,7 @@ const OVERLAY = () => {
       font:600 20px/1.35 'Pretendard','Malgun Gothic',sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.4);pointer-events:none;
       transition:opacity .3s;white-space:nowrap}
     #demo-caption b{color:#ff5c9a;margin-right:10px}
-    @media (max-width:600px){#demo-caption{bottom:88px;font-size:15px;white-space:normal;text-align:center;border-radius:16px;padding:9px 14px}}
+    @media (max-width:600px){#demo-caption{bottom:142px;font-size:15px;white-space:normal;text-align:center;border-radius:16px;padding:9px 14px}}
     #demo-title{position:fixed;inset:0;z-index:2147483644;display:flex;flex-direction:column;align-items:center;justify-content:center;
       gap:14px;background:radial-gradient(circle at 20% 10%,rgba(255,47,125,.55),transparent 55%),
       radial-gradient(circle at 90% 90%,rgba(124,92,255,.55),transparent 55%),#140a19;color:#fff;
@@ -128,7 +128,7 @@ async function type(page, locator, text) {
 }
 async function scrollMain(page, dy, ms = 1400) {
   await page.evaluate(async ([d, t]) => {
-    const el = document.querySelector('.main-content') || document.scrollingElement;
+    const el = document.querySelector('.m-main') || document.querySelector('.main-content') || document.scrollingElement;
     const start = el.scrollTop; const t0 = performance.now();
     await new Promise((res) => {
       const step = (now) => { const p = Math.min(1, (now - t0) / t); el.scrollTop = start + d * (1 - Math.cos(Math.PI * p)) / 2; p < 1 ? requestAnimationFrame(step) : res(); };
@@ -306,16 +306,26 @@ const m = await mctx.newPage();
 await m.goto(APP + '/', { waitUntil: 'load' });
 await sleep(2200);
 const mcast = await startCast(m);
-await caption(m, '<b>12</b>모바일: ☰ 메뉴');
+await caption(m, '<b>12</b>모바일 전용 화면 — 하단 탭바');
 await sleep(1200);
-await moveTo(m, m.locator('.menu-toggle'));
+await scrollMain(m, 420, 1300);
+await sleep(700);
+await moveTo(m, m.locator('.m-tab:has-text("라이브")'));
+await sleep(1500);
+await caption(m, '<b>12</b>모바일 라이브 — 영상 아래 채팅 · 신청곡 투표 탭');
+await moveTo(m, m.locator('.m-live-item'));
+await sleep(2200);
+await say(streamerPage, '모바일 시청자분도 반가워요!');
+await sleep(1600);
+await moveTo(m, m.locator('.mld-tabs button:has-text("신청곡 투표")'));
+await sleep(1800);
+await caption(m, '<b>12</b>미니 플레이어 → 전체화면 플레이어');
+await moveTo(m, m.locator('.m-tab:has-text("차트")'));
 await sleep(1300);
-await moveTo(m, m.locator('.sidebar .nav-item:has-text("실시간 라이브")'));
-await sleep(1800);
-await moveTo(m, m.locator('.live-card'));
-await sleep(3000);
-await scrollMain(m, 520, 1500);
-await sleep(1800);
+await moveTo(m, m.locator('.m-row').nth(2));
+await sleep(2200);
+await moveTo(m, m.locator('.m-mini-text'));
+await sleep(2600);
 await mcast.send('Page.stopScreencast');
 
 // 끝 카드
