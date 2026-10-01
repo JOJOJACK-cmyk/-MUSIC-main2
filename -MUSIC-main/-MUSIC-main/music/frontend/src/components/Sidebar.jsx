@@ -114,6 +114,15 @@ export default function Sidebar({ onOpenAddModal }) {
         >
           <i className="fa-solid fa-credit-card"></i> 이용권 결제
         </NavLink>
+
+        <NavLink
+          to="/shop"
+          tabIndex={-1}
+          onClick={(e) => e.currentTarget.blur()}
+          className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+        >
+          <i className="fa-solid fa-bag-shopping"></i> 스토어
+        </NavLink>
       </nav>
 
       {/* 💡 관리자 계정일 때만 '음원 등록' 버튼 노출 */}
