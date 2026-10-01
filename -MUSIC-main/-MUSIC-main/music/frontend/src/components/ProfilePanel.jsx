@@ -646,6 +646,7 @@ function NotiTab() {
       <div style={card}>
         <Item k="LIVE_START" title="라이브 방송 시작" desc="팔로우한 채널을 포함해 누군가 방송을 시작하면 알려드려요." />
         <Item k="NEW_HOT_SONG" title="새 인기곡 등장" desc="인기차트에 새 곡이 진입하면 알려드려요." />
+        <Item k="PASS_EXPIRY" title="이용권 만료 임박" desc="이용권 만료 3일 전에 알려드려요." />
       </div>
     </div>
   );

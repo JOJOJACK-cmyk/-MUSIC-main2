@@ -15,6 +15,7 @@ function timeAgo(ms) {
 function iconFor(type) {
   if (type === 'LIVE_START') return 'fa-tower-broadcast';
   if (type === 'NEW_HOT_SONG') return 'fa-fire';
+  if (type === 'PASS_EXPIRY') return 'fa-ticket';
   return 'fa-bell';
 }
 

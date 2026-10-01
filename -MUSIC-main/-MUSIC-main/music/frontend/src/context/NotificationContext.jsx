@@ -9,6 +9,7 @@ import React, {
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from './AuthContext';
 
 const NotificationContext = createContext(null);
 
@@ -20,9 +21,9 @@ const WS_URL = `${API}/ws-stomp`;
 // 알림 종류별 수신 설정 (프로필 설정창에서 토글). 기본값: 전부 on
 export function getNotifPrefs() {
   try {
-    return { LIVE_START: true, NEW_HOT_SONG: true, ...JSON.parse(localStorage.getItem(PREFS_KEY) || '{}') };
+    return { LIVE_START: true, NEW_HOT_SONG: true, PASS_EXPIRY: true, ...JSON.parse(localStorage.getItem(PREFS_KEY) || '{}') };
   } catch {
-    return { LIVE_START: true, NEW_HOT_SONG: true };
+    return { LIVE_START: true, NEW_HOT_SONG: true, PASS_EXPIRY: true };
   }
 }
 export function setNotifPrefs(prefs) {
@@ -101,6 +102,31 @@ export const NotificationProvider = ({ children }) => {
     })();
   }, [addNotification]);
 
+  // 나에게만 온 개인 알림 (이용권 만료 임박 등) — 로그인 시 + 10분마다 조회
+  const { user } = useAuth() || {};
+  useEffect(() => {
+    if (!user) return;
+    const load = async () => {
+      try {
+        const res = await fetch(`${API}/api/notifications/mine`, {
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
+          credentials: 'include',
+        });
+        if (!res.ok) return;
+        const list = await res.json();
+        const prefs = getNotifPrefs();
+        (Array.isArray(list) ? list : [])
+          .slice()
+          .reverse()
+          .filter((n) => !(n.type && prefs[n.type] === false))
+          .forEach((n) => addNotification(n));
+      } catch (_) {}
+    };
+    load();
+    const t = setInterval(load, 10 * 60 * 1000);
+    return () => clearInterval(t);
+  }, [user, addNotification]);
+
   // WebSocket(STOMP) 실시간 구독
   useEffect(() => {
     const client = new Client({
@@ -151,6 +177,7 @@ export const NotificationProvider = ({ children }) => {
       if (!target || target === '/') {
         if (n.type === 'NEW_HOT_SONG') target = '/charts';
         else if (n.type === 'LIVE_START') target = '/live';
+        else if (n.type === 'PASS_EXPIRY') target = '/payment';
         else target = '/';
       }
       try {
@@ -175,6 +202,7 @@ export const NotificationProvider = ({ children }) => {
 function iconFor(type) {
   if (type === 'LIVE_START') return 'fa-tower-broadcast';
   if (type === 'NEW_HOT_SONG') return 'fa-fire';
+  if (type === 'PASS_EXPIRY') return 'fa-ticket';
   return 'fa-bell';
 }
 
