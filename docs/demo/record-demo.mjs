@@ -224,7 +224,7 @@ await moveTo(page, page.locator('.toss-modal-close'));
 await sleep(600);
 
 // 05 차트
-await caption(page, '<b>05</b>최근 24시간 청취 기준 실시간 TOP 100');
+await caption(page, '<b>05</b>실시간 TOP 100 — 최근 24시간 → 누적 청취 순');
 await moveTo(page, page.locator('.sidebar .nav-item:has-text("TOP 100")'));
 await sleep(1200);
 await scrollMain(page, 500, 1600);
@@ -249,7 +249,7 @@ await say(otherPage, '브루노 마스 너무 좋아요');
 await sleep(1500);
 
 // 08 채팅
-await caption(page, '<b>08</b>실시간 채팅 (발신자는 서버가 로그인 정보로 판정)');
+await caption(page, '<b>08</b>실시간 채팅 — 프리미엄 회원은 ♪ PREMIUM 배지 (서버가 판정)');
 await type(page, page.locator('.lc-input input'), '킬디스러브 가자~!');
 await page.keyboard.press('Enter');
 await sleep(1200);
@@ -282,7 +282,18 @@ await sleep(1200);
 await moveTo(page, page.locator('.pl-detail-actions button:has-text("전체 재생")'));
 await sleep(2200);
 
-// 11 관리자 — 스토어 관리 (관리자 계정 창으로 전환해서 녹화)
+// 11 이용권 등급
+await caption(page, '<b>11</b>이용권 등급 — 라이트 · 스탠다드 · 프리미엄, 기능은 서버가 판정');
+await moveTo(page, page.locator('.sidebar .nav-item:has-text("이용권")'));
+await sleep(1500);
+await moveTo(page, page.locator('.plan-card:has-text("스탠다드")'));
+await sleep(900);
+await moveTo(page, page.locator('.plan-card:has-text("프리미엄 이용권")').first());
+await sleep(1000);
+await scrollMain(page, 420, 1500);
+await sleep(2600);
+
+// 12 관리자 — 스토어 관리 (관리자 계정 창으로 전환해서 녹화)
 await caption(page, '');
 await cast.send('Page.stopScreencast');
 const actx = await newContext(state.admin);
@@ -290,7 +301,7 @@ const a = await actx.newPage();
 await a.goto(APP + '/shop', { waitUntil: 'load' });
 await sleep(2200);
 const acast = await startCast(a);
-await caption(a, '<b>11</b>관리자: 상품 등록 · 곡 연결 · 주문 배송/환불 관리');
+await caption(a, '<b>12</b>관리자: 상품 등록 · 곡 연결 · 주문 배송/환불 관리');
 await sleep(900);
 await moveTo(a, a.locator('.user-nickname'));
 await sleep(900);
@@ -306,13 +317,13 @@ const m = await mctx.newPage();
 await m.goto(APP + '/', { waitUntil: 'load' });
 await sleep(2200);
 const mcast = await startCast(m);
-await caption(m, '<b>12</b>모바일 전용 화면 — 하단 탭바');
+await caption(m, '<b>13</b>모바일 전용 화면 — 하단 탭바');
 await sleep(1200);
 await scrollMain(m, 420, 1300);
 await sleep(700);
 await moveTo(m, m.locator('.m-tab:has-text("라이브")'));
 await sleep(1500);
-await caption(m, '<b>12</b>모바일 라이브 — 영상 아래 채팅 · 신청곡 투표 탭');
+await caption(m, '<b>13</b>모바일 라이브 — 영상 아래 채팅 · 신청곡 투표 탭');
 await moveTo(m, m.locator('.m-live-item'));
 await sleep(2200);
 await say(streamerPage, '모바일 시청자분도 반가워요!');
