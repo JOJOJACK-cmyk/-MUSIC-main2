@@ -104,6 +104,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, "/api/musics/**").hasAnyRole("ADMIN", "SUB_ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/musics/**").hasAnyRole("ADMIN", "SUB_ADMIN")
 
+                        // S3 직접 업로드 - 관리자 + 부 관리자 (일반 회원이 버킷에 파일을 올리지 못하게)
+                        .requestMatchers("/api/s3/**").hasAnyRole("ADMIN", "SUB_ADMIN")
+
                         // 스토어 관리 - 관리자 + 부 관리자 (아래 상품 조회 permitAll 보다 먼저)
                         .requestMatchers("/api/shop/admin/**").hasAnyRole("ADMIN", "SUB_ADMIN")
                         // 스토어 상품 조회는 누구나 (주문/결제는 아래 anyRequest().authenticated())
@@ -208,9 +211,11 @@ public class SecurityConfig {
                             String encodedRole = URLEncoder.encode(role, StandardCharsets.UTF_8);
                             String encodedToken = URLEncoder.encode(token, StandardCharsets.UTF_8);
 
-                            // 💡 리다이렉트 URL에 role, token 포함하여 전달
+                            // 💡 토큰은 쿼리(?)가 아니라 프래그먼트(#)로 전달한다 — 프래그먼트는 서버 로그·Referer 로
+                            //    나가지 않는다. 프론트(AuthContext)가 읽은 뒤 주소창에서 지운다.
+                            //    role 은 화면 힌트일 뿐이며 프론트는 /api/auth/me 응답으로 다시 확인한다.
                             response.sendRedirect(String.format(
-                                    "%s/?nickname=%s&email=%s&profileImageUrl=%s&role=%s&token=%s",
+                                    "%s/#nickname=%s&email=%s&profileImageUrl=%s&role=%s&token=%s",
                                     frontendUrl, encodedNickname, encodedEmail, encodedProfile, encodedRole, encodedToken
                             ));
                         })

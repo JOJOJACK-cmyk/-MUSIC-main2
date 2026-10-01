@@ -28,6 +28,20 @@ const readSavedState = () => {
   }
 };
 
+// 미리듣기 누적 시간은 (사용자, 날짜)별로 localStorage 에 저장한다 — 새로고침으로 초기화되지 않게
+const previewKey = (email) => `player:preview:${email || 'anon'}:${new Date().toISOString().slice(0, 10)}`;
+const readPreviewSeconds = (email) => {
+  try {
+    const v = Number(localStorage.getItem(previewKey(email)));
+    return Number.isFinite(v) && v > 0 ? v : 0;
+  } catch (_) {
+    return 0;
+  }
+};
+const writePreviewSeconds = (email, seconds) => {
+  try { localStorage.setItem(previewKey(email), String(seconds)); } catch (_) {}
+};
+
 export const PlayerProvider = ({ children }) => {
   const { user, hasFullAccess } = useAuth();
 
@@ -40,7 +54,7 @@ export const PlayerProvider = ({ children }) => {
   // 무료 회원 미리듣기 제한
   // =========================
   // 세션 동안 실제로 재생된 시간의 누적(초). 곡을 바꿔도 초기화되지 않는다.
-  const previewSecondsRef = useRef(0);
+  const previewSecondsRef = useRef(readPreviewSeconds(null));
   // 누적 60초를 초과해 재생이 잠긴 상태 (결제/로그인 전까지 재생 불가)
   const [previewLocked, setPreviewLocked] = useState(false);
 
@@ -243,9 +257,9 @@ export const PlayerProvider = ({ children }) => {
     }
   }, [hasFullAccess]);
 
-  // 로그인 계정이 바뀌면(로그인/로그아웃) 미리듣기 카운터를 새로 시작
+  // 로그인 계정이 바뀌면(로그인/로그아웃) 그 계정의 오늘 미리듣기 누적값을 불러온다
   useEffect(() => {
-    previewSecondsRef.current = 0;
+    previewSecondsRef.current = readPreviewSeconds(user?.email);
     setPreviewLocked(false);
   }, [user?.email]);
 
@@ -302,10 +316,13 @@ export const PlayerProvider = ({ children }) => {
       //    ② 재생 위치(스크럽/강제 건너뛰기 포함)가 60초를 넘으면 즉시 잠금
       if (!hasFullAccess) {
         previewSecondsRef.current += 0.5;
+        // 2초마다 저장 (새로고침해도 누적값 유지)
+        if (previewSecondsRef.current % 2 === 0) writePreviewSeconds(user?.email, previewSecondsRef.current);
         if (
           previewSecondsRef.current >= PREVIEW_LIMIT_SECONDS ||
           time >= PREVIEW_LIMIT_SECONDS
         ) {
+          writePreviewSeconds(user?.email, previewSecondsRef.current);
           lockPreview();
           return;
         }

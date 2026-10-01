@@ -58,8 +58,11 @@ public class MusicController {
     @GetMapping("/search")
     public ResponseEntity<List<MusicDto.Response>> searchMusics(
             @Parameter(description = "검색 키워드", example = "르세라핌", required = true)
-            @RequestParam String keyword) {
-        return ResponseEntity.ok(musicService.searchMusics(keyword));
+            @RequestParam String keyword,
+            Authentication authentication) {
+        // 유튜브에서 새 곡을 찾아오는 보강은 로그인 사용자 검색에서만 (할당량 보호)
+        boolean loggedIn = authenticatedUserResolver.resolveOptionalUser(authentication).isPresent();
+        return ResponseEntity.ok(musicService.searchMusics(keyword, loggedIn));
     }
 
     // 💡 내 보관함(좋아요 누른 음악 목록) 조회 API

@@ -25,7 +25,7 @@ public class SignupRequestDto {
 
     @Schema(description = "비밀번호 (최소 6자 이상 권장)", example = "password1234!", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "비밀번호는 필수 입력값입니다.")
-    @Size(min = 4, message = "비밀번호는 최소 4자 이상이어야 합니다.")
+    @Size(min = 6, max = 64, message = "비밀번호는 6자 이상이어야 합니다.")
     private String password;
 
     @Schema(description = "사용자 닉네임", example = "홍길동", requiredMode = Schema.RequiredMode.REQUIRED)

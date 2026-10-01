@@ -54,6 +54,12 @@ public class AuthController {
                 userId, java.time.LocalDateTime.now());
     }
 
+    /** 소셜 로그인 계정인지 (비밀번호가 없거나 provider 가 local 이 아님) — 비밀번호 찾기/변경 대상 아님 */
+    private static boolean isSocialAccount(User user) {
+        return user.getPassword() == null
+                || (user.getProvider() != null && !"local".equals(user.getProvider()));
+    }
+
     // 이메일 인증 코드 임시 저장소 (목적별 키: "find-email:<email>", "reset:<email>")
     //  - 5분 후 만료, 5회 틀리면 폐기, 재발송은 60초 간격 → 6자리 코드 무차별 대입 방지
     private static final long CODE_TTL_MILLIS = 5 * 60 * 1000L;
@@ -132,7 +138,8 @@ public class AuthController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().body("회원가입 오류: " + e.getMessage());
+            org.slf4j.LoggerFactory.getLogger(AuthController.class).error("[회원가입] 처리 실패", e);
+            return ResponseEntity.internalServerError().body("회원가입 처리 중 서버 오류가 발생했습니다.");
         }
     }
 
@@ -177,7 +184,8 @@ public class AuthController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().body("로그인 오류: " + e.getMessage());
+            org.slf4j.LoggerFactory.getLogger(AuthController.class).error("[로그인] 처리 실패", e);
+            return ResponseEntity.internalServerError().body("로그인 처리 중 서버 오류가 발생했습니다.");
         }
     }
 
@@ -199,7 +207,7 @@ public class AuthController {
         }
 
         User user = optionalUser.get();
-        if (user.getProvider() != null && !user.getProvider().equals("local")) {
+        if (isSocialAccount(user)) {
             return ResponseEntity.badRequest().body(Map.of("message", "소셜 로그인 계정입니다. 해당 소셜 로그인을 이용해주세요."));
         }
 
@@ -270,7 +278,7 @@ public class AuthController {
         }
 
         User user = optionalUser.get();
-        if (user.getProvider() != null && !user.getProvider().equals("local")) {
+        if (isSocialAccount(user)) {
             return ResponseEntity.badRequest().body(Map.of("message", "소셜 로그인 계정은 비밀번호를 찾을 수 없습니다."));
         }
 
@@ -420,7 +428,12 @@ public class AuthController {
         String profileImageUrl = request.get("profileImageUrl");
 
         if (nickname != null && !nickname.isBlank()) {
-            String trimmed = nickname.trim();
+            String trimmed;
+            try {
+                trimmed = UserService.validateNickname(nickname);
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+            }
             if (!trimmed.equals(user.getNickname())
                     && userRepository.findByNickname(trimmed).isPresent()) {
                 return ResponseEntity.badRequest().body(Map.of("message", "이미 사용 중인 닉네임입니다."));
@@ -460,7 +473,7 @@ public class AuthController {
         }
         User user = optionalUser.get();
 
-        if (user.getProvider() != null && !user.getProvider().equals("local")) {
+        if (isSocialAccount(user)) {
             return ResponseEntity.badRequest().body(Map.of("message", "소셜 로그인 계정은 비밀번호를 변경할 수 없습니다."));
         }
 

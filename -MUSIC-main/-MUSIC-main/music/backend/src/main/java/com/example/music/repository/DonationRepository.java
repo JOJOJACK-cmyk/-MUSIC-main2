@@ -19,4 +19,10 @@ public interface DonationRepository extends JpaRepository<Donation, Long> {
 
     @Query("select coalesce(sum(d.amount), 0) from Donation d where d.recipient.id = :recipientId and d.status = 'DONE'")
     long sumReceived(@Param("recipientId") Long recipientId);
+
+    /** 결제창에서 그만둔 오래된 결제 대기 주문 정리 */
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.transaction.annotation.Transactional
+    @org.springframework.data.jpa.repository.Query("delete from Donation o where o.status = 'PENDING' and o.createdAt < :before")
+    int deletePendingBefore(@org.springframework.data.repository.query.Param("before") java.time.LocalDateTime before);
 }

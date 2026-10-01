@@ -42,6 +42,8 @@ public class SongVoteService {
         public static PollOption text(String title) { return new PollOption(title, null); }
     }
     private String voterKey(Long b, String who) { return "broadcast:" + b + ":poll:voter:" + who; }
+    // 이 방송의 투표자 키 목록 (초기화 때 KEYS 전체 검색 대신 사용 — KEYS 는 운영 Redis 를 멈추게 할 수 있음)
+    private String voterSetKey(Long b) { return "broadcast:" + b + ":poll:voterkeys"; }
 
     // ── 스트리머: 옵션 관리 ──────────────────────────────────────────
 
@@ -115,6 +117,7 @@ public class SongVoteService {
         if (!Boolean.TRUE.equals(first)) return false; // 이미 투표함 — 1인 1표
 
         redis.opsForHash().increment(votesKey(broadcastId), String.valueOf(index), 1);
+        redis.opsForSet().add(voterSetKey(broadcastId), vk);
         return true;
     }
 
@@ -175,8 +178,9 @@ public class SongVoteService {
 
     private void clearVotesOnly(Long broadcastId) {
         redis.delete(votesKey(broadcastId));
-        Set<String> voterKeys = redis.keys("broadcast:" + broadcastId + ":poll:voter:*");
+        Set<String> voterKeys = redis.opsForSet().members(voterSetKey(broadcastId));
         if (voterKeys != null && !voterKeys.isEmpty()) redis.delete(voterKeys);
+        redis.delete(voterSetKey(broadcastId));
     }
 
     /** 표만 초기화 (곡 목록은 유지). */

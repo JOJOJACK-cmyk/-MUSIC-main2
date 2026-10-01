@@ -10,17 +10,28 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 @EnableWebSocketMessageBroker
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
+    // REST CORS 와 같은 출처만 웹소켓 접속 허용 (다른 사이트가 사용자 쿠키로 채팅/투표에 접속하는 것 방지)
+    @org.springframework.beans.factory.annotation.Value("${app.cors.allowed-origins}")
+    private String allowedOriginsRaw;
+
+    private String[] allowedOrigins() {
+        return java.util.Arrays.stream(allowedOriginsRaw.split(","))
+                .map(String::trim)
+                .filter(o -> !o.isEmpty())
+                .toArray(String[]::new);
+    }
+
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
 
         // 기존 채팅용 WebSocket
         registry.addEndpoint("/ws-chat")
-                .setAllowedOriginPatterns("*")
+                .setAllowedOriginPatterns(allowedOrigins())
                 .withSockJS();
 
         // 라이브 신청곡 / 투표용 WebSocket
         registry.addEndpoint("/ws-stomp")
-                .setAllowedOriginPatterns("*")
+                .setAllowedOriginPatterns(allowedOrigins())
                 .withSockJS();
     }
 
