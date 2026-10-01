@@ -38,6 +38,11 @@ export default function MobileTopBar() {
   const unread = notif?.unreadCount || 0;
 
   const openBell = () => { setBellOpen(true); notif?.markAllRead?.(); };
+  // 링크로 바로 들어온 상세 화면(공유된 라이브 주소 등)은 돌아갈 앱 내 기록이 없으니 홈으로
+  const goBack = () => {
+    if ((window.history.state?.idx ?? 0) > 0) navigate(-1);
+    else navigate('/', { replace: true });
+  };
 
   return (
     <header className="m-topbar">
@@ -46,7 +51,7 @@ export default function MobileTopBar() {
           <div className="m-logo"><span>♪</span>StreamWave</div>
         )
       ) : (
-        <button className="m-icon-btn" aria-label="뒤로" onClick={() => navigate(-1)}>
+        <button className="m-icon-btn" aria-label="뒤로" onClick={goBack}>
           <i className="fa-solid fa-chevron-left" />
         </button>
       )}

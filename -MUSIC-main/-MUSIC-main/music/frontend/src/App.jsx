@@ -161,9 +161,11 @@ function AppShell() {
 
   // (크롬리스 경로 /login, /live/:id/chat 는 AppRoot 에서 이미 처리됨)
 
-  if (isMobile) return <MobileApp />;
-
+  // 재생기·라이브 오디오 같은 공용 부품은 두 화면 틀 바깥에 한 번만 둔다.
+  // (폰을 가로로 돌리거나 창 크기를 바꿔 768px 를 넘나들 때 재생기가 다시 만들어져 곡이 처음부터 시작되지 않도록)
   return (
+    <>
+      {isMobile ? <MobileApp /> : (
           <div className="app-container">
             {/* 💡 관리자일 때만 모달 오픈 함수 전달 */}
             <Sidebar
@@ -252,15 +254,16 @@ function AppShell() {
               />
             )}
 
-            <YouTubePlayer />
-            <HlsAudioPlayer />
             <PlayerBar />
-            <PreviewLockModal />
             <LiveNowButton />
-            <BroadcasterNextSongListener />
-            <LiveMiniPlayer />
-
           </div>
+      )}
+      <YouTubePlayer />
+      <HlsAudioPlayer />
+      <PreviewLockModal />
+      <BroadcasterNextSongListener />
+      <LiveMiniPlayer />
+    </>
   );
 }
 
@@ -269,7 +272,6 @@ function AppShell() {
 function MobileApp() {
   const guard = (el) => <ProtectedRoute>{el}</ProtectedRoute>;
   return (
-    <>
       <MobileShell>
         <Routes>
           <Route path="/" element={<MobileHome />} />
@@ -288,11 +290,5 @@ function MobileApp() {
           <Route path="/payment/fail" element={guard(<PaymentFailPage />)} />
         </Routes>
       </MobileShell>
-      <YouTubePlayer />
-      <HlsAudioPlayer />
-      <PreviewLockModal />
-      <BroadcasterNextSongListener />
-      <LiveMiniPlayer />
-    </>
   );
 }

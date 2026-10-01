@@ -169,10 +169,13 @@ export default function MainPage() {
     }
     setSearching(true);
     const ctrl = new AbortController();
-    const t = setTimeout(async () => {
+    // 입력 중에는 DB 에서만 찾고(youtube=false), 검색어가 1.5초 그대로면 유튜브 보강까지 허용한다.
+    // (한 글자씩 칠 때마다 "르세", "르세라"… 로 유튜브 검색 한도를 써 버리지 않도록)
+    let fullDone = false;
+    const run = async (youtube) => {
       try {
         const res = await axios.get('/api/musics/search', {
-          params: { keyword: kw },
+          params: { keyword: kw, youtube },
           signal: ctrl.signal,
         });
         const items = Array.isArray(res.data) ? res.data : [];
@@ -183,15 +186,19 @@ export default function MainPage() {
           likedIds = new Set((Array.isArray(likedRes.data) ? likedRes.data : []).map((m) => m.id));
         } catch (e) {}
 
+        if (!youtube && fullDone) return;
+        if (youtube) fullDone = true;
         const mapped = items.map((m) => ({ ...m, isLiked: likedIds.has(m.id) }));
         setSearchResults(mapped);
       } catch (e) {
-        if (e.name !== 'CanceledError' && e.code !== 'ERR_CANCELED') setSearchResults([]);
+        if (e.name !== 'CanceledError' && e.code !== 'ERR_CANCELED' && !fullDone) setSearchResults([]);
       } finally {
-        setSearching(false);
+        if (!youtube) setSearching(false);
       }
-    }, 500);
-    return () => { clearTimeout(t); ctrl.abort(); };
+    };
+    const t1 = setTimeout(() => run(false), 400);
+    const t2 = setTimeout(() => run(true), 1500);
+    return () => { clearTimeout(t1); clearTimeout(t2); ctrl.abort(); };
   }, [searchTerm]);
 
   // 현재 방송 중인 라이브 목록 (메인 라이브 뷰 + 토글 배지)
