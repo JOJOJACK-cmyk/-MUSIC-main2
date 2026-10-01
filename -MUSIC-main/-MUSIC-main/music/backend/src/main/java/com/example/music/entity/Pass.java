@@ -37,6 +37,10 @@ public class Pass {
     @Column(name = "pass_name", nullable = false)
     private String passName;
 
+    // 요금제 ID (PricingPlan.planId). 요금제를 나누기 전에 산 이용권은 null — 이름으로 대응한다.
+    @Column(name = "plan_id", length = 30)
+    private String planId;
+
     @Column(name = "start_date", nullable = false)
     private LocalDateTime startDate;
 
@@ -50,12 +54,14 @@ public class Pass {
     public Pass(
             User user,
             String passName,
+            String planId,
             LocalDateTime startDate,
             LocalDateTime expireDate,
             boolean isActive
     ) {
         this.user = user;
         this.passName = passName;
+        this.planId = planId;
         this.startDate = startDate;
         this.expireDate = expireDate;
         this.isActive = isActive;

@@ -84,7 +84,8 @@ public class SecurityConfig {
                                 "/ws/**"
                         ).permitAll()
 
-                        // 2. 결제 API는 인증된 유저만 접근 가능
+                        // 2. 결제 API는 인증된 유저만 접근 가능 (요금제 안내만 공개 — 로그인 전에도 결제 화면에서 비교)
+                        .requestMatchers(HttpMethod.GET, "/api/v1/payments/plans").permitAll()
                         .requestMatchers("/api/v1/payments/**", "/api/payments/**").authenticated()
 
                         // 3. 청취 로그 및 권한 검증 관련 API 인증 설정

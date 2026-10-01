@@ -66,6 +66,10 @@ public class ShopOrder {
     @Column(name = "total_amount", nullable = false)
     private int totalAmount;
 
+    // 이용권 스토어 할인율(%) — 주문을 만들 때 확정. 할인 없으면 0 (요금제를 나누기 전 주문은 null)
+    @Column(name = "discount_pct")
+    private Integer discountPct;
+
     @Column(name = "recipient_name", nullable = false, length = 30)
     private String recipientName;
 
@@ -101,14 +105,17 @@ public class ShopOrder {
 
     public ShopOrder(String orderId, User user, Product product, int quantity,
                      String recipientName, String phone, String zipcode, String address,
-                     String addressDetail, String memo) {
+                     String addressDetail, String memo, int discountPct) {
         this.orderId = orderId;
         this.user = user;
         this.product = product;
         this.productName = product.getName();
         this.unitPrice = product.getPrice();
         this.quantity = quantity;
-        this.totalAmount = product.getPrice() * quantity;
+        this.discountPct = Math.max(0, Math.min(discountPct, 50));
+        int list = product.getPrice() * quantity;
+        // 원 단위 버림 (10% 할인 18,000원 → 16,200원)
+        this.totalAmount = list - (list * this.discountPct / 100);
         this.recipientName = recipientName;
         this.phone = phone;
         this.zipcode = zipcode;

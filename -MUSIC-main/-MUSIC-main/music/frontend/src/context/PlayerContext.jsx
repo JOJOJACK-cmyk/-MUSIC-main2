@@ -43,7 +43,7 @@ const writePreviewSeconds = (email, seconds) => {
 };
 
 export const PlayerProvider = ({ children }) => {
-  const { user, hasFullAccess } = useAuth();
+  const { user, hasFullAccess, limitedPlay, applySongClaim } = useAuth();
 
   const [saved] = useState(readSavedState);
 
@@ -57,6 +57,8 @@ export const PlayerProvider = ({ children }) => {
   const previewSecondsRef = useRef(readPreviewSeconds(null));
   // 누적 60초를 초과해 재생이 잠긴 상태 (결제/로그인 전까지 재생 불가)
   const [previewLocked, setPreviewLocked] = useState(false);
+  // 잠긴 이유: 'preview' (무료 미리듣기 소진) | 'songLimit' (곡 수 제한 이용권의 곡을 다 씀)
+  const [lockReason, setLockReason] = useState('preview');
 
   const [currentTime, setCurrentTime] = useState(saved?.currentTime ?? 0);
   const [duration, setDuration] = useState(0);
@@ -257,6 +259,12 @@ export const PlayerProvider = ({ children }) => {
     }
   }, [hasFullAccess]);
 
+  // 곡 수 제한 이용권을 새로 샀으면(곡이 남아 있으면) 잠금을 풀어 준다
+  const limitedLeft = limitedPlay ? limitedPlay.limit - limitedPlay.used : 0;
+  useEffect(() => {
+    if (limitedLeft > 0) setPreviewLocked(false);
+  }, [limitedLeft]);
+
   // 로그인 계정이 바뀌면(로그인/로그아웃) 그 계정의 오늘 미리듣기 누적값을 불러온다
   useEffect(() => {
     previewSecondsRef.current = readPreviewSeconds(user?.email);
@@ -279,6 +287,45 @@ export const PlayerProvider = ({ children }) => {
   }, []);
 
   // =========================
+  // 이 곡을 전곡 재생할 수 있는지 — 무제한 이용권 · 관리자, 또는 곡 수 제한 이용권에서
+  // 이미 차감된 곡이거나 아직 곡이 남아 있으면. (아니면 무료 미리듣기 규칙)
+  // =========================
+  const limitedRef = useRef(limitedPlay);
+  limitedRef.current = limitedPlay;
+  const canFullPlay = useCallback((track) => {
+    if (hasFullAccess) return true;
+    const lp = limitedRef.current;
+    if (!lp || !track) return false;
+    return lp.claimedIds.some((x) => String(x) === String(track.id)) || lp.used < lp.limit;
+  }, [hasFullAccess]);
+  const isClaimed = (track) => Boolean(limitedRef.current?.claimedIds.some((x) => String(x) === String(track?.id)));
+
+  // 곡 수 제한 이용권: 30초 재생 시점에 1곡 차감 (같은 곡은 서버가 다시 차감하지 않음)
+  const claimSong = useCallback(async (musicId) => {
+    const token = localStorage.getItem('token') || localStorage.getItem('accessToken');
+    try {
+      const res = await fetch('/api/v1/payments/play-claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        credentials: 'include',
+        body: JSON.stringify({ musicId: Number(musicId) }),
+      });
+      if (!res.ok) return null;
+      const result = await res.json();
+      applySongClaim?.(musicId, result);
+      return result;
+    } catch (_) {
+      return null;
+    }
+  }, [applySongClaim]);
+
+  // 미리듣기/곡 수 소진으로 잠글 때 이유를 함께 남긴다
+  const lockFor = useCallback((reason) => {
+    setLockReason(reason);
+    lockPreview();
+  }, [lockPreview]);
+
+  // =========================
   // 실제 재생시간 추적 및 세션 누적 1분(60초) 제한 통제
   // =========================
   useEffect(() => {
@@ -286,6 +333,8 @@ export const PlayerProvider = ({ children }) => {
       return;
     }
 
+    // 이 곡은 전곡 재생인지 (곡 수 제한 이용권은 곡마다 다름 — 차감 결과가 오면 이 효과가 다시 돈다)
+    const fullPlay = canFullPlay(currentTrack);
     let tick = 0;
     const interval = setInterval(() => {
       const player = playerRef.current;
@@ -314,7 +363,7 @@ export const PlayerProvider = ({ children }) => {
       // 💡 무료(비로그인 또는 미결제) 회원 제한:
       //    ① 세션 누적 재생시간이 60초를 넘거나
       //    ② 재생 위치(스크럽/강제 건너뛰기 포함)가 60초를 넘으면 즉시 잠금
-      if (!hasFullAccess) {
+      if (!fullPlay) {
         previewSecondsRef.current += 0.5;
         // 2초마다 저장 (새로고침해도 누적값 유지)
         if (previewSecondsRef.current % 2 === 0) writePreviewSeconds(user?.email, previewSecondsRef.current);
@@ -323,7 +372,7 @@ export const PlayerProvider = ({ children }) => {
           time >= PREVIEW_LIMIT_SECONDS
         ) {
           writePreviewSeconds(user?.email, previewSecondsRef.current);
-          lockPreview();
+          lockFor(limitedRef.current ? 'songLimit' : 'preview');
           return;
         }
       }
@@ -346,18 +395,26 @@ export const PlayerProvider = ({ children }) => {
         loggedTrackIdRef.current !== currentTrack.id &&
         !isSendingLogRef.current
       ) {
-        sendListenLog(currentTrack.id).then((success) => {
-          if (success) {
-            loggedTrackIdRef.current = currentTrack.id;
+        const trackId = currentTrack.id;
+        loggedTrackIdRef.current = trackId; // 응답을 기다리는 동안 다시 보내지 않게
+        (async () => {
+          // 곡 수 제한 이용권: 아직 차감 안 된 곡이면 먼저 1곡 차감 — 한도를 넘었으면 이 곡은 미리듣기로 전환
+          if (fullPlay && !hasFullAccess && !isClaimed(currentTrack)) {
+            const r = await claimSong(trackId);
+            if (!r?.allowed) return;
           }
-        });
+          if (!fullPlay) return; // 미리듣기는 청취 기록 · 차트에 넣지 않는다 (서버도 거른다)
+          const success = await sendListenLog(trackId);
+          if (!success && loggedTrackIdRef.current === trackId) loggedTrackIdRef.current = null;
+        })();
       }
     }, 500);
 
     return () => {
       clearInterval(interval);
     };
-  }, [isPlaying, currentTrack, sendListenLog, user, hasFullAccess, lockPreview]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlaying, currentTrack, sendListenLog, user, hasFullAccess, limitedPlay, canFullPlay, claimSong, lockFor]);
 
   // =========================
   // 곡 길이 기반 자동 넘김 타이머
@@ -406,8 +463,9 @@ export const PlayerProvider = ({ children }) => {
       return;
     }
 
-    // 무료 회원이 누적 60초를 모두 소진했으면 재생 자체를 차단
-    if (!hasFullAccess && previewSecondsRef.current >= PREVIEW_LIMIT_SECONDS) {
+    // 전곡 재생 대상이 아닌데(무료 · 곡 수 소진) 미리듣기 60초도 다 썼으면 재생 자체를 차단
+    if (!canFullPlay(track) && previewSecondsRef.current >= PREVIEW_LIMIT_SECONDS) {
+      setLockReason(limitedRef.current ? 'songLimit' : 'preview');
       setPreviewLocked(true);
       return;
     }
@@ -432,7 +490,7 @@ export const PlayerProvider = ({ children }) => {
       player.loadVideoById(track.youtubeVideoId);
       player.playVideo();
     }
-  }, [hasFullAccess]);
+  }, [canFullPlay]);
 
   // 두 목록이 같은 곡 순서인지 (id 기준)
   const queuesEqual = (a, b) => {
@@ -492,8 +550,9 @@ export const PlayerProvider = ({ children }) => {
   // 재생 / 일시정지
   // =========================
   const togglePlay = () => {
-    // 무료 회원이 미리듣기 시간을 모두 소진한 경우 재생 차단
-    if (!hasFullAccess && previewSecondsRef.current >= PREVIEW_LIMIT_SECONDS) {
+    // 이 곡을 전곡 재생할 수 없고 미리듣기 시간도 다 쓴 경우 재생 차단
+    if (!canFullPlay(currentTrack || playlist[0]) && previewSecondsRef.current >= PREVIEW_LIMIT_SECONDS) {
+      setLockReason(limitedRef.current ? 'songLimit' : 'preview');
       setPreviewLocked(true);
       return;
     }
@@ -688,7 +747,10 @@ export const PlayerProvider = ({ children }) => {
         isShuffle,
         isRepeat,
         previewLocked,
+        lockReason,
         hasFullAccess,
+        limitedPlay,
+        canFullPlay,
         previewLimitSeconds: PREVIEW_LIMIT_SECONDS,
         dismissPreviewLock: () => setPreviewLocked(false),
         setPlaylist,

@@ -82,6 +82,13 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse("ERROR", "PAYMENT_FAILED", e.getMessage()));
     }
 
+    // 403 Forbidden: 이용권에 포함되지 않은 기능 (프론트는 code 로 이용권 안내를 띄운다)
+    @ExceptionHandler(com.example.music.service.PassEntitlementService.PassRequiredException.class)
+    public ResponseEntity<ErrorResponse> handlePassRequired(com.example.music.service.PassEntitlementService.PassRequiredException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ErrorResponse("ERROR", "PASS_REQUIRED", e.getMessage()));
+    }
+
     // 500 Internal Server Error: 그 외 예상치 못한 모든 서버 에러 처리
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneralException(Exception e) {

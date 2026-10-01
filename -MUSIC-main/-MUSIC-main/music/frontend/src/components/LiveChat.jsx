@@ -124,13 +124,14 @@ const LiveChat = ({ broadcastId, isBroadcaster = false, onSendNotes }) => {
             // 방송자: 남의 메시지는 삭제 가능, 로그인 사용자(senderId 있음)는 채팅 금지 가능
             const canModerate = isBroadcaster && !mine && c.messageId;
             return (
-              <div key={c.messageId || `${c.timestamp}-${i}`} className={`lc-msg ${mine ? 'mine' : ''}`}>
+              <div key={c.messageId || `${c.timestamp}-${i}`} className={`lc-msg ${mine ? 'mine' : ''} ${c.premium ? 'premium' : ''}`}>
                 <span className="lc-av" style={{ background: colorFor(c.sender || '?') }}>
                   {(c.sender || '?').trim().charAt(0).toUpperCase()}
                 </span>
                 <div className="lc-bubble">
                   <div className="lc-meta">
                     <span className="lc-sender">{c.sender}</span>
+                    {c.premium && <span className="lc-premium" title="프리미엄 이용권">♪ PREMIUM</span>}
                     <span className="lc-time">
                       {c.timestamp ? c.timestamp.substring(11, 16) : ''}
                     </span>

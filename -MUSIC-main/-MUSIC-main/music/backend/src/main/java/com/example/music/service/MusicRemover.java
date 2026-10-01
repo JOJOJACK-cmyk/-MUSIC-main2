@@ -4,6 +4,7 @@ import com.example.music.entity.Music;
 import com.example.music.repository.LikedMusicRepository;
 import com.example.music.repository.ListenLogRepository;
 import com.example.music.repository.MusicRepository;
+import com.example.music.repository.PassSongClaimRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +22,7 @@ public class MusicRemover {
     private final MusicRepository musicRepository;
     private final LikedMusicRepository likedMusicRepository;
     private final ListenLogRepository listenLogRepository;
+    private final PassSongClaimRepository passSongClaimRepository;
 
     /** 참조 기록을 먼저 지우고 곡을 삭제한다. 호출한 쪽 트랜잭션에 참여한다. */
     @Transactional
@@ -28,6 +30,7 @@ public class MusicRemover {
         Long id = music.getId();
         listenLogRepository.deleteByMusicId(id);
         likedMusicRepository.deleteByMusicId(id);
+        passSongClaimRepository.deleteByMusicId(id);
         musicRepository.delete(music);
     }
 }
