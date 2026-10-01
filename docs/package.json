@@ -1,0 +1,16 @@
+{
+  "name": "streamwave-docs-tools",
+  "private": true,
+  "type": "module",
+  "description": "README 시연 영상 · 포트폴리오 PDF 생성 도구 (설치된 Edge/Chrome 을 playwright-core 로 조종, 브라우저 다운로드 없음)",
+  "scripts": {
+    "live": "node demo/live-test-stream.mjs",
+    "demo": "node demo/record-demo.mjs",
+    "video": "node demo/make-video.mjs",
+    "pdf": "node portfolio/build-pdf.mjs"
+  },
+  "devDependencies": {
+    "ffmpeg-static": "5.3.0",
+    "playwright-core": "1.63.0"
+  }
+}
