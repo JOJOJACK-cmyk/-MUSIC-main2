@@ -255,6 +255,8 @@ export default function LiveDetailPage() {
   // ── 모바일 전용 화면: 영상(상단 고정) · 방송 정보 · [채팅 | 투표] 탭 ──
   //    채팅/투표는 탭을 바꿔도 연결이 끊기지 않게 둘 다 띄워 두고 보이기만 바꾼다.
   if (isMobile) {
+    // 방송자가 신청곡을 끄면 투표 탭이 사라지므로 채팅으로 돌린다 (빈 패널 방지)
+    const tab = broadcast?.songRequestEnabled ? mobileTab : 'chat';
     const video = (
       <div className="mld-video">
         <div className="ld-video" ref={videoWrapRef}>
@@ -304,17 +306,17 @@ export default function LiveDetailPage() {
               </button>
             )}
             <div className="mld-tabs">
-              <button className={mobileTab === 'chat' ? 'active' : ''} onClick={() => setMobileTab('chat')}>
+              <button className={tab === 'chat' ? 'active' : ''} onClick={() => setMobileTab('chat')}>
                 <i className="fa-solid fa-comment-dots" /> 채팅
               </button>
               {broadcast.songRequestEnabled && (
-                <button className={mobileTab === 'poll' ? 'active' : ''} onClick={() => setMobileTab('poll')}>
+                <button className={tab === 'poll' ? 'active' : ''} onClick={() => setMobileTab('poll')}>
                   <i className="fa-solid fa-square-poll-vertical" /> 신청곡 투표
                 </button>
               )}
             </div>
             <div className="mld-panel">
-              <div className="mld-pane" style={{ display: mobileTab === 'chat' ? 'flex' : 'none' }}>
+              <div className="mld-pane" style={{ display: tab === 'chat' ? 'flex' : 'none' }}>
                 <LiveChat
                   broadcastId={broadcastId}
                   isBroadcaster={isBroadcaster}
@@ -322,7 +324,7 @@ export default function LiveDetailPage() {
                 />
               </div>
               {broadcast.songRequestEnabled && (
-                <div className="mld-pane poll" style={{ display: mobileTab === 'poll' ? 'block' : 'none' }}>
+                <div className="mld-pane poll" style={{ display: tab === 'poll' ? 'block' : 'none' }}>
                   <LivePoll broadcastId={broadcastId} isBroadcaster={isBroadcaster} />
                 </div>
               )}

@@ -71,6 +71,7 @@ export function MobileFullPlayer({ open, onClose }) {
 
   if (!open || !currentTrack) return null;
 
+  const commitSeek = () => { if (dragPct != null) { seekTime(dragPct); setDragPct(null); } };
   const pct = dragPct ?? (duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0);
   const toggleLike = async () => {
     if (!user) { onClose(); navigate('/login'); return; }
@@ -82,11 +83,16 @@ export function MobileFullPlayer({ open, onClose }) {
   const idx = playlist.findIndex((t) => String(t.id) === String(currentTrack.id));
   const upNext = idx >= 0 ? playlist.slice(idx + 1) : playlist;
 
-  // body 로 포털: .m-app(position: fixed)이 쌓임 맥락을 만들어서, 그 안에 두면 바깥의 떠 있는 부품
+  // body 로 포털: 화면 틀 안쪽의 쌓임 맥락에 갇히면 바깥의 떠 있는 부품
   // (라이브 미니 플레이어 등)이 z-index 와 상관없이 위에 그려진다.
   return createPortal(
     <div className="m-full" role="dialog" aria-label="지금 재생 중"
-      onTouchStart={(e) => { startY.current = e.touches[0].clientY; }}
+      // 시트(다음 곡·관련 상품)도 포털이지만 React 이벤트는 여기까지 올라온다 — 시트 안 스크롤로 닫히지 않게
+      // 실제 DOM 이 플레이어 안인 터치만, 진행바 조작도 빼고 센다
+      onTouchStart={(e) => {
+        const inside = e.currentTarget.contains(e.target) && !e.target.closest?.('input[type="range"]');
+        startY.current = inside ? e.touches[0].clientY : null;
+      }}
       onTouchEnd={(e) => { if (startY.current != null && e.changedTouches[0].clientY - startY.current > 120) onClose(); startY.current = null; }}>
       <div className="m-full-bg" style={currentTrack.thumbnailUrl ? { backgroundImage: `url(${currentTrack.thumbnailUrl})` } : undefined} />
       <div className="m-full-head">
@@ -115,8 +121,9 @@ export function MobileFullPlayer({ open, onClose }) {
           aria-label="재생 위치"
           style={{ '--pct': `${pct}%` }}
           onChange={(e) => setDragPct(Number(e.target.value))}
-          onMouseUp={() => { if (dragPct != null) { seekTime(dragPct); setDragPct(null); } }}
-          onTouchEnd={() => { if (dragPct != null) { seekTime(dragPct); setDragPct(null); } }}
+          onPointerUp={commitSeek}
+          onTouchEnd={commitSeek}
+          onKeyUp={commitSeek}
         />
         <div className="m-full-times"><span>{fmt((pct / 100) * duration)}</span><span>{fmt(duration)}</span></div>
       </div>
