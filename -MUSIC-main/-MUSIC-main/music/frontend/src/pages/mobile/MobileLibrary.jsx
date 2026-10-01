@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/axiosInstance';
 import { usePlayer } from '../../context/PlayerContext';
+import { useAuth } from '../../context/AuthContext';
 import TrackRow, { toTrack } from '../../components/mobile/TrackRow';
 
 const TABS = [
@@ -14,6 +15,9 @@ const TABS = [
 export default function MobileLibrary() {
   const navigate = useNavigate();
   const { selectTrack } = usePlayer();
+  const { hasFeature } = useAuth() || {};
+  // 만들기 · 이름 변경은 플레이리스트 기능이 있는 이용권만 (보기 · 재생 · 정리는 누구나)
+  const canEdit = Boolean(hasFeature?.('PLAYLIST'));
   const [tab, setTab] = useState('liked');
   const [tracks, setTracks] = useState(null);
   const [playlists, setPlaylists] = useState(null);
@@ -82,7 +86,7 @@ export default function MobileLibrary() {
               <button className="m-btn primary small" disabled={!list.length} onClick={() => list.length && selectTrack(list[0], list)}>
                 <i className="fa-solid fa-play" /> 전체 재생
               </button>
-              <button className="m-icon-btn" aria-label="이름 변경" onClick={renamePlaylist}><i className="fa-solid fa-pen" /></button>
+              {canEdit && <button className="m-icon-btn" aria-label="이름 변경" onClick={renamePlaylist}><i className="fa-solid fa-pen" /></button>}
               <button className="m-icon-btn danger" aria-label="삭제" onClick={deletePlaylist}><i className="fa-solid fa-trash" /></button>
             </div>
           </div>
@@ -111,10 +115,18 @@ export default function MobileLibrary() {
       {tab === 'playlists' ? (
         playlists === null ? <div className="m-empty"><i className="fa-solid fa-compact-disc fa-spin" />불러오는 중…</div> : (
           <div className="m-list">
-            <button className="m-pl-row new" onClick={createPlaylist}>
-              <div className="m-pl-thumb"><i className="fa-solid fa-plus" /></div>
-              <span><strong>새 플레이리스트</strong></span>
-            </button>
+            {canEdit ? (
+              <button className="m-pl-row new" onClick={createPlaylist}>
+                <div className="m-pl-thumb"><i className="fa-solid fa-plus" /></div>
+                <span><strong>새 플레이리스트</strong></span>
+              </button>
+            ) : (
+              <button className="m-pl-row new" onClick={() => navigate('/payment')}>
+                <div className="m-pl-thumb"><i className="fa-solid fa-lock" /></div>
+                <span><strong>스탠다드 이상 이용권</strong><small>플레이리스트를 만들 수 있어요</small></span>
+                <i className="fa-solid fa-chevron-right" />
+              </button>
+            )}
             {playlists.map((p) => (
               <button key={p.id} className="m-pl-row" onClick={() => openDetail(p.id)}>
                 <div className="m-pl-thumb">{p.coverUrl ? <img src={p.coverUrl} alt="" /> : <i className="fa-solid fa-music" />}</div>

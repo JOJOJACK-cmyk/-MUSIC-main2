@@ -35,6 +35,7 @@ public class ShopService {
     private final ShopOrderRepository shopOrderRepository;
     private final MusicRepository musicRepository;
     private final TossPaymentClient tossPaymentClient;
+    private final PassEntitlementService entitlementService;
 
     /** 상품 등록/수정 입력값 */
     public record ProductForm(String name, String description, Integer price, Integer stock,
@@ -117,11 +118,13 @@ public class ShopService {
 
         String orderId = "shop_" + UUID.randomUUID().toString().replace("-", "");
         ShopOrder order = shopOrderRepository.save(new ShopOrder(orderId, user, product, qty,
-                s.recipientName(), s.phone(), s.zipcode(), s.address(), s.addressDetail(), s.memo()));
+                s.recipientName(), s.phone(), s.zipcode(), s.address(), s.addressDetail(), s.memo(),
+                entitlementService.of(user).storeDiscountPct()));
 
         Map<String, Object> body = new HashMap<>();
         body.put("orderId", orderId);
         body.put("amount", order.getTotalAmount());
+        body.put("discountPct", order.getDiscountPct());
         body.put("orderName", qty > 1 ? product.getName() + " × " + qty + "개" : product.getName());
         return body;
     }
@@ -324,6 +327,7 @@ public class ShopService {
         m.put("unitPrice", o.getUnitPrice());
         m.put("quantity", o.getQuantity());
         m.put("totalAmount", o.getTotalAmount());
+        m.put("discountPct", o.getDiscountPct() == null ? 0 : o.getDiscountPct());
         m.put("status", o.getStatus());
         m.put("recipientName", o.getRecipientName());
         m.put("phone", o.getPhone());

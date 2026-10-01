@@ -2,6 +2,8 @@ package com.example.music.controller;
 
 import com.example.music.entity.User;
 import com.example.music.security.AuthenticatedUserResolver;
+import com.example.music.service.PassEntitlementService;
+import com.example.music.service.PassFeature;
 import com.example.music.service.PlaylistService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,9 +24,17 @@ public class PlaylistController {
 
     private final PlaylistService playlistService;
     private final AuthenticatedUserResolver authenticatedUserResolver;
+    private final PassEntitlementService entitlementService;
 
     private User me(Authentication authentication) {
         return authenticatedUserResolver.resolveRequiredUser(authentication);
+    }
+
+    /** 만들기 · 이름 변경 · 곡 담기는 플레이리스트 기능이 있는 이용권만 (보기 · 재생 · 빼기 · 삭제는 이용권이 끝나도 가능) */
+    private User editor(Authentication authentication) {
+        User user = me(authentication);
+        entitlementService.require(user, PassFeature.PLAYLIST);
+        return user;
     }
 
     @Operation(summary = "내 플레이리스트 목록")
@@ -36,13 +46,13 @@ public class PlaylistController {
     @Operation(summary = "플레이리스트 만들기", description = "body: {name}")
     @PostMapping
     public ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, String> body, Authentication authentication) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(playlistService.create(me(authentication), body.get("name")));
+        return ResponseEntity.status(HttpStatus.CREATED).body(playlistService.create(editor(authentication), body.get("name")));
     }
 
     @Operation(summary = "플레이리스트 이름 변경", description = "body: {name}")
     @PatchMapping("/{id}")
     public Map<String, Object> rename(@PathVariable Long id, @RequestBody Map<String, String> body, Authentication authentication) {
-        return playlistService.rename(me(authentication), id, body.get("name"));
+        return playlistService.rename(editor(authentication), id, body.get("name"));
     }
 
     @Operation(summary = "플레이리스트 삭제")
@@ -61,6 +71,7 @@ public class PlaylistController {
     @Operation(summary = "곡 담기", description = "body: {musicId}. 이미 담긴 곡이면 409")
     @PostMapping("/{id}/tracks")
     public ResponseEntity<?> addTrack(@PathVariable Long id, @RequestBody Map<String, Object> body, Authentication authentication) {
+        User user = editor(authentication);
         Long musicId;
         try {
             musicId = Long.valueOf(String.valueOf(body.get("musicId")));
@@ -68,7 +79,7 @@ public class PlaylistController {
             return ResponseEntity.badRequest().body(Map.of("message", "musicId 형식이 올바르지 않습니다."));
         }
         try {
-            return ResponseEntity.ok(playlistService.addTrack(me(authentication), id, musicId));
+            return ResponseEntity.ok(playlistService.addTrack(user, id, musicId));
         } catch (PlaylistService.DuplicateTrackException e) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", e.getMessage()));
         }

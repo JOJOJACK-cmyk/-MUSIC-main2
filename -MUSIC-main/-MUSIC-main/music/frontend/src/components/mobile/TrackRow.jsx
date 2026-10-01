@@ -47,8 +47,9 @@ export default function TrackRow({ track, queue, rank, right, onRemove }) {
 
 /** 곡 ⋯ 시트: 좋아요 · 플레이리스트에 담기 (· 빼기) */
 export function TrackActions({ track, onClose, onRemove }) {
-  const { user } = useAuth() || {};
+  const { user, hasFeature } = useAuth() || {};
   const navigate = useNavigate();
+  const canPlaylist = Boolean(hasFeature?.('PLAYLIST'));
   const [playlists, setPlaylists] = useState(null);
   const [msg, setMsg] = useState('');
 
@@ -64,6 +65,7 @@ export function TrackActions({ track, onClose, onRemove }) {
   };
   const loadPlaylists = async () => {
     if (!user) return needLogin();
+    if (!canPlaylist) { onClose(); navigate('/payment'); return; }
     try {
       const r = await api.get('/api/playlists');
       setPlaylists(Array.isArray(r.data) ? r.data : []);
@@ -93,7 +95,10 @@ export function TrackActions({ track, onClose, onRemove }) {
       {playlists === null ? (
         <div className="m-actions">
           <button onClick={like}><i className="fa-solid fa-heart" /> 좋아요</button>
-          <button onClick={loadPlaylists}><i className="fa-solid fa-list" /> 플레이리스트에 담기</button>
+          <button onClick={loadPlaylists}>
+            <i className={`fa-solid ${user && !canPlaylist ? 'fa-lock' : 'fa-list'}`} /> 플레이리스트에 담기
+            {user && !canPlaylist && <small>스탠다드 이상</small>}
+          </button>
           {onRemove && (
             <button className="danger" onClick={() => { onRemove(); onClose(); }}>
               <i className="fa-solid fa-minus" /> 이 플레이리스트에서 빼기

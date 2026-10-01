@@ -18,7 +18,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * 실시간 TOP 100 — 최근 24시간 청취 기준.
+ * 실시간 TOP 100 — 최근 24시간 청취 기준. 남는 자리는 DB 누적 청취 순 → 유튜브 조회수 순으로 채운다.
  *  - 청취 점수는 시간대별 Redis ZSET(chart:h:{epochHour})에 쌓고, 조회 시 최근 24개 버킷을 합산한다.
  *    (예전 chart:realtime 은 한 번도 줄지 않는 누적 점수라 "실시간"이 아니었다)
  *  - 같은 사용자가 같은 곡을 반복 재생해도 한 시간에 1점만 반영 (반복 재생으로 차트 올리기 방지)
@@ -99,7 +99,30 @@ public class ChartService {
             used.add(m.getId());
         }
 
-        // 100위까지 유튜브 조회수 상위곡으로 채우기
+        // 최근 24시간 청취만으로는 자리가 남으면 DB 누적 청취기록 순으로 채운다.
+        // (청취가 뜸한 날에도 차트가 유튜브 조회수 순으로 통째로 바뀌지 않고, 이 서비스에서 실제로 들은 곡이 먼저 온다)
+        if (result.size() < CHART_SIZE) {
+            List<Object[]> allTime = listenLogRepository.findMusicRanking();
+            List<Long> ids = new ArrayList<>();
+            Map<Long, Long> counts = new HashMap<>();
+            for (Object[] row : allTime) {
+                Long id = ((Number) row[0]).longValue();
+                if (used.contains(id)) continue;
+                ids.add(id);
+                counts.put(id, ((Number) row[1]).longValue());
+                if (ids.size() >= CHART_SIZE - result.size()) break;
+            }
+            Map<Long, Music> musics = musicRepository.findAllById(ids).stream()
+                    .collect(Collectors.toMap(Music::getId, Function.identity()));
+            for (Long id : ids) {
+                Music m = musics.get(id);
+                if (m == null) continue;
+                result.add(toDto(rank++, m, counts.get(id)));
+                used.add(id);
+            }
+        }
+
+        // 그래도 남는 자리는 유튜브 조회수 상위곡으로 채우기
         if (result.size() < CHART_SIZE) {
             for (Music m : musicRepository.findTop100ByViewCountIsNotNullOrderByViewCountDesc()) {
                 if (result.size() >= CHART_SIZE) break;
