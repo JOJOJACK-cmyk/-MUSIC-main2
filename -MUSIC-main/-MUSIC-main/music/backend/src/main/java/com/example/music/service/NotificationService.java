@@ -55,10 +55,40 @@ public class NotificationService {
         return dto;
     }
 
+    /**
+     * 특정 사용자에게만 보이는 개인 알림 (예: 이용권 만료 임박).
+     * Redis notifications:user:{userId} 에 최근 30건 보관 — 프론트가 로그인 시/주기적으로 조회한다.
+     */
+    public NotificationDto publishToUser(Long userId, String type, String title, String message, String link) {
+        NotificationDto dto = new NotificationDto(
+                UUID.randomUUID().toString(), type, title, message, link, null, System.currentTimeMillis());
+        String key = userKey(userId);
+        try {
+            redisTemplate.opsForList().leftPush(key, objectMapper.writeValueAsString(dto));
+            redisTemplate.opsForList().trim(key, 0, MAX_RECENT - 1);
+        } catch (Exception e) {
+            log.warn("개인 알림 저장 실패 userId={}: {}", userId, e.getMessage());
+        }
+        log.info("🔔 개인 알림 [{}] userId={} {}", type, userId, title);
+        return dto;
+    }
+
+    public List<NotificationDto> getForUser(Long userId) {
+        return readList(userKey(userId));
+    }
+
+    private static String userKey(Long userId) {
+        return "notifications:user:" + userId;
+    }
+
     public List<NotificationDto> getRecent() {
+        return readList(RECENT_KEY);
+    }
+
+    private List<NotificationDto> readList(String key) {
         List<NotificationDto> result = new ArrayList<>();
         try {
-            List<String> raw = redisTemplate.opsForList().range(RECENT_KEY, 0, MAX_RECENT - 1);
+            List<String> raw = redisTemplate.opsForList().range(key, 0, MAX_RECENT - 1);
             if (raw != null) {
                 for (String json : raw) {
                     try {

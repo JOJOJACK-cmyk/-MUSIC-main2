@@ -25,4 +25,7 @@ public interface PassRepository extends JpaRepository<Pass, Long> {
 
     // 특정 유저의 모든 이용권 조회
     List<Pass> findByUser_Id(Long userId);
+
+    // 이용권 만료 임박 알림 대상 - 기간 안에 만료되는 유효 이용권
+    List<Pass> findByIsActiveTrueAndExpireDateBetween(LocalDateTime from, LocalDateTime to);
 }
