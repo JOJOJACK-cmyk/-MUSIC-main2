@@ -231,8 +231,10 @@ export default function LiveDetailPage() {
 
     const mq = window.matchMedia('(max-width: 1040px)');
 
+    // 영상이 작아도(창이 좁거나 투표가 열려도) 채팅이 읽을 만한 높이는 유지한다
+    const MIN_CHAT_HEIGHT = 560;
     const update = () => {
-      setChatHeight(mq.matches ? null : el.getBoundingClientRect().height);
+      setChatHeight(mq.matches ? null : Math.max(el.getBoundingClientRect().height, MIN_CHAT_HEIGHT));
     };
 
     update();
@@ -257,6 +259,8 @@ export default function LiveDetailPage() {
       <div
         className="content-section"
         style={{
+          // width 가 없으면 margin:auto 때문에 내용 폭으로 줄어들어(약 760px) 영상·채팅이 같이 작아진다
+          width: '100%',
           maxWidth: '1400px',
           margin: '0 auto',
           paddingBottom: '60px',

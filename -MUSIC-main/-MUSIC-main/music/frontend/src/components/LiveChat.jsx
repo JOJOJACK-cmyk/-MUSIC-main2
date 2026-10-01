@@ -45,13 +45,14 @@ const LiveChat = ({ broadcastId, isBroadcaster = false, onSendNotes }) => {
       await api.delete(`/api/broadcast/${broadcastId}/chat/mute/${c.senderId}`);
     } catch (e) { showModError(e, '채팅 금지 해제에 실패했어요'); }
   };
-  const endRef = useRef(null);
   const listRef = useRef(null);
   const stickRef = useRef(true);
 
   // 스크롤이 거의 바닥일 때만 자동 스크롤
   useEffect(() => {
-    if (stickRef.current) endRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // scrollIntoView 는 페이지 전체까지 스크롤해서(헤더가 밀려 올라감) 채팅 목록만 직접 내린다
+    const el = listRef.current;
+    if (stickRef.current && el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   }, [messages]);
 
   const onScroll = () => {
@@ -163,7 +164,6 @@ const LiveChat = ({ broadcastId, isBroadcaster = false, onSendNotes }) => {
             );
           })
         )}
-        <div ref={endRef} />
       </div>
 
       {modError && <div className="lc-mod-error">{modError}</div>}
