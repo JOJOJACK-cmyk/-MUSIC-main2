@@ -2204,6 +2204,24 @@ body {
 .lc-sender { font-size: 11px; font-weight: 700; color: #ff7ab6; }
 .lc-time { font-size: 9.5px; color: #55505c; }
 .lc-text { font-size: 13px; line-height: 1.45; color: #e3e0e6; word-break: break-word; }
+/* 채팅 관리 (방송자 전용 메뉴) */
+.lc-vote.lc-system { color: #c9b8ff; background: rgba(124,92,255,0.12); border-color: rgba(124,92,255,0.3); }
+.lc-mod { position: relative; flex-shrink: 0; opacity: 0; transition: opacity .15s; }
+.lc-msg:hover .lc-mod, .lc-mod:focus-within { opacity: 1; }
+.lc-mod-btn { background: none; border: none; color: #8d8494; cursor: pointer; padding: 4px 6px; font-size: 12px; }
+.lc-mod-btn:hover { color: #fff; }
+.lc-mod-menu {
+    position: absolute; right: 0; top: 22px; z-index: 5; min-width: 140px;
+    display: flex; flex-direction: column; background: #1e1e25; border: 1px solid #34343e;
+    border-radius: 8px; padding: 4px; box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+}
+.lc-mod-menu button {
+    background: none; border: none; color: #ddd; text-align: left; font-size: 12px;
+    padding: 7px 9px; border-radius: 6px; cursor: pointer; white-space: nowrap;
+}
+.lc-mod-menu button:hover { background: #2a2a33; color: #fff; }
+.lc-mod-error { margin-top: 8px; font-size: 11.5px; color: #ff8bab; text-align: center; }
+@media (hover: none) { .lc-mod { opacity: 1; } }
 .lc-input { display: flex; gap: 7px; margin-top: 10px; flex-shrink: 0; }
 .lc-input input {
     flex: 1; min-width: 0; border: 1px solid #34343e; background: #16161b; color: #fff;

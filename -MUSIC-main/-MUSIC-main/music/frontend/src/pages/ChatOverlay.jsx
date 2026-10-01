@@ -63,7 +63,7 @@ export default function ChatOverlay() {
       {messages
         .filter((m) => m.type !== 'ENTER' && m.type !== 'LEAVE')
         .map((chat, i) => {
-          if (chat.type === 'VOTE') {
+          if ((chat.type === 'VOTE' || chat.type === 'NOTICE')) {
             return (
               <div
                 key={`${chat.timestamp}-${i}`}

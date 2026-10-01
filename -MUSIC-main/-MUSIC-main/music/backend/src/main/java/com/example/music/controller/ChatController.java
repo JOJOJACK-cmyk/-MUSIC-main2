@@ -17,6 +17,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -29,6 +30,7 @@ public class ChatController {
     private final SongVoteService songVoteService;
     private final BroadcastService broadcastService;
     private final AuthenticatedUserResolver authenticatedUserResolver;
+    private final com.example.music.service.ChatModerationService chatModerationService;
 
     // "투표1", "투표 2", "vote3" 등 → 번호 추출
     private static final Pattern VOTE_CMD =
@@ -58,6 +60,8 @@ public class ChatController {
         // (클라이언트 sender 를 믿으면 방송자 사칭 → "!투표창", 이름 바꿔가며 무제한 투표가 가능해짐)
         Optional<User> me = authenticatedUserResolver.resolveOptionalUser(principal);
         message.setSender(me.map(AuthenticatedUserResolver::displayName).orElse(GUEST_NAME));
+        message.setSenderId(me.map(User::getId).orElse(null));
+        message.setMessageId(UUID.randomUUID().toString());
         message.setTimestamp(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
 
         if (ChatMessageDto.MessageType.ENTER.equals(message.getType())) {
@@ -67,6 +71,23 @@ public class ChatController {
         } else if (ChatMessageDto.MessageType.TALK.equals(message.getType())) {
             String text = message.getMessage() == null ? "" : message.getMessage().trim();
             if (text.isEmpty()) return;
+
+            Long roomBroadcastId = parseLong(message.getRoomId());
+            if (me.isPresent()) {
+                long remain = chatModerationService.remainingMuteSeconds(roomBroadcastId, me.get().getId());
+                if (remain > 0) {
+                    // 금지된 사용자에게만 안내하고 메시지는 방에 뿌리지 않는다
+                    ChatMessageDto notice = ChatMessageDto.builder()
+                            .roomId(message.getRoomId())
+                            .type(ChatMessageDto.MessageType.NOTICE)
+                            .message("채팅이 금지되어 있어요 (" + formatRemaining(remain) + " 남음)")
+                            .timestamp(message.getTimestamp())
+                            .messageId(UUID.randomUUID().toString())
+                            .build();
+                    messagingTemplate.convertAndSendToUser(principal.getName(), "/queue/chat-notice", notice);
+                    return;
+                }
+            }
             if (text.length() > MAX_MESSAGE_LENGTH) text = text.substring(0, MAX_MESSAGE_LENGTH);
             message.setMessage(text);
 
@@ -125,6 +146,12 @@ public class ChatController {
 
         log.info("[Chat] Room: {}, Sender: {}, Type: {}", message.getRoomId(), message.getSender(), message.getType());
         messagingTemplate.convertAndSend("/sub/chat/room/" + message.getRoomId(), message);
+    }
+
+    private static String formatRemaining(long seconds) {
+        if (seconds >= 3600) return (seconds / 3600) + "시간 " + ((seconds % 3600) / 60) + "분";
+        if (seconds >= 60) return (seconds / 60) + "분";
+        return seconds + "초";
     }
 
     private Long parseLong(String s) {

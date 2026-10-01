@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import useLiveChat from '../hooks/useLiveChat';
+import api from '../api/axiosInstance';
 
 const AV_COLORS = ['#E028B7', '#7C5CFF', '#2FB8FF', '#22C55E', '#F59E0B', '#FF5C7A', '#14B8A6'];
 const colorFor = (name = '') => {
@@ -9,7 +10,8 @@ const colorFor = (name = '') => {
   return AV_COLORS[h % AV_COLORS.length];
 };
 
-const LiveChat = ({ broadcastId }) => {
+// isBroadcaster: 방송자 본인이면 메시지마다 삭제 / 채팅 금지 메뉴를 보여준다 (권한은 서버가 다시 검증)
+const LiveChat = ({ broadcastId, isBroadcaster = false }) => {
   const { user } = useAuth();
   const sender =
     user?.nickname || user?.name || user?.email?.split('@')[0] || '게스트';
@@ -17,6 +19,31 @@ const LiveChat = ({ broadcastId }) => {
   const { messages, connected, sendMessage } = useLiveChat(broadcastId, { sender });
 
   const [message, setMessage] = useState('');
+  const [menuFor, setMenuFor] = useState(null); // 관리 메뉴가 열린 messageId
+  const [modError, setModError] = useState('');
+
+  const showModError = (e, fallback) => {
+    setModError(e?.response?.data?.message || fallback);
+    setTimeout(() => setModError(''), 4000);
+  };
+  const deleteMessage = async (c) => {
+    setMenuFor(null);
+    try {
+      await api.post(`/api/broadcast/${broadcastId}/chat/delete`, { messageId: c.messageId });
+    } catch (e) { showModError(e, '메시지를 삭제하지 못했어요'); }
+  };
+  const muteUser = async (c, minutes) => {
+    setMenuFor(null);
+    try {
+      await api.post(`/api/broadcast/${broadcastId}/chat/mute`, { userId: c.senderId, minutes });
+    } catch (e) { showModError(e, '채팅 금지에 실패했어요'); }
+  };
+  const unmuteUser = async (c) => {
+    setMenuFor(null);
+    try {
+      await api.delete(`/api/broadcast/${broadcastId}/chat/mute/${c.senderId}`);
+    } catch (e) { showModError(e, '채팅 금지 해제에 실패했어요'); }
+  };
   const endRef = useRef(null);
   const listRef = useRef(null);
   const stickRef = useRef(true);
@@ -63,14 +90,23 @@ const LiveChat = ({ broadcastId }) => {
           visibleMessages.map((c, i) => {
             if (c.type === 'VOTE') {
               return (
-                <div key={`${c.timestamp}-${i}`} className="lc-vote">
+                <div key={c.messageId || `${c.timestamp}-${i}`} className="lc-vote">
                   <i className="fa-solid fa-square-poll-vertical" /> {c.message}
                 </div>
               );
             }
+            if (c.type === 'NOTICE') {
+              return (
+                <div key={c.messageId || `${c.timestamp}-${i}`} className="lc-vote lc-system">
+                  <i className="fa-solid fa-shield-halved" /> {c.message}
+                </div>
+              );
+            }
             const mine = c.sender === sender;
+            // 방송자: 남의 메시지는 삭제 가능, 로그인 사용자(senderId 있음)는 채팅 금지 가능
+            const canModerate = isBroadcaster && !mine && c.messageId;
             return (
-              <div key={`${c.timestamp}-${i}`} className={`lc-msg ${mine ? 'mine' : ''}`}>
+              <div key={c.messageId || `${c.timestamp}-${i}`} className={`lc-msg ${mine ? 'mine' : ''}`}>
                 <span className="lc-av" style={{ background: colorFor(c.sender || '?') }}>
                   {(c.sender || '?').trim().charAt(0).toUpperCase()}
                 </span>
@@ -83,6 +119,29 @@ const LiveChat = ({ broadcastId }) => {
                   </div>
                   <div className="lc-text">{c.message}</div>
                 </div>
+                {canModerate && (
+                  <div className="lc-mod">
+                    <button
+                      className="lc-mod-btn"
+                      title="채팅 관리"
+                      onClick={() => setMenuFor(menuFor === c.messageId ? null : c.messageId)}
+                    >
+                      <i className="fa-solid fa-ellipsis-vertical" />
+                    </button>
+                    {menuFor === c.messageId && (
+                      <div className="lc-mod-menu">
+                        <button onClick={() => deleteMessage(c)}>메시지 삭제</button>
+                        {c.senderId && (
+                          <>
+                            <button onClick={() => muteUser(c, 10)}>10분 채팅 금지</button>
+                            <button onClick={() => muteUser(c, 720)}>이번 방송 동안 금지</button>
+                            <button onClick={() => unmuteUser(c)}>금지 해제</button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })
@@ -90,6 +149,7 @@ const LiveChat = ({ broadcastId }) => {
         <div ref={endRef} />
       </div>
 
+      {modError && <div className="lc-mod-error">{modError}</div>}
       <div className="lc-input">
         <input
           type="text"

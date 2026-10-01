@@ -30,9 +30,11 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         // 서버 → 클라이언트 구독 경로
         // 기존 채팅: /sub
         // 라이브 투표: /topic
+        // /queue : 특정 사용자에게만 보내는 개인 메시지 (/user/queue/... 로 구독)
         registry.enableSimpleBroker(
                 "/sub",
-                "/topic"
+                "/topic",
+                "/queue"
         );
 
         // 클라이언트 → 서버 발행 경로

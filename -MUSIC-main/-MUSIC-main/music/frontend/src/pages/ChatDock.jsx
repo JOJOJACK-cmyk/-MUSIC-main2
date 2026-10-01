@@ -55,7 +55,7 @@ export default function ChatDock() {
       {broadcast?.songRequestEnabled && (
         <LivePoll broadcastId={broadcastId} isBroadcaster={isBroadcaster} />
       )}
-      <LiveChat broadcastId={broadcastId} />
+      <LiveChat broadcastId={broadcastId} isBroadcaster={isBroadcaster} />
     </div>
   );
 }
