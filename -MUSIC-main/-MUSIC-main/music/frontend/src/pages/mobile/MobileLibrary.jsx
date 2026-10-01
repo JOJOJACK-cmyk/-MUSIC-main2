@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/axiosInstance';
 import { usePlayer } from '../../context/PlayerContext';
@@ -19,19 +19,24 @@ export default function MobileLibrary() {
   const [playlists, setPlaylists] = useState(null);
   const [detail, setDetail] = useState(null); // { id, name, tracks: [{itemId, music}] }
 
+  // 탭을 빠르게 바꿨을 때 이전 탭의 늦은 응답이 지금 탭 목록을 덮지 않도록 요청 번호로 거른다
+  const reqSeq = useRef(0);
   const load = useCallback(async () => {
+    const seq = ++reqSeq.current;
+    const stale = () => seq !== reqSeq.current;
     setDetail(null);
     try {
       if (tab === 'playlists') {
         setPlaylists(null);
         const r = await api.get('/api/playlists');
-        setPlaylists(Array.isArray(r.data) ? r.data : []);
+        if (!stale()) setPlaylists(Array.isArray(r.data) ? r.data : []);
       } else {
         setTracks(null);
         const r = await api.get(tab === 'liked' ? '/api/musics/liked' : '/api/musics/recent');
-        setTracks((Array.isArray(r.data) ? r.data : []).map(toTrack));
+        if (!stale()) setTracks((Array.isArray(r.data) ? r.data : []).map(toTrack));
       }
     } catch (_) {
+      if (stale()) return;
       if (tab === 'playlists') setPlaylists([]); else setTracks([]);
     }
   }, [tab]);

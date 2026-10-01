@@ -100,6 +100,8 @@ npm run pdf                       # docs/portfolio/StreamWave-portfolio.pdf
 
 이용권 결제, 스토어 주문·환불, 채팅 관리, 관리자 기능까지 실제 운영을 전제로 만들었습니다.
 
+> 기획부터 백엔드 · 프론트엔드 · 배포까지 **혼자 진행한 개인 프로젝트**입니다.
+
 ---
 
 ## ✨ 주요 기능
@@ -494,7 +496,7 @@ docs/
     <td align="center" width="160">
       <a href="https://github.com/cjsrudgh98-crypto"><img src="https://github.com/cjsrudgh98-crypto.png" width="100" alt="천경호" /></a>
       <br /><b>천경호</b>
-      <br /><sub>풀스택 (기획 · 백엔드 · 프론트엔드 · 배포)</sub>
+      <br /><sub>개인 프로젝트 · 1인 풀스택<br />(기획 · 백엔드 · 프론트엔드 · 배포)</sub>
     </td>
     <td>
 

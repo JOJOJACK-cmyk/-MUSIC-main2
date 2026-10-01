@@ -41,21 +41,26 @@ export default function ChartPage() {
     }
     setSearching(true);
     const ctrl = new AbortController();
-    const t = setTimeout(async () => {
+    // 입력 중에는 DB 에서만(youtube=false), 검색어가 1.5초 그대로면 유튜브 보강까지 (할당량 보호)
+    let fullDone = false;
+    const run = async (youtube) => {
       try {
         const res = await axios.get('/api/musics/search', {
-          params: { keyword: kw },
+          params: { keyword: kw, youtube },
           signal: ctrl.signal,
         });
-        const items = Array.isArray(res.data) ? res.data : [];
-        setSearchResults(items);
+        if (!youtube && fullDone) return;
+        if (youtube) fullDone = true;
+        setSearchResults(Array.isArray(res.data) ? res.data : []);
       } catch (e) {
-        if (e.name !== 'CanceledError' && e.code !== 'ERR_CANCELED') setSearchResults([]);
+        if (e.name !== 'CanceledError' && e.code !== 'ERR_CANCELED' && !fullDone) setSearchResults([]);
       } finally {
-        setSearching(false);
+        if (!youtube) setSearching(false);
       }
-    }, 500);
-    return () => { clearTimeout(t); ctrl.abort(); };
+    };
+    const t1 = setTimeout(() => run(false), 400);
+    const t2 = setTimeout(() => run(true), 1500);
+    return () => { clearTimeout(t1); clearTimeout(t2); ctrl.abort(); };
   }, [searchTerm]);
 
   const handleSelectMusic = (music) =>
