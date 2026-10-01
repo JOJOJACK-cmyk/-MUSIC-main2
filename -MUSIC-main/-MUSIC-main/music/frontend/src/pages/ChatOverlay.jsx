@@ -63,6 +63,35 @@ export default function ChatOverlay() {
       {messages
         .filter((m) => m.type !== 'ENTER' && m.type !== 'LEAVE')
         .map((chat, i) => {
+          if (chat.type === 'DONATION') {
+            // 음표 알림 — 방송 화면에서 눈에 띄게 (음표 모양 배지 + 통통 튀는 애니메이션)
+            return (
+              <div
+                key={chat.messageId || `${chat.timestamp}-${i}`}
+                style={{
+                  alignSelf: 'flex-start',
+                  maxWidth: '96%',
+                  background: 'linear-gradient(135deg, rgba(255,47,125,0.92), rgba(124,92,255,0.92))',
+                  borderRadius: '18px 18px 18px 4px',
+                  padding: '10px 14px',
+                  color: '#fff',
+                  boxShadow: '0 6px 20px rgba(255,47,125,0.35)',
+                  animation: 'noteIn 0.45s cubic-bezier(.2,1.4,.4,1)',
+                }}
+              >
+                <div style={{ fontSize: size, fontWeight: 800, textShadow: shadow }}>
+                  <span style={{ display: 'inline-block', marginRight: 6, animation: 'noteBob 1.2s ease-in-out infinite' }}>♪</span>
+                  {chat.sender} 님 음표 {Number(chat.amount || 0).toLocaleString('ko-KR')}개
+                  <span style={{ display: 'inline-block', marginLeft: 6, animation: 'noteBob 1.2s ease-in-out .3s infinite' }}>♫</span>
+                </div>
+                {chat.message && (
+                  <div style={{ fontSize: size - 1, marginTop: 4, textShadow: shadow, wordBreak: 'break-word' }}>
+                    {chat.message}
+                  </div>
+                )}
+              </div>
+            );
+          }
           if ((chat.type === 'VOTE' || chat.type === 'NOTICE')) {
             return (
               <div
@@ -125,6 +154,8 @@ export default function ChatOverlay() {
       <div ref={endRef} />
       <style>{`
         @keyframes chatIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+        @keyframes noteIn { from { opacity: 0; transform: scale(.6) translateY(10px); } to { opacity: 1; transform: none; } }
+        @keyframes noteBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
         ::-webkit-scrollbar { display: none; }
       `}</style>
     </div>

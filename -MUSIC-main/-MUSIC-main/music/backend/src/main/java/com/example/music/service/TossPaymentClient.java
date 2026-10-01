@@ -110,5 +110,48 @@ public class TossPaymentClient {
         return new TossConfirmResult(approvedAmount, method, orderName, status);
     }
 
+    /**
+     * 결제 취소(전액 환불). 실패 시 {@link TossPaymentException}.
+     * 승인 URL(.../v1/payments/confirm)에서 기본 경로를 얻어 .../v1/payments/{paymentKey}/cancel 을 호출한다.
+     */
+    public void cancel(String paymentKey, String reason) {
+        String basic = Base64.getEncoder()
+                .encodeToString((secretKey + ":").getBytes(StandardCharsets.UTF_8));
+        String base = confirmUrl.endsWith("/confirm")
+                ? confirmUrl.substring(0, confirmUrl.length() - "/confirm".length())
+                : "https://api.tosspayments.com/v1/payments";
+
+        String body;
+        try {
+            body = objectMapper.writeValueAsString(Map.of("cancelReason", reason == null ? "고객 요청" : reason));
+        } catch (Exception e) {
+            throw new TossPaymentException("취소 요청 본문 생성 실패");
+        }
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(base + "/" + java.net.URLEncoder.encode(paymentKey, StandardCharsets.UTF_8) + "/cancel"))
+                .header("Authorization", "Basic " + basic)
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(15))
+                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
+                .build();
+
+        HttpResponse<String> response;
+        try {
+            response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            log.error("[Toss] 결제 취소 통신 오류", e);
+            throw new TossPaymentException("결제 서버와 통신할 수 없습니다.");
+        }
+        if (response.statusCode() != 200) {
+            String message = "결제 취소에 실패했습니다.";
+            try {
+                message = objectMapper.readTree(response.body()).path("message").asText(message);
+            } catch (Exception ignore) {}
+            log.warn("[Toss] 결제 취소 실패 status={} message={}", response.statusCode(), message);
+            throw new TossPaymentException(message);
+        }
+    }
+
     public record TossConfirmResult(long amount, String method, String orderName, String status) {}
 }

@@ -17,6 +17,7 @@ import ChartPage from './pages/ChartPage';
 import LivePage from './pages/LivePage';
 import ChatOverlay from './pages/ChatOverlay';
 import ChatDock from './pages/ChatDock';
+import NoteResultPage from './pages/NoteResultPage';
 import LibraryPage from './pages/LibraryPage';
 import PaymentPage from './pages/PaymentPage';
 import PaymentSuccessPage from './pages/PaymentSuccessPage';
@@ -217,6 +218,14 @@ function AppShell() {
                   }
                 />
                 <Route path="/live/:broadcastId" element={<LiveDetailPage />} />
+                <Route
+                  path="/notes/result"
+                  element={
+                    <ProtectedRoute>
+                      <NoteResultPage />
+                    </ProtectedRoute>
+                  }
+                />
               </Routes>
             </main>
 

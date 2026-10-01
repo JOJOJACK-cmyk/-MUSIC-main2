@@ -2453,3 +2453,161 @@ body {
 .card-actions .pl-add-menu .pl-add-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-actions .pl-add-menu .pl-add-item small { color: var(--text-sub); font-size: 11px; flex-shrink: 0; }
 .card-actions .pl-add-menu .pl-add-new { justify-content: flex-start; color: var(--primary-hover); border-top: 1px solid #2c2c35; border-radius: 0 0 6px 6px; margin-top: 4px; }
+
+/* ==========================================
+   💳 토스 결제 모달 (음표·스토어 공용)
+   ========================================== */
+.toss-modal-backdrop {
+    position: fixed; inset: 0; z-index: 10000; background: rgba(0, 0, 0, 0.6);
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.toss-modal {
+    width: 520px; max-width: 100%; max-height: 92vh; overflow-y: auto;
+    background: #fff; color: #191f28; border-radius: 16px; padding: 18px 18px 14px;
+}
+.toss-modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.toss-modal-head strong { font-size: 16px; }
+.toss-modal-close { background: none; border: none; font-size: 18px; color: #8b95a1; cursor: pointer; padding: 4px; }
+.toss-modal-amount {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+    background: #f2f4f6; border-radius: 10px; padding: 10px 12px; margin-bottom: 6px; font-size: 13px;
+}
+.toss-modal-amount b { font-size: 18px; white-space: nowrap; }
+.toss-modal-error { color: #e11d48; font-size: 13px; }
+.toss-modal-pay {
+    width: 100%; margin-top: 12px; padding: 13px 0; border: none; border-radius: 10px;
+    color: #fff; font-size: 15px; font-weight: 800; cursor: pointer;
+}
+.toss-modal-pay:disabled { cursor: default; }
+.toss-modal-note { font-size: 11px; color: #8b95a1; margin: 8px 0 0; text-align: center; }
+
+/* ==========================================
+   ♪ 음표 (라이브 후원)
+   ========================================== */
+.note-modal {
+    position: relative; overflow: hidden;
+    width: 420px; max-width: 100%; border-radius: 22px; padding: 22px 20px 16px; color: #fff;
+    background:
+        radial-gradient(circle at 15% 0%, rgba(255, 47, 125, 0.35), transparent 55%),
+        radial-gradient(circle at 100% 100%, rgba(124, 92, 255, 0.35), transparent 55%),
+        #17111a;
+    border: 1px solid rgba(255, 47, 125, 0.35);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+}
+.note-modal-deco { position: absolute; inset: 0; pointer-events: none; }
+.note-modal-deco span {
+    position: absolute; bottom: -24px; font-size: 22px; color: rgba(255, 158, 196, 0.35);
+    animation: noteFloat 6s linear infinite;
+}
+.note-modal-deco span:nth-child(1) { left: 8%;  animation-delay: 0s; }
+.note-modal-deco span:nth-child(2) { left: 28%; animation-delay: 1.4s; font-size: 18px; }
+.note-modal-deco span:nth-child(3) { left: 52%; animation-delay: 2.8s; }
+.note-modal-deco span:nth-child(4) { left: 74%; animation-delay: 0.7s; font-size: 26px; }
+.note-modal-deco span:nth-child(5) { left: 90%; animation-delay: 3.6s; font-size: 16px; }
+@keyframes noteFloat {
+    0%   { transform: translateY(0) rotate(0deg); opacity: 0; }
+    15%  { opacity: 1; }
+    100% { transform: translateY(-420px) rotate(25deg); opacity: 0; }
+}
+.note-modal > *:not(.note-modal-deco) { position: relative; }
+.note-modal-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.note-modal-head h3 { margin: 0; font-size: 18px; font-weight: 800; }
+.note-modal-head p { margin: 2px 0 0; font-size: 12.5px; color: #cdb6c6; }
+.note-modal-head .toss-modal-close { margin-left: auto; align-self: flex-start; color: #a98db9; }
+.note-badge {
+    flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: 19px;
+    background: linear-gradient(135deg, #ff2f7d, #7c5cff); box-shadow: 0 6px 18px rgba(255, 47, 125, 0.45);
+}
+.note-presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+.note-preset {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); color: #efe6ec;
+    border-radius: 14px 14px 14px 4px; padding: 9px 4px; font-size: 13px; font-weight: 700; cursor: pointer;
+    transition: transform 0.12s, border-color 0.12s, background 0.12s;
+}
+.note-preset:hover { transform: translateY(-2px); border-color: rgba(255, 47, 125, 0.6); }
+.note-preset.active { background: linear-gradient(135deg, rgba(255, 47, 125, 0.35), rgba(124, 92, 255, 0.35)); border-color: #ff2f7d; }
+.note-preset-icon { font-size: 18px; color: #ff9ec4; line-height: 1; }
+.note-field { display: block; margin-bottom: 12px; }
+.note-field > span { display: block; font-size: 12px; color: #a98db9; margin-bottom: 5px; }
+.note-input-wrap {
+    display: flex; align-items: center; gap: 6px; background: #120c14;
+    border: 1px solid #3a2a38; border-radius: 10px; padding: 0 10px;
+}
+.note-input-wrap:focus-within, .note-message:focus { border-color: #ff2f7d; }
+.note-input-icon { color: #ff5c9a; font-size: 16px; }
+.note-input-wrap input {
+    flex: 1; min-width: 0; background: none; border: none; outline: none; color: #fff; padding: 10px 0; font-size: 14px;
+}
+.note-input-unit { font-size: 12px; color: #8d7896; }
+.note-message {
+    width: 100%; box-sizing: border-box; background: #120c14; border: 1px solid #3a2a38; color: #fff;
+    border-radius: 10px; padding: 10px; font-size: 13px; outline: none;
+}
+.note-error { font-size: 12.5px; color: #ff8bab; margin: -4px 0 10px; }
+.note-send {
+    width: 100%; border: none; border-radius: 999px; padding: 13px 0; color: #fff; font-size: 15px; font-weight: 800;
+    cursor: pointer; background: linear-gradient(135deg, #ff2f7d, #7c5cff); box-shadow: 0 8px 22px rgba(255, 47, 125, 0.35);
+}
+.note-send small { font-weight: 600; opacity: 0.85; }
+.note-send:disabled { opacity: 0.55; cursor: default; box-shadow: none; }
+.note-hint { font-size: 11px; color: #8d7896; text-align: center; margin: 10px 0 0; }
+
+/* 라이브 페이지 "음표 보내기" 버튼 */
+.note-open-btn {
+    display: inline-flex; align-items: center; gap: 6px; border: none; cursor: pointer;
+    background: linear-gradient(135deg, #ff2f7d, #7c5cff); color: #fff; font-size: 12.5px; font-weight: 800;
+    border-radius: 999px; padding: 6px 14px; box-shadow: 0 4px 14px rgba(255, 47, 125, 0.35);
+}
+.note-open-btn:hover { filter: brightness(1.1); }
+.note-open-icon { display: inline-block; font-size: 15px; animation: noteWiggle 1.6s ease-in-out infinite; }
+@keyframes noteWiggle { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-12deg); } 75% { transform: rotate(12deg); } }
+
+/* 채팅 입력창 옆 ♪ 버튼 */
+.lc-input .lc-note-btn {
+    flex-shrink: 0; width: 40px; border: none; border-radius: 9px; cursor: pointer; font-size: 18px; color: #fff;
+    background: linear-gradient(135deg, #ff2f7d, #7c5cff);
+}
+
+/* 채팅 속 음표 알림 */
+.lc-note {
+    position: relative; overflow: hidden; align-self: stretch;
+    border-radius: 16px 16px 16px 4px; padding: 10px 12px;
+    background: linear-gradient(135deg, rgba(255, 47, 125, 0.28), rgba(124, 92, 255, 0.28));
+    border: 1px solid rgba(255, 47, 125, 0.5);
+    animation: lcNoteIn 0.45s cubic-bezier(.2, 1.4, .4, 1);
+}
+@keyframes lcNoteIn { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: none; } }
+.lc-note-notes { position: absolute; right: 8px; top: 4px; display: flex; gap: 4px; color: rgba(255, 158, 196, 0.55); font-size: 13px; }
+.lc-note-notes span { animation: noteBobSite 1.4s ease-in-out infinite; }
+.lc-note-notes span:nth-child(2) { animation-delay: 0.2s; }
+.lc-note-notes span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes noteBobSite { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+.lc-note-head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #f6e8f1; padding-right: 48px; }
+.lc-note-icon {
+    flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #ff2f7d, #7c5cff); color: #fff; font-size: 15px;
+}
+.lc-note-amount { color: #ffd1e4; font-size: 14px; }
+.lc-note-msg { margin: 6px 0 0 34px; font-size: 13px; color: #fff; word-break: break-word; }
+
+/* 음표 결제 결과 페이지 */
+.note-result { min-height: 70vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.note-result-card {
+    width: 420px; max-width: 92vw; text-align: center; color: #efe6ec; border-radius: 22px; padding: 34px 26px;
+    background: radial-gradient(circle at 50% 0%, rgba(255, 47, 125, 0.28), transparent 60%), #17111a;
+    border: 1px solid rgba(255, 47, 125, 0.35);
+}
+.note-result-card h2 { margin: 0 0 10px; font-size: 19px; }
+.note-result-card p { margin: 0 0 22px; font-size: 14px; color: #cdb6c6; }
+.note-result-icon {
+    width: 72px; height: 72px; margin: 0 auto 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 36px; color: #fff; background: linear-gradient(135deg, #ff2f7d, #7c5cff); box-shadow: 0 10px 30px rgba(255, 47, 125, 0.45);
+}
+.note-result-card.error .note-result-icon { background: #3a2a38; box-shadow: none; }
+.note-bounce { display: inline-block; animation: noteBobSite 0.8s ease-in-out infinite; }
+.note-result-card button {
+    border: none; border-radius: 999px; padding: 10px 20px; font-size: 13px; font-weight: 800; color: #fff; cursor: pointer;
+    background: linear-gradient(135deg, #ff2f7d, #7c5cff);
+}
