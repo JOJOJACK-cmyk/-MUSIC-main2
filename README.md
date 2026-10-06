@@ -30,8 +30,78 @@
 
 ---
 
+## 🙋 내가 담당한 부분
+
+> 이 저장소는 팀 프로젝트 **StreamWave**를 포크한 것입니다. 원본: [cjsrudgh98-crypto/-MUSIC-main2](https://github.com/cjsrudgh98-crypto/-MUSIC-main2)
+>
+> - **협업 기간**: 2026-08-24 ~ 2026-09-09 (제 커밋 기준). 이후 결제·스토어·이용권 등급제·모바일 전용 화면·보안 패치 등은 원본 저장소 소유자가 단독으로 확장했습니다. 아래 본문의 "개인 프로젝트" 표기는 그 이후 상태를 기준으로 한 것입니다.
+> - 이 섹션에는 **커밋 이력으로 확인되는 제 작업만** 적었습니다. (Git 작성자명 `sy` · `JOJOJACK-cmyk`)
+> - 이 섹션 아래의 본문은 원본 저장소 소유자가 작성한 README 그대로입니다.
+
+| | |
+|---|---|
+| **역할** | 라이브 방송 백엔드 · 운영 배포 인프라 (+ 실시간 채팅/투표 초기 구현) |
+| **기간** | 2026-08-24 ~ 2026-09-09 |
+| **기술** | Spring Boot · Redis · SRS(RTMP/HLS) · WebSocket(STOMP) · Docker Compose · Caddy · React |
+
+### 1. 라이브 방송 파이프라인 (SRS)
+
+- OBS(RTMP) → SRS → HLS 재생 구조를 구성했습니다. `docker-compose`와 `srs.conf`를 작성하고 HLS 조각·윈도 길이를 조정했습니다. SRS 관리 포트(1985)는 `127.0.0.1`에만 열었습니다.
+- SRS `on_publish` / `on_unpublish` 웹훅을 받는 `SrsCallbackController`를 만들어, **실제 송출 시작·종료에 맞춰 방송 상태(ON/OFF)를 동기화**했습니다. 방송이 끝나면 해당 방송의 신청곡·투표 Redis 데이터도 함께 정리합니다.
+- SRS HTTP API(`/api/v1/streams/`)로 송출 중인 스트림을 감지하는 `SrsLiveStatusService`를 만들었습니다. SRS가 재시작 중이거나 죽어 있어도 라이브 목록 API가 500이 되지 않고 빈 목록을 돌려주도록 방어했고, HLS 주소는 환경별 설정(`hls.base-url`)으로 분리했습니다.
+- 라이브 목록 API(상태 · 시청자 수 · 썸네일 · HLS 주소)와 프론트 라이브 목록 페이지를 구현했습니다.
+
+### 2. 실시간 시청자 수 (Redis)
+
+- `LiveViewerService`: 시청자 heartbeat를 Redis **Sorted Set**(score = 마지막 접속 시각)에 기록하고, 15초 동안 heartbeat가 없으면 `removeRangeByScore`로 정리한 뒤 `zCard`로 현재 시청자 수를 셉니다. 방송 키에는 TTL을 둬 아무도 보지 않으면 사라지게 했습니다.
+
+### 3. 실시간 채팅 · 신청곡 투표 (초기 구현)
+
+- STOMP/SockJS 엔드포인트(`/ws-stomp`)와 구독·발행 경로(`/topic`, `/app`)를 구성했습니다.
+- `SongVoteService`: 사용자별 투표 기록을 Redis **Set**에 저장해 같은 곡 중복 투표를 막고, **Sorted Set**의 `incrementScore`로 곡별 득표를 집계합니다. 투표 · 랭킹 조회 · 다음 곡 선택 엔드포인트와 프론트 `LiveChat` · `LiveDetailPage`를 함께 만들었습니다.
+
+### 4. 운영 배포 (2026-09-09)
+
+- **Docker Compose 운영 스택**: MySQL(헬스체크) · Redis(AOF) · SRS · Spring Boot · Caddy. MySQL과 Redis는 외부 포트를 열지 않고 도커 내부 네트워크로만 접근합니다. (Oracle Cloud ARM / Ubuntu 22.04 기준)
+- **Caddy 리버스 프록시 · 자동 HTTPS**: `/api` · WebSocket · OAuth는 Spring으로, HLS(`.m3u8` / `.ts`)는 SRS로, 나머지는 프론트 정적 파일로 라우팅합니다.
+- 백엔드 · 프론트 `Dockerfile`과 `application-prod.properties`(프로파일 분리: DB · Redis · SRS 호스트를 서비스명으로, 세션 쿠키 `secure` / `http-only` / `same-site`)를 작성하고, OAuth 리다이렉트 주소와 CORS 허용 origin을 환경변수로 뺐습니다(`SecurityConfig`).
+
+### 5. 데이터 · 인증 (백엔드)
+
+- **JPA 연관관계 · 제약조건 정리**: `User` · `Pass` · `Payment` · `ListenLog` 엔티티와 관련 Repository · Service.
+- **`AuthenticatedUserResolver`**: OAuth2(Google · Kakao · Naver), 세션, STOMP `Principal`에서 로그인 사용자를 찾는 공통 컴포넌트. 인증 실패 시 JSON 401/403을 내려주는 `CustomAuthenticationEntryPoint` · `CustomAccessDeniedHandler`와 프론트 `ProtectedRoute`도 작성했습니다.
+- **Redis TOP100 · 음악 스냅샷 (초기 구현)**: 청취 로그를 집계해 Redis(`music:ranking:top100`)에 저장하고 `@Scheduled`로 주기 갱신했습니다.
+- **AWS S3 업로드 (초기 연동)**: `S3Controller` · `S3Service`.
+- **YouTube IFrame Player 연동 (초기 구현)**: `YouTubePlayer` · `PlayerContext`.
+
+> ※ 위 5번의 Redis TOP100 · S3 · YouTube 플레이어와 3번의 투표 로직은 이후 원본 저장소 소유자가 재설계·확장해, 현재 코드에는 제 코드가 거의 남아 있지 않습니다. 당시 구현은 아래 커밋 링크에서 확인할 수 있습니다.
+
+### 이후 원본 저장소 소유자가 추가·확장한 것 (제 작업이 아님)
+
+결제(토스페이먼츠) · 이용권 등급제 · 스토어 · 음표 후원 · 모바일 전용 화면 · 채팅 관리 · 실시간 차트 개편 · 소셜 로그인 계정 연결 보안 · **송출 키 검증(방송 탈취 방지)** · Swagger 비공개 · Rate Limit · 테스트 코드. 제가 만든 `on_publish` 웹훅은 처음에는 송출을 항상 허용했고, 송출 키 검증은 10월 1일 이후 추가됐습니다.
+
+### 관련 커밋
+
+| 날짜 | 내용 | 커밋 |
+|---|---|---|
+| 08-24 | SRS RTMP/HLS Docker Compose · HLS 설정 | [`322f16b`](https://github.com/cjsrudgh98-crypto/-MUSIC-main2/commit/322f16b) · [`7bfff8f`](https://github.com/cjsrudgh98-crypto/-MUSIC-main2/commit/7bfff8f) |
+| 08-24 | YouTube 플레이어 연동 | [`5516acf`](https://github.com/cjsrudgh98-crypto/-MUSIC-main2/commit/5516acf) |
+| 08-24 | AWS S3 업로드 | [`5f236fb`](https://github.com/cjsrudgh98-crypto/-MUSIC-main2/commit/5f236fb) |
+| 08-25 | Redis 스냅샷 스케줄러 · TOP100 · 청취 로그 | [`40122b6`](https://github.com/cjsrudgh98-crypto/-MUSIC-main2/commit/40122b6) · [`0b3774a`](https://github.com/cjsrudgh98-crypto/-MUSIC-main2/commit/0b3774a) |
+| 08-26 | SRS 포트를 localhost로 제한 | [`9b1c73a`](https://github.com/cjsrudgh98-crypto/-MUSIC-main2/commit/9b1c73a) |
+| 08-27 | JPA 연관관계 · DB 제약조건 정리 | [`00e62f3`](https://github.com/cjsrudgh98-crypto/-MUSIC-main2/commit/00e62f3) |
+| 08-28 | Redis 인프라 · 인증 사용자 resolver | [`b9775ff`](https://github.com/cjsrudgh98-crypto/-MUSIC-main2/commit/b9775ff) |
+| 08-28 | 라이브 송출 상태 감지 | [`64b1f0e`](https://github.com/cjsrudgh98-crypto/-MUSIC-main2/commit/64b1f0e) |
+| 09-01 | 시청자 수 집계 · 라이브 목록 | [`cc039ca`](https://github.com/cjsrudgh98-crypto/-MUSIC-main2/commit/cc039ca) |
+| 09-01 | 실시간 채팅 · 신청곡 투표 · 방송자 제어 | [`2f73535`](https://github.com/cjsrudgh98-crypto/-MUSIC-main2/commit/2f73535) |
+| 09-02 | 인증 가드 · SRS 웹훅 연동 | [`3632862`](https://github.com/cjsrudgh98-crypto/-MUSIC-main2/commit/3632862) |
+| 09-09 | 운영 배포 구성 | [`docker-compose.prod.yml`](-MUSIC-main/-MUSIC-main/music/docker-compose.prod.yml) · [`Caddyfile`](-MUSIC-main/-MUSIC-main/music/infra/caddy/Caddyfile) · [`srs.prod.conf`](-MUSIC-main/-MUSIC-main/music/infra/srs/srs.prod.conf) · [`application-prod.properties`](-MUSIC-main/-MUSIC-main/music/backend/src/main/resources/application-prod.properties) |
+
+---
+
 ## 목차
 
+- [내가 담당한 부분](#-내가-담당한-부분)
 - [시연 영상 · 포트폴리오](#-시연-영상--포트폴리오)
 - [프로젝트 소개](#-프로젝트-소개)
 - [주요 기능](#-주요-기능)
