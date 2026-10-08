@@ -17,7 +17,6 @@
 
 <br />
 
-<a href="https://github.com/cjsrudgh98-crypto/-MUSIC-main2/raw/main/docs/portfolio/StreamWave-portfolio.pdf"><img src="https://img.shields.io/badge/📄_포트폴리오_PDF-다운로드-e0207f?style=for-the-badge" alt="포트폴리오 PDF 다운로드" /></a>
 <a href="docs/demo/StreamWave-demo.mp4"><img src="https://img.shields.io/badge/▶_시연_영상-2분_29초-111827?style=for-the-badge" alt="시연 영상 보기" /></a>
 
 </div>
@@ -32,7 +31,7 @@
 
 ## 목차
 
-- [시연 영상 · 포트폴리오](#-시연-영상--포트폴리오)
+- [시연 영상](#-시연-영상)
 - [프로젝트 소개](#-프로젝트-소개)
 - [주요 기능](#-주요-기능)
 - [화면](#-화면)
@@ -46,12 +45,11 @@
 
 ---
 
-## 🎬 시연 영상 · 포트폴리오
+## 🎬 시연 영상
 
 | | |
 |---|---|
 | ▶ **시연 영상** | [StreamWave-demo.mp4](docs/demo/StreamWave-demo.mp4) (2분 29초, 1280×720). 자막으로 단계를 안내하므로 소리 없이 볼 수 있습니다. |
-| 📄 **포트폴리오 PDF** | [StreamWave-portfolio.pdf](https://github.com/cjsrudgh98-crypto/-MUSIC-main2/raw/main/docs/portfolio/StreamWave-portfolio.pdf) (A4 8쪽): 개요 · 화면 · 시스템 구조 · 기술적 도전과 해결 8가지 · 테스트 |
 
 **영상 순서**
 
@@ -101,7 +99,7 @@ npm run pdf                       # docs/portfolio/StreamWave-portfolio.pdf
 
 등급별 이용권(라이트 · 스탠다드 · 프리미엄) 결제, 스토어 주문·환불, 채팅 관리, 관리자 기능까지 실제 운영을 전제로 만들었습니다.
 
-> 기획부터 백엔드 · 프론트엔드 · 배포까지 **혼자 진행한 개인 프로젝트**입니다.
+> **팀 프로젝트**입니다. 팀원별 담당은 [개발자](#-개발자) 섹션에 정리했습니다.
 
 ---
 
@@ -518,26 +516,12 @@ docs/
 
 ---
 
-## 👤 개발자
+## 👥 개발자
 
-<table>
-  <tr>
-    <td align="center" width="160">
-      <a href="https://github.com/cjsrudgh98-crypto"><img src="https://github.com/cjsrudgh98-crypto.png" width="100" alt="천경호" /></a>
-      <br /><b>천경호</b>
-      <br /><sub>개인 프로젝트 · 1인 풀스택<br />(기획 · 백엔드 · 프론트엔드 · 배포)</sub>
-    </td>
-    <td>
-
-| | |
-|---|---|
-| 📞 **연락처** | 010-7757-5062 |
-| ✉️ **이메일** | [cjsrudgh98@gmail.com](mailto:cjsrudgh98@gmail.com) |
-| 🐙 **GitHub** | [@cjsrudgh98-crypto](https://github.com/cjsrudgh98-crypto) |
-
-    </td>
-  </tr>
-</table>
+| | 이름 | 담당 |
+|:-:|:-:|---|
+| <a href="https://github.com/cjsrudgh98-crypto"><img src="https://github.com/cjsrudgh98-crypto.png" width="80" alt="천경호" /></a> | **천경호**<br />[@cjsrudgh98-crypto](https://github.com/cjsrudgh98-crypto) | 음악 스트리밍(YouTube 카탈로그 · 차트 · 검색 · 플레이어), 이용권 · 결제, 음표 후원, 스토어, 실시간 채팅 · 투표, 회원 · 관리자, 모바일 화면 등 서비스 전반 |
+| <a href="https://github.com/JOJOJACK-cmyk"><img src="https://github.com/JOJOJACK-cmyk.png" width="80" alt="JOJOJACK" /></a> | **JOJOJACK**<br />[@JOJOJACK-cmyk](https://github.com/JOJOJACK-cmyk) | 라이브 방송 서버 연동(SRS RTMP → HLS, 송출 시작 · 종료 콜백, 방송 상태 감지, Redis 시청자 수 집계), 라이브 상세 화면, 인증 사용자 판별 로직, JPA 연관관계 · DB 제약 정리, 운영 배포 환경(Docker Compose · Caddy) |
 
 ---
 
