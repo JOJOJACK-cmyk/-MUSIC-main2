@@ -77,7 +77,7 @@ public class User {
             String providerId
     ) {
         this.email = email;
-        this.password = ***REMOVED***
+        this.password = password;
         this.nickname = nickname;
         this.role = role != null ? role : "ROLE_USER";
         this.profileImageUrl = profileImageUrl;

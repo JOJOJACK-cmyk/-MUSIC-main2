@@ -36,7 +36,7 @@ public class TossPaymentClient {
             @Value("${toss.payments.secret-key}") String secretKey,
             @Value("${toss.payments.confirm-url}") String confirmUrl
     ) {
-        this.secretKey = ***REMOVED***
+        this.secretKey = secretKey;
         this.confirmUrl = confirmUrl;
     }
 
