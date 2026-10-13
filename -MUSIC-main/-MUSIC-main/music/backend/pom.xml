@@ -14,6 +14,7 @@
     <groupId>com.example</groupId>
     <artifactId>music</artifactId>
     <version>0.0.1-SNAPSHOT</version>
+    <packaging>war</packaging>
     <name>music</name>
     <description>StreamWave - React + Spring Boot music streaming &amp; live platform backend</description>
 
@@ -43,6 +44,13 @@
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>s3</artifactId>
+        </dependency>
+
+        <!-- WAR 배포: 내장 Tomcat은 provided (외부 Tomcat이 제공) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-tomcat</artifactId>
+            <scope>provided</scope>
         </dependency>
 
         <!-- REST API -->
@@ -132,6 +140,8 @@
     </dependencies>
 
     <build>
+        <!-- 외부 Tomcat에서 루트 컨텍스트(/)로 서비스되도록 ROOT.war로 생성 -->
+        <finalName>ROOT</finalName>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
