@@ -21,7 +21,7 @@
 
 | | 이름 | 담당 |
 |:-:|:-:|---|
-| <a href="https://github.com/JOJOJACK-cmyk"><img src="https://github.com/JOJOJACK-cmyk.png" width="80" alt="박세영" /></a> | **JOJOJACK**<br />[@JOJOJACK-cmyk](https://github.com/JOJOJACK-cmyk) | **라이브 방송 서버 연동**(SRS RTMP → HLS, 송출 시작 · 종료 웹훅, 방송 상태 감지, Redis 시청자 수 집계), **라이브 상세 화면 · 채팅 · 신청곡 투표 초기 구현**, 인증 사용자 판별 로직, JPA 연관관계 · DB 제약 정리, Redis · S3 · YouTube 플레이어 초기 연동, **운영 배포 환경**(Docker Compose · Caddy) |
+| <a href="https://github.com/JOJOJACK-cmyk"><img src="https://github.com/JOJOJACK-cmyk.png" width="80" alt="박세영" /></a> | **박세영**<br />[@JOJOJACK-cmyk](https://github.com/JOJOJACK-cmyk) | **라이브 방송 서버 연동**(SRS RTMP → HLS, 송출 시작 · 종료 웹훅, 방송 상태 감지, Redis 시청자 수 집계), **라이브 상세 화면 · 채팅 · 신청곡 투표 초기 구현**, 인증 사용자 판별 로직, JPA 연관관계 · DB 제약 정리, Redis · S3 · YouTube 플레이어 초기 연동, **운영 배포 환경**(Docker Compose · Caddy) |
 | <a href="https://github.com/cjsrudgh98-crypto"><img src="https://github.com/cjsrudgh98-crypto.png" width="80" alt="천경호" /></a> | **천경호**<br />[@cjsrudgh98-crypto](https://github.com/cjsrudgh98-crypto) | 음악 스트리밍(YouTube 카탈로그 · 차트 · 검색 · 플레이어), 이용권 · 결제, 음표 후원, 스토어, 실시간 채팅 · 투표 고도화, 회원 · 관리자, 모바일 화면 등 서비스 전반 |
 
 > 이 README는 **JOJOJACK이 맡은 부분**을 중심으로 정리했습니다. 서비스 전체 기능은 [서비스 한눈에 보기](#-서비스-한눈에-보기)에 요약했습니다.
